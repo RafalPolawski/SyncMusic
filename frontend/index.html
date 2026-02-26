@@ -7,56 +7,154 @@
     <style>
         body { font-family: sans-serif; text-align: center; margin-top: 50px; background: #121212; color: white; }
         button { font-size: 20px; padding: 10px 30px; margin: 10px; cursor: pointer; border-radius: 8px; border: none; }
-        #playBtn { background-color: #1DB954; color: white; } /* Kolor Spotify */
+        #playBtn { background-color: #1DB954; color: white; } 
         #pauseBtn { background-color: #ff4444; color: white; }
+        
+        .song-btn { background-color: #333; color: #ddd; width: 100%; max-width: 400px; text-align: left; margin: 5px auto; display: block; font-size: 14px;}
+        .song-btn:hover { background-color: #444; }
+        #playlist { margin-top: 30px; }
+
+        /* NOWE: Style dla nakładki odblokowującej dźwięk */
+        #overlay {
+            display: none; /* Domyślnie ukryte */
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85); z-index: 1000;
+            flex-direction: column; justify-content: center; align-items: center;
+        }
+        #joinBtn { background-color: #1DB954; color: white; font-size: 24px; padding: 20px 40px; font-weight: bold; }
     </style>
 </head>
 <body>
 
+    <div id="overlay">
+        <h2>Muzyka już gra!</h2>
+        <button id="joinBtn">DOŁĄCZ DO ODSŁUCHU 🎧</button>
+    </div>
+
     <h1>Sync Music 🚀</h1>
     <p>Status: <span id="status" style="color: yellow;">Łączenie...</span></p>
 
-    <audio id="audioPlayer" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"></audio>
+    <audio id="audioPlayer" controls></audio>
+    <br>
 
     <button id="playBtn">PLAY</button>
     <button id="pauseBtn">PAUSE</button>
 
-    <script>
+    <div id="playlist">
+        <h3>Wybierz utwór:</h3>
+        <div id="songsContainer">Pobieranie listy z serwera...</div>
+    </div>
+
+<script>
         const audio = document.getElementById("audioPlayer");
         const statusText = document.getElementById("status");
+        const songsContainer = document.getElementById("songsContainer");
+        const overlay = document.getElementById("overlay");
         
-        // Łączymy się z naszym serwerem w Go przez WebSockets
         const socket = new WebSocket("ws://" + window.location.host + "/ws");
+        let isSyncing = false; 
+
+        // NOWE ZMIENNE DO OBLICZANIA CZASU OCZEKIWANIA
+        let pendingPlay = false; 
+        let syncReceivedTime = 0; // Kiedy dokładnie przyszedł sygnał
+        let syncAudioTime = 0;    // Na jakiej sekundzie był wtedy utwór
 
         socket.onopen = () => {
             statusText.innerText = "Podłączono! 🟢";
             statusText.style.color = "lime";
         };
 
-        // Kiedy Ty klikasz PLAY, wysyłasz paczkę do serwera
+        // KIEDY KLIKASZ "DOŁĄCZ DO ODSŁUCHU"
+        document.getElementById("joinBtn").addEventListener("click", () => {
+            overlay.style.display = "none"; 
+            if (pendingPlay) {
+                // 1. Obliczamy ile sekund gapiliśmy się na ekran powitalny
+                const waitTimeSeconds = (Date.now() - syncReceivedTime) / 1000;
+                
+                // 2. Dodajemy ten czas to zapisanego stanu utworu, żeby dogonić resztę!
+                audio.currentTime = syncAudioTime + waitTimeSeconds;
+                audio.play(); 
+                pendingPlay = false;
+            }
+        });
+
+        fetch('/api/songs')
+            .then(response => response.json())
+            .then(songs => {
+                songsContainer.innerHTML = ""; 
+                if(!songs || songs.length === 0) {
+                    songsContainer.innerText = "Brak piosenek. Sprawdź czy folder C:/Muzyka jest pełny!";
+                    return;
+                }
+
+                songs.forEach(songPath => {
+                    const btn = document.createElement("button");
+                    btn.className = "song-btn";
+                    btn.innerText = "🎵 " + songPath;
+                    btn.onclick = () => {
+                        socket.send(JSON.stringify({ action: "load", song: songPath }));
+                    };
+                    songsContainer.appendChild(btn);
+                });
+            });
+
         document.getElementById("playBtn").addEventListener("click", () => {
             socket.send(JSON.stringify({ action: "play", time: audio.currentTime }));
         });
 
-        // Kiedy Ty klikasz PAUSE, wysyłasz paczkę
         document.getElementById("pauseBtn").addEventListener("click", () => {
-            socket.send(JSON.stringify({ action: "pause" }));
+            socket.send(JSON.stringify({ action: "pause", time: audio.currentTime }));
         });
 
-        // Co się dzieje, gdy serwer roześle komendę do wszystkich?
+        audio.addEventListener("seeked", () => {
+            if(!isSyncing) {
+                socket.send(JSON.stringify({ action: "seek", time: audio.currentTime }));
+            }
+        });
+
         socket.onmessage = (event) => {
             const msg = JSON.parse(event.data);
             console.log("Otrzymano rozkaz z serwera:", msg);
+            isSyncing = true; 
 
-            if (msg.action === "play") {
-                // Dla pewności upewniamy się, że czasy się zgadzają z dokładnością do ułamka sekundy
+            if (msg.action === "sync") {
+                audio.src = "/music/" + msg.song;
+                
+                // ZAPISUJEMY STAN DO STOPERA
+                syncAudioTime = msg.time;
+                syncReceivedTime = Date.now();
+                audio.currentTime = syncAudioTime;
+
+                if (msg.isPlaying) {
+                    let playPromise = audio.play();
+                    if (playPromise !== undefined) {
+                        playPromise.catch(error => {
+                            console.log("Przeglądarka zablokowała autoplay. Wymagana akcja użytkownika.");
+                            pendingPlay = true;
+                            overlay.style.display = "flex";
+                        });
+                    }
+                }
+            }
+            else if (msg.action === "load") {
+                audio.src = "/music/" + msg.song;
+                audio.play();
+            }
+            else if (msg.action === "play") {
                 if (Math.abs(audio.currentTime - msg.time) > 0.5) {
                     audio.currentTime = msg.time; 
                 }
                 audio.play();
-            } else if (msg.action === "pause") {
+            } 
+            else if (msg.action === "pause") {
+                if (msg.time) audio.currentTime = msg.time;
                 audio.pause();
             }
+            else if (msg.action === "seek") {
+                audio.currentTime = msg.time;
+            }
+
+            setTimeout(() => { isSyncing = false; }, 100); 
         };
     </script>
 </body>
