@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SyncMusic</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; margin-top: 50px; background: #121212; color: white; }
+        button { font-size: 20px; padding: 10px 30px; margin: 10px; cursor: pointer; border-radius: 8px; border: none; }
+        #playBtn { background-color: #1DB954; color: white; } /* Kolor Spotify */
+        #pauseBtn { background-color: #ff4444; color: white; }
+    </style>
+</head>
+<body>
+
+    <h1>Sync Music 🚀</h1>
+    <p>Status: <span id="status" style="color: yellow;">Łączenie...</span></p>
+
+    <audio id="audioPlayer" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"></audio>
+
+    <button id="playBtn">PLAY</button>
+    <button id="pauseBtn">PAUSE</button>
+
+    <script>
+        const audio = document.getElementById("audioPlayer");
+        const statusText = document.getElementById("status");
+        
+        // Łączymy się z naszym serwerem w Go przez WebSockets
+        const socket = new WebSocket("ws://" + window.location.host + "/ws");
+
+        socket.onopen = () => {
+            statusText.innerText = "Podłączono! 🟢";
+            statusText.style.color = "lime";
+        };
+
+        // Kiedy Ty klikasz PLAY, wysyłasz paczkę do serwera
+        document.getElementById("playBtn").addEventListener("click", () => {
+            socket.send(JSON.stringify({ action: "play", time: audio.currentTime }));
+        });
+
+        // Kiedy Ty klikasz PAUSE, wysyłasz paczkę
+        document.getElementById("pauseBtn").addEventListener("click", () => {
+            socket.send(JSON.stringify({ action: "pause" }));
+        });
+
+        // Co się dzieje, gdy serwer roześle komendę do wszystkich?
+        socket.onmessage = (event) => {
+            const msg = JSON.parse(event.data);
+            console.log("Otrzymano rozkaz z serwera:", msg);
+
+            if (msg.action === "play") {
+                // Dla pewności upewniamy się, że czasy się zgadzają z dokładnością do ułamka sekundy
+                if (Math.abs(audio.currentTime - msg.time) > 0.5) {
+                    audio.currentTime = msg.time; 
+                }
+                audio.play();
+            } else if (msg.action === "pause") {
+                audio.pause();
+            }
+        };
+    </script>
+</body>
+</html>
