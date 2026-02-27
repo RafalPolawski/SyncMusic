@@ -48,7 +48,7 @@ func handleGetSongs(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(songs)
 }
 
-// NOWA FUNKCJA: Wyciąganie okładki z pliku w locie!
+// NOWA FUNKCJA: Wyciąganie okładki z pliku w locie (Teraz z logowaniem!)
 func handleGetCover(w http.ResponseWriter, r *http.Request) {
 	songPath := r.URL.Query().Get("song")
 	if songPath == "" {
@@ -56,31 +56,31 @@ func handleGetCover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Zabezpieczenie ścieżki i otworzenie pliku z muzyką
 	cleanPath := filepath.Clean(songPath)
 	fullPath := filepath.Join("./music", cleanPath)
 	f, err := os.Open(fullPath)
 	if err != nil {
+		log.Printf("❌ Błąd: Nie można otworzyć pliku: %s\n", fullPath)
 		http.Error(w, "Brak pliku", http.StatusNotFound)
 		return
 	}
 	defer f.Close()
 
-	// Czytamy metadane (tagi)
 	m, err := tag.ReadFrom(f)
 	if err != nil || m == nil {
+		log.Printf("⚠️ Błąd: Brak tagów ID3/Vorbis w pliku: %s (błąd: %v)\n", fullPath, err)
 		http.Error(w, "Brak metadanych", http.StatusNotFound)
 		return
 	}
 
-	// Szukamy obrazka okładki
 	pic := m.Picture()
 	if pic == nil {
+		log.Printf("🤷 Brak obrazka: Plik ma tagi, ale nie ma zaszytej okładki: %s\n", fullPath)
 		http.Error(w, "Brak okładki", http.StatusNotFound)
 		return
 	}
 
-	// Wysyłamy obrazek prosto do przeglądarki!
+	log.Printf("🖼️ SUKCES: Załadowano okładkę dla: %s\n", fullPath)
 	contentType := pic.MIMEType
 	if contentType == "" {
 		contentType = "image/" + pic.Ext

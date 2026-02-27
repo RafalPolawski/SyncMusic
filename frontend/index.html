@@ -202,30 +202,31 @@
             if (!ignoreEvents) socket.send(JSON.stringify(data));
         };
 
-        // --- AKTUALIZACJA UI (Z OKŁADKĄ!) ---
         const updateNowPlaying = (path) => {
             if (!path) return;
             const parts = path.split('/');
             let filename = parts[parts.length - 1].replace(/\.[^/.]+$/, ""); 
             trackTitle.innerText = filename;
+            document.getElementById("trackArtist").innerText = "Z biblioteki"; 
             
-            // Pytamy nasz nowy backend o obrazek
             const coverUrl = `/api/cover?song=${encodeURIComponent(path)}`;
             
-            // Sztuczka: ładujemy obrazek w tle, jeśli się uda - podmieniamy, jak nie to nutka
+            // FIX: Ręcznie zabezpieczamy apostrofy i cudzysłowy, żeby nie zepsuły CSSa!
+            const safeCssUrl = coverUrl.replace(/'/g, "%27").replace(/"/g, "%22").replace(/\(/g, "%28").replace(/\)/g, "%29");
+            
             const img = new Image();
             img.onload = () => {
-                coverArt.style.backgroundImage = `url('${coverUrl}')`;
+                coverArt.style.backgroundImage = `url('${safeCssUrl}')`;
                 coverArt.style.backgroundSize = "cover";
                 coverArt.style.backgroundPosition = "center";
-                coverArt.innerHTML = ""; // Ukrywamy nutkę
+                coverArt.innerHTML = ""; 
             };
             img.onerror = () => {
-                // Brak okładki w pliku mp3 - wracamy do domyślnej grafiki
+                console.warn("Przeglądarka odrzuciła obrazek dla:", path);
                 coverArt.style.backgroundImage = "linear-gradient(45deg, #2a2a2a, #3a3a3a)";
                 coverArt.innerHTML = "🎵";
             };
-            img.src = coverUrl; // To wyzwala pobieranie
+            img.src = coverUrl; 
         };
 
         // --- GLOBALNY SHUFFLE ---
