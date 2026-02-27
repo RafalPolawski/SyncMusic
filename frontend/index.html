@@ -5,62 +5,150 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SyncMusic</title>
     <style>
-        /* GŁÓWNY MOTYW (Dark Mode w stylu Spotify) */
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; margin: 0; padding: 20px; background: #121212; color: white; }
-        h1 { margin-bottom: 5px; color: #1DB954; }
-        p { margin-top: 0; font-size: 14px; color: #aaa; }
+        /* GŁÓWNY MOTYW */
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            text-align: center; margin: 0; padding: 20px; 
+            background: linear-gradient(135deg, #1e1e1e 0%, #121212 100%); 
+            color: white; min-height: 100vh; 
+            -webkit-tap-highlight-color: transparent; /* Usuwa brzydki błysk na mobilkach! */
+        }
+        h1 { margin-bottom: 5px; color: #1DB954; font-size: 28px; letter-spacing: 1px;}
+        p { margin-top: 0; font-size: 14px; color: #888; }
         
-        /* ODTWARZACZ I KONTROLKI */
-        .player-container { background: #181818; padding: 20px; border-radius: 12px; max-width: 400px; margin: 0 auto 20px auto; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
-        #currentSongDisplay { font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #fff; word-wrap: break-word; min-height: 25px; }
-        audio { width: 100%; outline: none; margin-bottom: 15px; }
-        
-        .controls { display: flex; justify-content: center; align-items: center; gap: 15px; }
-        .ctrl-btn { background: #282828; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; font-size: 20px; cursor: pointer; transition: 0.2s; display: flex; justify-content: center; align-items: center;}
-        .ctrl-btn:hover { background: #3E3E3E; transform: scale(1.05); }
-        .ctrl-btn:active { transform: scale(0.95); }
-        #shuffleBtn.active { color: #1DB954; background: #222; } /* Zielony jak jest włączone losowanie */
+        /* GŁÓWNY KONTENER ODTWARZACZA */
+        .player-container { 
+            background: #181818; padding: 30px 20px; border-radius: 20px; 
+            max-width: 380px; margin: 0 auto 30px auto; 
+            box-shadow: 0 15px 35px rgba(0,0,0,0.6); 
+            display: flex; flex-direction: column; align-items: center;
+        }
 
-        /* BIBLIOTEKA I PRZYCISKI */
-        button { font-size: 16px; cursor: pointer; border-radius: 8px; border: none; font-family: inherit; }
-        .song-btn { background-color: #282828; color: #ddd; width: 100%; max-width: 400px; text-align: left; margin: 8px auto; display: block; font-size: 14px; padding: 14px; transition: 0.2s; }
-        .song-btn:hover { background-color: #3E3E3E; }
-        .folder-btn { background-color: #1a5276; font-weight: bold; border-left: 5px solid #2980b9; }
-        .folder-btn:hover { background-color: #2471a3; }
-        
-        #backBtn { background-color: #ff9800; color: white; display: none; margin: 0 auto 15px auto; width: 100%; max-width: 400px; padding: 12px; font-weight: bold; }
-        #backBtn:hover { background-color: #e68a00; }
+        .cover-art {
+            width: 250px; height: 250px; border-radius: 15px; 
+            background: linear-gradient(45deg, #2a2a2a, #3a3a3a);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            display: flex; justify-content: center; align-items: center;
+            font-size: 80px; margin-bottom: 25px;
+        }
 
-        /* NAKŁADKA POWITALNA */
+        .track-info { width: 100%; text-align: left; margin-bottom: 20px; padding: 0 15px; box-sizing: border-box;}
+        .track-title { font-size: 22px; font-weight: bold; color: #fff; margin: 0 0 5px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .track-artist { font-size: 15px; color: #b3b3b3; margin: 0; }
+
+        /* PASEK POSTĘPU - Grubszy dla palców! */
+        .progress-container { width: 100%; padding: 0 15px; box-sizing: border-box; margin-bottom: 25px; }
+        .time-display { display: flex; justify-content: space-between; font-size: 12px; color: #a0a0a0; margin-top: 8px; font-weight: 500;}
+        
+        input[type="range"] {
+            -webkit-appearance: none; width: 100%; height: 8px; background: #4d4d4d; 
+            border-radius: 5px; outline: none; cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 18px; height: 18px; 
+            border-radius: 50%; background: #1DB954; cursor: pointer;
+            transition: transform 0.1s; box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        }
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+
+        /* KONTROLKI ODTWARZANIA - Zoptymalizowane pod dotyk */
+        .controls { 
+            display: flex; justify-content: space-evenly; align-items: center; 
+            width: 100%; padding: 0 10px;
+        }
+        
+        .ctrl-btn { 
+            background: transparent; color: #b3b3b3; border: none; 
+            cursor: pointer; display: flex; justify-content: center; align-items: center; 
+            padding: 15px; /* Ogromny touch-target! */
+            border-radius: 50%; transition: all 0.2s;
+            touch-action: manipulation; /* Brak opóźnienia 300ms na klik! */
+        }
+        .ctrl-btn svg { width: 28px; height: 28px; fill: currentColor; }
+        
+        .ctrl-btn:hover { color: #fff; transform: scale(1.1); }
+        .ctrl-btn:active { transform: scale(0.9); background: rgba(255,255,255,0.1); }
+        
+        /* Wielki przycisk Play/Pause */
+        .play-pause-btn { 
+            background: #fff; color: #000; width: 70px; height: 70px; 
+            box-shadow: 0 8px 15px rgba(0,0,0,0.3);
+        }
+        .play-pause-btn svg { width: 36px; height: 36px; }
+        .play-pause-btn:hover { background: #1DB954; color: #fff; transform: scale(1.05); }
+        .play-pause-btn:active { transform: scale(0.95); }
+
+        #shuffleBtn.active { color: #1DB954; }
+
+        audio { display: none; }
+
+        /* BIBLIOTEKA */
+        .playlist-section { background: #181818; padding: 20px; border-radius: 15px; max-width: 380px; margin: 0 auto; }
+        .playlist-section h3 { margin-top: 0; text-align: left; padding-left: 10px; color: #ddd;}
+        button.item-btn { 
+            width: 100%; text-align: left; padding: 18px 15px; /* Wyższe przyciski listy */
+            background: #222; color: #ddd; border: none; border-radius: 8px; 
+            margin-bottom: 8px; font-size: 15px; cursor: pointer; transition: 0.2s; 
+            touch-action: manipulation;
+        }
+        button.item-btn:hover { background: #333; }
+        button.item-btn:active { transform: scale(0.98); }
+        
+        .folder-btn { border-left: 5px solid #1DB954; font-weight: bold; }
+        #backBtn { background-color: #333; color: white; display: none; margin-bottom: 15px; font-weight: bold; text-align: center; }
+        #backBtn:hover { background-color: #444; }
+
         #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.95); z-index: 1000; flex-direction: column; justify-content: center; align-items: center; }
-        #joinBtn { background-color: #1DB954; color: white; font-size: 20px; padding: 20px 40px; border-radius: 50px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
-        #joinBtn:hover { transform: scale(1.05); background-color: #1ed760; }
+        #joinBtn { background-color: #1DB954; color: white; font-size: 20px; padding: 15px 35px; border-radius: 50px; font-weight: bold; border: none; cursor: pointer; }
     </style>
 </head>
 <body>
 
     <div id="overlay">
-        <h2>Muzyka już gra!</h2>
+        <h2 style="color: white; margin-bottom: 30px;">Dołącz do synchronizacji</h2>
         <button id="joinBtn">DOŁĄCZ DO ODSŁUCHU 🎧</button>
     </div>
 
-    <h1>SyncMusic 🚀</h1>
+    <h1>SyncMusic</h1>
     <p>Status: <span id="status" style="color: yellow;">Łączenie...</span></p>
 
     <div class="player-container">
-        <div id="currentSongDisplay">Wybierz utwór z biblioteki...</div>
+        <div class="cover-art" id="coverArt">🎵</div>
         
-        <audio id="audioPlayer" controls></audio>
+        <div class="track-info">
+            <h2 class="track-title" id="trackTitle">Wybierz utwór</h2>
+            <p class="track-artist" id="trackArtist">Nieznany wykonawca</p>
+        </div>
+
+        <div class="progress-container">
+            <input type="range" id="progressBar" min="0" max="100" value="0" step="0.1">
+            <div class="time-display">
+                <span id="currentTimeDisp">0:00</span>
+                <span id="durationDisp">0:00</span>
+            </div>
+        </div>
         
         <div class="controls">
-            <button id="shuffleBtn" class="ctrl-btn" title="Losowanie (Shuffle)">🔀</button>
-            <button id="prevBtn" class="ctrl-btn" title="Poprzedni utwór">⏮️</button>
-            <button id="nextBtn" class="ctrl-btn" title="Następny utwór">⏭️</button>
+            <button id="shuffleBtn" class="ctrl-btn" title="Losowanie">
+                <svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+            </button>
+            <button id="prevBtn" class="ctrl-btn" title="Poprzedni">
+                <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+            </button>
+            <button id="playPauseBtn" class="ctrl-btn play-pause-btn" title="Graj/Pauza">
+                <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+            <button id="nextBtn" class="ctrl-btn" title="Następny">
+                <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+            </button>
         </div>
+
+        <audio id="audioPlayer"></audio>
     </div>
     
-    <div id="playlist">
-        <button id="backBtn">⬅ Wróć do folderów</button>
+    <div class="playlist-section">
+        <h3>Biblioteka</h3>
+        <button id="backBtn" class="item-btn">⬅ Wróć do folderów</button>
         <div id="foldersContainer"></div>
         <div id="songsContainer" style="display: none;"></div>
     </div>
@@ -68,7 +156,11 @@
     <script>
         const audio = document.getElementById("audioPlayer");
         const statusText = document.getElementById("status");
-        const currentSongDisplay = document.getElementById("currentSongDisplay");
+        const trackTitle = document.getElementById("trackTitle");
+        const playPauseBtn = document.getElementById("playPauseBtn");
+        const progressBar = document.getElementById("progressBar");
+        const currentTimeDisp = document.getElementById("currentTimeDisp");
+        const durationDisp = document.getElementById("durationDisp");
         
         const foldersContainer = document.getElementById("foldersContainer");
         const songsContainer = document.getElementById("songsContainer");
@@ -85,26 +177,39 @@
         
         let currentPlaylist = [];
         let currentSongPath = "";
-        let isShuffle = false; // Flaga losowania
+        let isShuffle = false; 
         let lastKnownTime = -1; 
+        let isDraggingProgress = false; 
+
+        // Ikony SVG do podmieniania
+        const svgPlay = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+        const svgPause = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+
+        const formatTime = (seconds) => {
+            if (isNaN(seconds) || seconds < 0) return "0:00";
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        };
 
         socket.onopen = () => {
             statusText.innerText = "Podłączono! 🟢";
-            statusText.style.color = "lime";
+            statusText.style.color = "#1DB954";
         };
 
         const sendSync = (data) => {
             if (!ignoreEvents) socket.send(JSON.stringify(data));
         };
 
-        // Aktualizacja nazwy aktualnie grającego utworu
         const updateNowPlaying = (path) => {
             if (!path) return;
             const parts = path.split('/');
-            currentSongDisplay.innerText = "🎵 " + parts[parts.length - 1]; // Pokazuje tylko nazwę pliku
+            let filename = parts[parts.length - 1];
+            filename = filename.replace(/\.[^/.]+$/, ""); 
+            trackTitle.innerText = filename;
+            document.getElementById("trackArtist").innerText = "Z biblioteki"; 
         };
 
-        // --- LIVENESS PROBE (Z poprzedniego kroku, ratuje przed deadlockiem) ---
         setInterval(() => {
             if (!shouldBePlaying) return;
             const isActuallyMoving = audio.currentTime > lastKnownTime;
@@ -116,31 +221,83 @@
             }
         }, 800);
 
-        // --- LOGIKA NASTĘPNY / POPRZEDNI / LOSOWANIE ---
+        audio.addEventListener('timeupdate', () => {
+            if (!isDraggingProgress) {
+                progressBar.value = audio.currentTime;
+            }
+            currentTimeDisp.innerText = formatTime(audio.currentTime);
+            if (audio.duration) {
+                progressBar.max = audio.duration;
+                durationDisp.innerText = formatTime(audio.duration);
+            }
+        });
+
+        audio.addEventListener('loadedmetadata', () => {
+            progressBar.max = audio.duration;
+            durationDisp.innerText = formatTime(audio.duration);
+        });
+
+        playPauseBtn.onclick = () => {
+            // Dodajemy efekt wibracji przy kliknięciu (na wspieranych telefonach)
+            if (navigator.vibrate) navigator.vibrate(50);
+            
+            if (audio.paused) {
+                audio.play(); 
+            } else {
+                audio.pause(); 
+            }
+        };
+
+        progressBar.addEventListener('input', () => {
+            isDraggingProgress = true;
+            currentTimeDisp.innerText = formatTime(progressBar.value);
+        });
+
+        progressBar.addEventListener('change', () => {
+            isDraggingProgress = false;
+            audio.currentTime = progressBar.value;
+            if (!ignoreEvents) {
+                sendSync({ action: "seek", time: parseFloat(progressBar.value), isPlaying: shouldBePlaying });
+            }
+        });
+
+        audio.onplay = () => {
+            playPauseBtn.innerHTML = svgPause; // Zmiana na ładne SVG
+            if (ignoreEvents) return;
+            shouldBePlaying = true;
+            sendSync({ action: "play", time: audio.currentTime });
+        };
+
+        audio.onpause = () => {
+            playPauseBtn.innerHTML = svgPlay; // Zmiana na ładne SVG
+            if (ignoreEvents || audio.readyState < 2) return; 
+            shouldBePlaying = false;
+            sendSync({ action: "pause", time: audio.currentTime });
+        };
+
         document.getElementById("shuffleBtn").onclick = () => {
+            if (navigator.vibrate) navigator.vibrate(30);
             isShuffle = !isShuffle;
             document.getElementById("shuffleBtn").classList.toggle("active", isShuffle);
         };
 
         const playNext = () => {
+            if (navigator.vibrate) navigator.vibrate(30);
             if (currentPlaylist.length === 0) return;
             let nextIndex = 0;
-            
             if (isShuffle) {
-                // Losujemy dowolny utwór
                 nextIndex = Math.floor(Math.random() * currentPlaylist.length);
             } else {
-                // Szukamy obecnego i bierzemy następny
                 const currentIndex = currentPlaylist.findIndex(s => s.path === currentSongPath);
                 nextIndex = currentIndex + 1;
-                if (nextIndex >= currentPlaylist.length) nextIndex = 0; // Wracamy na początek listy
+                if (nextIndex >= currentPlaylist.length) nextIndex = 0; 
             }
             socket.send(JSON.stringify({ action: "load", song: currentPlaylist[nextIndex].path }));
         };
 
         const playPrev = () => {
+            if (navigator.vibrate) navigator.vibrate(30);
             if (currentPlaylist.length === 0) return;
-            // Poprzedni utwór zazwyczaj omija shuffle, po prostu cofa o 1 (lub wraca na koniec)
             const currentIndex = currentPlaylist.findIndex(s => s.path === currentSongPath);
             let prevIndex = currentIndex - 1;
             if (prevIndex < 0) prevIndex = currentPlaylist.length - 1;
@@ -150,29 +307,7 @@
         document.getElementById("nextBtn").onclick = playNext;
         document.getElementById("prevBtn").onclick = playPrev;
 
-        // Kiedy utwór naturalnie dobiegnie końca
-        audio.onended = () => {
-            if (!ignoreEvents) playNext();
-        };
-
-        // --- ZDARZENIA ODTWARZACZA ---
-        audio.onplay = () => {
-            if (ignoreEvents) return;
-            shouldBePlaying = true;
-            sendSync({ action: "play", time: audio.currentTime });
-        };
-
-        audio.onpause = () => {
-            if (ignoreEvents || audio.readyState < 2) return; 
-            shouldBePlaying = false;
-            sendSync({ action: "pause", time: audio.currentTime });
-        };
-
-        audio.onseeked = () => {
-            if (ignoreEvents) return;
-            lastKnownTime = -1; 
-            sendSync({ action: "seek", time: audio.currentTime, isPlaying: true });
-        };
+        audio.onended = () => { if (!ignoreEvents) playNext(); };
 
         document.getElementById("joinBtn").onclick = () => {
             overlay.style.display = "none"; 
@@ -183,7 +318,6 @@
             audio.play();
         };
 
-        // --- POBIERANIE PIOSENEK ---
         fetch('/api/songs').then(r => r.json()).then(songs => {
             if(!songs || songs.length === 0) return;
             const groups = {};
@@ -199,18 +333,18 @@
                 backBtn.style.display = "none"; foldersContainer.innerHTML = "";
                 for (const f in groups) {
                     const b = document.createElement("button");
-                    b.className = "song-btn folder-btn";
+                    b.className = "item-btn folder-btn";
                     b.innerText = `📁 ${f} (${groups[f].length})`;
                     b.onclick = () => {
                         foldersContainer.style.display = "none"; songsContainer.style.display = "block";
-                        backBtn.style.display = "inline-block"; songsContainer.innerHTML = "";
+                        backBtn.style.display = "block"; songsContainer.innerHTML = "";
                         
-                        // Zapisujemy folder jako aktywną playlistę
                         currentPlaylist = groups[f];
                         
                         groups[f].forEach(s => {
                             const sb = document.createElement("button");
-                            sb.className = "song-btn"; sb.innerText = "🎵 " + s.name;
+                            sb.className = "item-btn"; 
+                            sb.innerText = "🎵 " + s.name.replace(/\.[^/.]+$/, ""); 
                             sb.onclick = () => socket.send(JSON.stringify({ action: "load", song: s.path }));
                             songsContainer.appendChild(sb);
                         });
@@ -222,7 +356,6 @@
             backBtn.onclick = showFolders;
         });
 
-        // --- ODBIERANIE ROZKAZÓW Z SERWERA ---
         socket.onmessage = (event) => {
             const msg = JSON.parse(event.data);
             ignoreEvents = true;
@@ -240,7 +373,6 @@
                 audio.src = "/music/" + msg.song;
                 currentSongPath = msg.song;
                 updateNowPlaying(currentSongPath);
-                
                 shouldBePlaying = true;
             } else if (msg.action === "play") {
                 audio.currentTime = msg.time;
