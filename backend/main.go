@@ -114,6 +114,10 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 					currentPosition = t
 					lastUpdate = time.Now()
 				}
+				// NOWE: Serwer też zapamiętuje, czy utwór ma lecieć!
+				if playing, ok := msg["isPlaying"].(bool); ok {
+					isPlaying = playing
+				}
 			}
 		}
 		stateMutex.Unlock()

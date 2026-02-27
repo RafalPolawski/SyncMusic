@@ -5,23 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SyncMusic</title>
     <style>
-        body { font-family: sans-serif; text-align: center; margin-top: 50px; background: #121212; color: white; }
-        button { font-size: 20px; padding: 10px 30px; margin: 10px; cursor: pointer; border-radius: 8px; border: none; }
-        #playBtn { background-color: #1DB954; color: white; } 
-        #pauseBtn { background-color: #ff4444; color: white; }
-        
-        .song-btn { background-color: #333; color: #ddd; width: 100%; max-width: 400px; text-align: left; margin: 5px auto; display: block; font-size: 14px;}
-        .song-btn:hover { background-color: #444; }
-        #playlist { margin-top: 30px; }
-
-        /* NOWE: Style dla nakładki odblokowującej dźwięk */
+        body { font-family: sans-serif; text-align: center; margin-top: 50px; background: #121212; color: white; padding: 10px; }
+        button { font-size: 16px; padding: 12px 20px; margin: 5px; cursor: pointer; border-radius: 8px; border: none; }
+        .song-btn { background-color: #333; color: #ddd; width: 100%; max-width: 400px; text-align: left; margin: 8px auto; display: block; font-size: 14px; }
+        .folder-btn { background-color: #1a5276; font-weight: bold; }
+        #backBtn { background-color: #ff9800; color: white; display: none; margin-bottom: 15px; width: 100%; max-width: 400px; }
         #overlay {
-            display: none; /* Domyślnie ukryte */
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.85); z-index: 1000;
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9); z-index: 1000;
             flex-direction: column; justify-content: center; align-items: center;
         }
-        #joinBtn { background-color: #1DB954; color: white; font-size: 24px; padding: 20px 40px; font-weight: bold; }
+        #joinBtn { background-color: #1DB954; color: white; font-size: 20px; padding: 20px 40px; }
     </style>
 </head>
 <body>
@@ -34,128 +28,169 @@
     <h1>Sync Music 🚀</h1>
     <p>Status: <span id="status" style="color: yellow;">Łączenie...</span></p>
 
-    <audio id="audioPlayer" controls></audio>
-    <br>
-
-    <button id="playBtn">PLAY</button>
-    <button id="pauseBtn">PAUSE</button>
-
+    <audio id="audioPlayer" controls style="width: 100%; max-width: 400px;"></audio>
+    
     <div id="playlist">
-        <h3>Wybierz utwór:</h3>
-        <div id="songsContainer">Pobieranie listy z serwera...</div>
+        <h3>Biblioteka:</h3>
+        <button id="backBtn">⬅ Wróć do folderów</button>
+        <div id="foldersContainer"></div>
+        <div id="songsContainer" style="display: none;"></div>
     </div>
 
 <script>
-        const audio = document.getElementById("audioPlayer");
-        const statusText = document.getElementById("status");
-        const songsContainer = document.getElementById("songsContainer");
-        const overlay = document.getElementById("overlay");
-        
-        const socket = new WebSocket("ws://" + window.location.host + "/ws");
-        let isSyncing = false; 
+    const audio = document.getElementById("audioPlayer");
+    const statusText = document.getElementById("status");
+    const foldersContainer = document.getElementById("foldersContainer");
+    const songsContainer = document.getElementById("songsContainer");
+    const backBtn = document.getElementById("backBtn");
+    const overlay = document.getElementById("overlay");
+    
+    const socket = new WebSocket("ws://" + window.location.host + "/ws");
+    
+    let ignoreEvents = false; 
+    let pendingPlay = false; 
+    let syncReceivedTime = 0; 
+    let syncAudioTime = 0;    
+    let shouldBePlaying = false; 
+    let currentPlaylist = [];
+    let currentSongPath = "";
+    let lastKnownTime = -1; // Do sprawdzania czy czas faktycznie płynie
 
-        // NOWE ZMIENNE DO OBLICZANIA CZASU OCZEKIWANIA
-        let pendingPlay = false; 
-        let syncReceivedTime = 0; // Kiedy dokładnie przyszedł sygnał
-        let syncAudioTime = 0;    // Na jakiej sekundzie był wtedy utwór
+    socket.onopen = () => {
+        statusText.innerText = "Podłączono! 🟢";
+        statusText.style.color = "lime";
+    };
 
-        socket.onopen = () => {
-            statusText.innerText = "Podłączono! 🟢";
-            statusText.style.color = "lime";
-        };
+    const sendSync = (data) => {
+        if (!ignoreEvents) socket.send(JSON.stringify(data));
+    };
 
-        // KIEDY KLIKASZ "DOŁĄCZ DO ODSŁUCHU"
-        document.getElementById("joinBtn").addEventListener("click", () => {
-            overlay.style.display = "none"; 
-            if (pendingPlay) {
-                // 1. Obliczamy ile sekund gapiliśmy się na ekran powitalny
-                const waitTimeSeconds = (Date.now() - syncReceivedTime) / 1000;
-                
-                // 2. Dodajemy ten czas to zapisanego stanu utworu, żeby dogonić resztę!
-                audio.currentTime = syncAudioTime + waitTimeSeconds;
-                audio.play(); 
-                pendingPlay = false;
-            }
-        });
+    // --- AGRESYWNY STRAŻNIK (LIVENESS PROBE) ---
+    setInterval(() => {
+        if (!shouldBePlaying) return;
 
-        fetch('/api/songs')
-            .then(response => response.json())
-            .then(songs => {
-                songsContainer.innerHTML = ""; 
-                if(!songs || songs.length === 0) {
-                    songsContainer.innerText = "Brak piosenek. Sprawdź czy folder C:/Muzyka jest pełny!";
-                    return;
+        // Sprawdzamy czy muzyka FIZYCZNIE idzie do przodu
+        const isActuallyMoving = audio.currentTime > lastKnownTime;
+        lastKnownTime = audio.currentTime;
+
+        if (audio.paused || !isActuallyMoving) {
+            console.log("Wykryto zastój! Próba siłowego wznowienia...");
+            
+            // Próbujemy odpalić - jeśli to wina buforowania, play() po prostu nic nie zrobi
+            // Jeśli to wina "zawieszenia się" stanu, play() go obudzi.
+            audio.play().catch(() => {
+                if (!pendingPlay) {
+                    pendingPlay = true;
+                    overlay.style.display = "flex";
                 }
-
-                songs.forEach(songPath => {
-                    const btn = document.createElement("button");
-                    btn.className = "song-btn";
-                    btn.innerText = "🎵 " + songPath;
-                    btn.onclick = () => {
-                        socket.send(JSON.stringify({ action: "load", song: songPath }));
-                    };
-                    songsContainer.appendChild(btn);
-                });
             });
+        }
+    }, 800); // Co 800ms - wystarczająco by wykryć lag, ale nie zabić baterii
 
-        document.getElementById("playBtn").addEventListener("click", () => {
-            socket.send(JSON.stringify({ action: "play", time: audio.currentTime }));
+    audio.onended = () => {
+        if (!ignoreEvents && currentPlaylist.length > 0) {
+            const currentIndex = currentPlaylist.findIndex(s => s.path === currentSongPath);
+            const nextIndex = currentIndex + 1;
+            if (nextIndex < currentPlaylist.length) {
+                socket.send(JSON.stringify({ action: "load", song: currentPlaylist[nextIndex].path }));
+            }
+        }
+    };
+
+    audio.onplay = () => {
+        if (ignoreEvents) return;
+        shouldBePlaying = true;
+        sendSync({ action: "play", time: audio.currentTime });
+    };
+
+    audio.onpause = () => {
+        if (ignoreEvents) return;
+        // Sprawdzamy, czy to nie była "fałszywa" pauza podczas buforowania
+        if (audio.readyState < 2) return; 
+        shouldBePlaying = false;
+        sendSync({ action: "pause", time: audio.currentTime });
+    };
+
+    audio.onseeked = () => {
+        if (ignoreEvents) return;
+        lastKnownTime = -1; // Resetujemy licznik ruchu po przewinięciu
+        sendSync({ action: "seek", time: audio.currentTime, isPlaying: true });
+    };
+
+    document.getElementById("joinBtn").onclick = () => {
+        overlay.style.display = "none"; 
+        pendingPlay = false;
+        const waitTimeSeconds = (Date.now() - syncReceivedTime) / 1000;
+        audio.currentTime = syncAudioTime + waitTimeSeconds;
+        shouldBePlaying = true;
+        audio.play();
+    };
+
+    fetch('/api/songs').then(r => r.json()).then(songs => {
+        if(!songs || songs.length === 0) return;
+        const groups = {};
+        songs.forEach(path => {
+            const parts = path.split('/');
+            const folder = parts.length > 1 ? parts[0] : "Pozostałe";
+            if (!groups[folder]) groups[folder] = [];
+            groups[folder].push({ path, name: parts.length > 1 ? parts.slice(1).join('/') : path });
         });
 
-        document.getElementById("pauseBtn").addEventListener("click", () => {
-            socket.send(JSON.stringify({ action: "pause", time: audio.currentTime }));
-        });
-
-        audio.addEventListener("seeked", () => {
-            if(!isSyncing) {
-                socket.send(JSON.stringify({ action: "seek", time: audio.currentTime }));
+        const showFolders = () => {
+            foldersContainer.style.display = "block"; songsContainer.style.display = "none";
+            backBtn.style.display = "none"; foldersContainer.innerHTML = "";
+            for (const f in groups) {
+                const b = document.createElement("button");
+                b.className = "song-btn folder-btn";
+                b.innerText = `📁 ${f} (${groups[f].length})`;
+                b.onclick = () => {
+                    foldersContainer.style.display = "none"; songsContainer.style.display = "block";
+                    backBtn.style.display = "inline-block"; songsContainer.innerHTML = "";
+                    currentPlaylist = groups[f];
+                    groups[f].forEach(s => {
+                        const sb = document.createElement("button");
+                        sb.className = "song-btn"; sb.innerText = "🎵 " + s.name;
+                        sb.onclick = () => socket.send(JSON.stringify({ action: "load", song: s.path }));
+                        songsContainer.appendChild(sb);
+                    });
+                };
+                foldersContainer.appendChild(b);
             }
-        });
-
-        socket.onmessage = (event) => {
-            const msg = JSON.parse(event.data);
-            console.log("Otrzymano rozkaz z serwera:", msg);
-            isSyncing = true; 
-
-            if (msg.action === "sync") {
-                audio.src = "/music/" + msg.song;
-                
-                // ZAPISUJEMY STAN DO STOPERA
-                syncAudioTime = msg.time;
-                syncReceivedTime = Date.now();
-                audio.currentTime = syncAudioTime;
-
-                if (msg.isPlaying) {
-                    let playPromise = audio.play();
-                    if (playPromise !== undefined) {
-                        playPromise.catch(error => {
-                            console.log("Przeglądarka zablokowała autoplay. Wymagana akcja użytkownika.");
-                            pendingPlay = true;
-                            overlay.style.display = "flex";
-                        });
-                    }
-                }
-            }
-            else if (msg.action === "load") {
-                audio.src = "/music/" + msg.song;
-                audio.play();
-            }
-            else if (msg.action === "play") {
-                if (Math.abs(audio.currentTime - msg.time) > 0.5) {
-                    audio.currentTime = msg.time; 
-                }
-                audio.play();
-            } 
-            else if (msg.action === "pause") {
-                if (msg.time) audio.currentTime = msg.time;
-                audio.pause();
-            }
-            else if (msg.action === "seek") {
-                audio.currentTime = msg.time;
-            }
-
-            setTimeout(() => { isSyncing = false; }, 100); 
         };
-    </script>
+        showFolders();
+        backBtn.onclick = showFolders;
+    });
+
+    socket.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        ignoreEvents = true;
+
+        if (msg.action === "sync") {
+            audio.src = "/music/" + msg.song;
+            currentSongPath = msg.song;
+            audio.currentTime = msg.time;
+            syncReceivedTime = Date.now();
+            syncAudioTime = msg.time;
+            shouldBePlaying = msg.isPlaying;
+        } else if (msg.action === "load") {
+            audio.src = "/music/" + msg.song;
+            currentSongPath = msg.song;
+            shouldBePlaying = true;
+        } else if (msg.action === "play") {
+            audio.currentTime = msg.time;
+            shouldBePlaying = true;
+        } else if (msg.action === "pause") {
+            shouldBePlaying = false;
+            audio.pause();
+            audio.currentTime = msg.time;
+        } else if (msg.action === "seek") {
+            audio.currentTime = msg.time;
+            shouldBePlaying = msg.isPlaying;
+            lastKnownTime = -1; 
+        }
+
+        setTimeout(() => { ignoreEvents = false; }, 800);
+    };
+</script>
 </body>
 </html>
