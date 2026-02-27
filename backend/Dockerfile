@@ -7,9 +7,10 @@ WORKDIR /app
 # Kopiujemy nasz kod źródłowy do kontenera
 COPY main.go .
 
-# Inicjalizujemy projekt Go i pobieramy bibliotekę do WebSocketów
+# Inicjalizujemy projekt Go i pobieramy bibliotekę do WebSocketów oraz tagów
 RUN go mod init gym-sync
 RUN go get github.com/gorilla/websocket
+RUN go get github.com/dhowden/tag
 
 # Kompilujemy nasz program do pliku binarnego o nazwie 'server'
 RUN go build -o server .
