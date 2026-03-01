@@ -211,7 +211,10 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.Handle("/", http.FileServer(http.Dir("./frontend")))
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(`<h1>Cześć!</h1><p>Backend Go działa poprawnie. Twój interfejs frontendowy znajduje się teraz pod adresem deweloperskim Vite: <a href="http://localhost:5173">http://localhost:5173</a>.</p>`))
+	})
 	http.Handle("/music/", http.StripPrefix("/music/", http.FileServer(http.Dir("./music"))))
 	http.HandleFunc("/api/songs", handleGetSongs)
 	

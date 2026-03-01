@@ -2,10 +2,20 @@ version: '3.8'
 
 services:
   sync-app:
-    build: 
+    build:
       context: ./backend
     ports:
       - "12137:12137" # Mapujemy port 12137 z Twojego PC na port 12137 w kontenerze
     volumes:
-      - ./frontend:/app/frontend # Montujemy frontend na żywo, żeby nie musieć przebudowywać kontenera przy zmianach w HTML!
       - "/c/Muzyka:/app/music" # Montujemy katalog z muzyką, jeśli chcesz mieć lokalne pliki do testów
+
+  sync-frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules # Anonimowy wolumen chronujący node_modules przed nadpisaniem przez bind mount w Windowsie
+    depends_on:
+      - sync-app
