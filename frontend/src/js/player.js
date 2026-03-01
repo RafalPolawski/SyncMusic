@@ -86,6 +86,43 @@ export function initPlayer(socket) {
         if (onTrackChangeCallback) {
             onTrackChangeCallback(path, currentFolderName);
         }
+
+        precacheNextTracks();
+    };
+
+    const precacheNextTracks = () => {
+        if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return;
+        if (currentPlaylist.length === 0) return;
+
+        let urlsToCache = [];
+
+        if (isShuffle) {
+            // Buffer up to 3 random tracks if shuffling
+            for (let i = 0; i < 3; i++) {
+                const randIndex = Math.floor(Math.random() * currentPlaylist.length);
+                urlsToCache.push(`/music/${currentPlaylist[randIndex].path}`);
+            }
+        } else {
+            // Buffer the next 2 tracks linearly
+            const currentIndex = currentPlaylist.findIndex(s => s.path === currentSongPath);
+            if (currentIndex !== -1) {
+                for (let i = 1; i <= 2; i++) {
+                    let nextIndex = currentIndex + i;
+                    if (nextIndex < currentPlaylist.length) {
+                        urlsToCache.push(`/music/${currentPlaylist[nextIndex].path}`);
+                    } else if (isRepeat !== 0) { // wrap around if repeat is on
+                        urlsToCache.push(`/music/${currentPlaylist[nextIndex % currentPlaylist.length].path}`);
+                    }
+                }
+            }
+        }
+
+        if (urlsToCache.length > 0) {
+            navigator.serviceWorker.controller.postMessage({
+                action: 'precache',
+                urls: urlsToCache
+            });
+        }
     };
 
     const updateShuffleUI = (state) => {

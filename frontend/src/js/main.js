@@ -11,6 +11,17 @@ import { initPlayer } from './player.js';
  * - Loading media libraries on startup and rendering the folder tree.
  */
 document.addEventListener("DOMContentLoaded", () => {
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').then((registration) => {
+                console.log('[SW] ServiceWorker registration successful with scope: ', registration.scope);
+            }, (err) => {
+                console.log('[SW] ServiceWorker registration failed: ', err);
+            });
+        });
+    }
+
     const socket = new SyncWebSocket();
     const player = initPlayer(socket);
 

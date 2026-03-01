@@ -74,7 +74,7 @@ func handleGetSongs(w http.ResponseWriter, r *http.Request) {
 	err := filepath.Walk("./music", func(path string, info os.FileInfo, err error) error {
 		if err != nil { return err }
 		ext := filepath.Ext(path)
-		if !info.IsDir() && (ext == ".mp3" || ext == ".opus") {
+		if !info.IsDir() && ext == ".opus" {
 			paths = append(paths, path)
 		}
 		return nil
