@@ -18,11 +18,53 @@ document.addEventListener("DOMContentLoaded", () => {
         player.handleSocketMessage(msg);
     });
 
+    // Global state for highlighting
+    let globalPlayingPath = null;
+    let globalPlayingFolder = null;
+
+    const updateHighlights = () => {
+        // Hydrate from player if missing (useful when player syncs before UI is built)
+        if (!globalPlayingPath || !globalPlayingFolder) {
+            const state = player.getCurrentState();
+            if (state.path) globalPlayingPath = state.path;
+            if (state.folder) globalPlayingFolder = state.folder;
+        }
+
+        // Clear all active classes
+        document.querySelectorAll('.folder-btn').forEach(btn => btn.classList.remove('active-folder'));
+        document.querySelectorAll('.item-btn:not(.folder-btn)').forEach(btn => btn.classList.remove('active-track'));
+
+        // Highlight active folder if any
+        if (globalPlayingFolder) {
+            const folderBtn = document.querySelector(`.folder-btn[data-folder="${globalPlayingFolder}"]`);
+            if (folderBtn) folderBtn.classList.add('active-folder');
+        }
+
+        // Highlight active track
+        if (globalPlayingPath) {
+            const trackBtns = document.querySelectorAll('#songsContainer .item-btn');
+            trackBtns.forEach(btn => {
+                if (btn.dataset.path === globalPlayingPath) {
+                    btn.classList.add('active-track');
+                }
+            });
+        }
+    };
+
+    // Handle track changes from player.js to update highlights
+    player.onTrackChanged((currentPath, currentFolder) => {
+        globalPlayingPath = currentPath;
+        globalPlayingFolder = currentFolder;
+        updateHighlights();
+    });
+
     const foldersContainer = document.getElementById("foldersContainer");
     const songsContainer = document.getElementById("songsContainer");
     const backBtn = document.getElementById("backBtn");
+    const loadingIndicator = document.getElementById("loadingIndicator");
 
     fetchSongsLibrary().then(songs => {
+        loadingIndicator.style.display = "none";
         if (!songs || songs.length === 0) return;
         const groups = {};
         songs.forEach(song => {
@@ -48,6 +90,8 @@ document.addEventListener("DOMContentLoaded", () => {
             for (const f in groups) {
                 const b = document.createElement("button");
                 b.className = "item-btn folder-btn";
+                // Optionally highlight folder on first render if it matches something playing (optional, handled after anyway if event fires)
+                b.dataset.folder = f;
                 b.innerText = `📁 ${f} (${groups[f].length})`;
                 b.onclick = () => {
                     foldersContainer.style.display = "none";
@@ -60,6 +104,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     groups[f].forEach(s => {
                         const sb = document.createElement("button");
                         sb.className = "item-btn";
+                        sb.dataset.path = s.path;
 
                         const safeEncode = encodeURIComponent(s.path).replace(/'/g, "%27").replace(/"/g, "%22");
                         const thumbUrl = `/api/cover?song=${safeEncode}`;
@@ -73,11 +118,15 @@ document.addEventListener("DOMContentLoaded", () => {
                         `;
 
                         sb.onclick = () => {
-                            player.setCurrentPlaylistFolder(f);
+                            // Don't update player's folder directly here to prevent UI desyncs before WS response
+                            // The server load response will update the player and fire onTrackChanged anyway
                             socket.sendCommand("load", { song: s.path, folder: f });
                         };
                         songsContainer.appendChild(sb);
                     });
+
+                    // Reapply highlights since DOM elements were just recreated for the songs view
+                    updateHighlights();
                 };
                 foldersContainer.appendChild(b);
             }
@@ -85,5 +134,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         showFolders();
         backBtn.onclick = showFolders;
+
+        // Ensure highlights are applied if changing back to folders view
+        backBtn.addEventListener('click', updateHighlights);
+        // Force highlight evaluation upon initial load just in case player was already initialized
+        updateHighlights();
     });
 });

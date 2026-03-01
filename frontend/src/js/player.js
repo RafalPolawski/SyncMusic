@@ -36,6 +36,8 @@ export function initPlayer(socket) {
 
     let allGroupsCache = {};
 
+    let onTrackChangeCallback = null;
+
     const svgPlay = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
     const svgPause = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
 
@@ -80,6 +82,10 @@ export function initPlayer(socket) {
             coverArt.innerHTML = "🎵";
         };
         img.src = coverUrl;
+
+        if (onTrackChangeCallback) {
+            onTrackChangeCallback(path, currentFolderName);
+        }
     };
 
     const updateShuffleUI = (state) => {
@@ -277,6 +283,8 @@ export function initPlayer(socket) {
             else if (msg.action === "repeat") updateRepeatUI(msg.state);
         },
         setCacheGroups: (groups) => allGroupsCache = groups,
-        setCurrentPlaylistFolder: (folder) => { currentFolderName = folder; currentPlaylist = allGroupsCache[folder]; }
+        setCurrentPlaylistFolder: (folder) => { currentFolderName = folder; currentPlaylist = allGroupsCache[folder]; },
+        onTrackChanged: (cb) => { onTrackChangeCallback = cb; },
+        getCurrentState: () => ({ path: currentSongPath, folder: currentFolderName })
     };
 }
