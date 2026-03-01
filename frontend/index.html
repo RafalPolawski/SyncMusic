@@ -1,107 +1,377 @@
 <!DOCTYPE html>
 <html lang="pl">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SyncMusic</title>
+    <!-- Nowoczesna Czcionka Inter dla poczucia Premium -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         /* GŁÓWNY MOTYW */
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            text-align: center; margin: 0; padding: 20px; 
-            background: linear-gradient(135deg, #1e1e1e 0%, #121212 100%); 
-            color: white; min-height: 100vh; 
-            -webkit-tap-highlight-color: transparent; /* Usuwa brzydki błysk na mobilkach! */
+        body {
+            font-family: 'Inter', sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            color: white;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
         }
-        h1 { margin-bottom: 5px; color: #1DB954; font-size: 28px; letter-spacing: 1px;}
-        p { margin-top: 0; font-size: 14px; color: #888; }
-        
-        /* GŁÓWNY KONTENER ODTWARZACZA */
-        .player-container { 
-            background: #181818; padding: 30px 20px; border-radius: 20px; 
-            max-width: 380px; margin: 0 auto 30px auto; 
-            box-shadow: 0 15px 35px rgba(0,0,0,0.6); 
-            display: flex; flex-direction: column; align-items: center;
+
+        h1 {
+            margin-bottom: 5px;
+            color: #1DB954;
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            text-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        p {
+            margin-top: 0;
+            font-size: 14px;
+            color: #b0b0b0;
+        }
+
+        /* GŁÓWNY KONTENER ODTWARZACZA - Glassmorphism */
+        .player-container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 30px 20px;
+            border-radius: 24px;
+            max-width: 380px;
+            margin: 0 auto 30px auto;
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: transform 0.3s ease;
         }
 
         .cover-art {
-            width: 250px; height: 250px; border-radius: 15px; 
-            background: linear-gradient(45deg, #2a2a2a, #3a3a3a);
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-            display: flex; justify-content: center; align-items: center;
-            font-size: 80px; margin-bottom: 25px;
+            width: 280px;
+            height: 280px;
+            border-radius: 50%;
+            /* Efekt Winyla! */
+            background: linear-gradient(45deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), inset 0 0 0 8px #111, inset 0 0 0 12px #222;
+            /* Rowki winylowe */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 80px;
+            margin-bottom: 30px;
+
+            /* Animacja płyty */
+            animation: spin 12s linear infinite;
+            animation-play-state: paused;
+            transition: box-shadow 0.4s ease;
         }
 
-        .track-info { width: 100%; text-align: left; margin-bottom: 20px; padding: 0 15px; box-sizing: border-box;}
-        .track-title { font-size: 22px; font-weight: bold; color: #fff; margin: 0 0 5px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .track-artist { font-size: 15px; color: #b3b3b3; margin: 0; }
+        /* Klasa dodawana gdy muzyka gra */
+        .cover-art.playing {
+            animation-play-state: running;
+            box-shadow: 0 20px 45px rgba(29, 185, 84, 0.3), inset 0 0 0 8px #111, inset 0 0 0 12px #222;
+        }
+
+        @keyframes spin {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .track-info {
+            width: 100%;
+            text-align: left;
+            margin-bottom: 25px;
+            padding: 0 15px;
+            box-sizing: border-box;
+        }
+
+        .track-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #fff;
+            margin: 0 0 6px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            text-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+        }
+
+        .track-artist {
+            font-size: 15px;
+            color: rgba(255, 255, 255, 0.7);
+            margin: 0;
+            font-weight: 500;
+        }
 
         /* PASEK POSTĘPU - Grubszy dla palców! */
-        .progress-container { width: 100%; padding: 0 15px; box-sizing: border-box; margin-bottom: 25px; }
-        .time-display { display: flex; justify-content: space-between; font-size: 12px; color: #a0a0a0; margin-top: 8px; font-weight: 500;}
-        
+        .progress-container {
+            width: 100%;
+            padding: 0 15px;
+            box-sizing: border-box;
+            margin-bottom: 30px;
+        }
+
+        .time-display {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 10px;
+            font-weight: 500;
+        }
+
         input[type="range"] {
-            -webkit-appearance: none; appearance: none; width: 100%; height: 8px; background: #4d4d4d; 
-            border-radius: 5px; outline: none; cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            outline: none;
+            cursor: pointer;
         }
+
         input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none; appearance: none; width: 18px; height: 18px; 
-            border-radius: 50%; background: #1DB954; cursor: pointer;
-            transition: transform 0.1s; box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #1DB954;
+            cursor: pointer;
+            transition: transform 0.1s;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
         }
-        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.3);
+        }
 
         /* KONTROLKI ODTWARZANIA - Zoptymalizowane pod dotyk */
-        .controls { 
-            display: flex; justify-content: space-evenly; align-items: center; 
-            width: 100%; padding: 0 10px;
+        .controls {
+            display: flex;
+            justify-content: space-evenly;
+            align-items: center;
+            width: 100%;
+            padding: 0 10px;
         }
-        
-        .ctrl-btn { 
-            background: transparent; color: #b3b3b3; border: none; 
-            cursor: pointer; display: flex; justify-content: center; align-items: center; 
-            padding: 15px; /* Ogromny touch-target! */
-            border-radius: 50%; transition: all 0.2s;
-            touch-action: manipulation; /* Brak opóźnienia 300ms na klik! */
-        }
-        .ctrl-btn svg { width: 28px; height: 28px; fill: currentColor; }
-        
-        .ctrl-btn:hover { color: #fff; transform: scale(1.1); }
-        .ctrl-btn:active { transform: scale(0.9); background: rgba(255,255,255,0.1); }
-        
-        /* Wielki przycisk Play/Pause */
-        .play-pause-btn { 
-            background: #fff; color: #000; width: 70px; height: 70px; 
-            box-shadow: 0 8px 15px rgba(0,0,0,0.3);
-        }
-        .play-pause-btn svg { width: 36px; height: 36px; }
-        .play-pause-btn:hover { background: #1DB954; color: #fff; transform: scale(1.05); }
-        .play-pause-btn:active { transform: scale(0.95); }
 
-        #shuffleBtn.active { color: #1DB954; }
-
-        audio { display: none; }
-
-        /* BIBLIOTEKA */
-        .playlist-section { background: #181818; padding: 20px; border-radius: 15px; max-width: 380px; margin: 0 auto; }
-        .playlist-section h3 { margin-top: 0; text-align: left; padding-left: 10px; color: #ddd;}
-        button.item-btn { 
-            width: 100%; text-align: left; padding: 18px 15px; /* Wyższe przyciski listy */
-            background: #222; color: #ddd; border: none; border-radius: 8px; 
-            margin-bottom: 8px; font-size: 15px; cursor: pointer; transition: 0.2s; 
+        .ctrl-btn {
+            background: transparent;
+            color: rgba(255, 255, 255, 0.7);
+            border: none;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 15px;
+            border-radius: 50%;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             touch-action: manipulation;
         }
-        button.item-btn:hover { background: #333; }
-        button.item-btn:active { transform: scale(0.98); }
-        
-        .folder-btn { border-left: 5px solid #1DB954; font-weight: bold; }
-        #backBtn { background-color: #333; color: white; display: none; margin-bottom: 15px; font-weight: bold; text-align: center; }
-        #backBtn:hover { background-color: #444; }
 
-        #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.95); z-index: 1000; flex-direction: column; justify-content: center; align-items: center; }
-        #joinBtn { background-color: #1DB954; color: white; font-size: 20px; padding: 15px 35px; border-radius: 50px; font-weight: bold; border: none; cursor: pointer; }
+        .ctrl-btn svg {
+            width: 28px;
+            height: 28px;
+            fill: currentColor;
+        }
+
+        .ctrl-btn:hover {
+            color: #fff;
+            transform: scale(1.15);
+        }
+
+        .ctrl-btn:active {
+            transform: scale(0.9);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Wielki przycisk Play/Pause */
+        .play-pause-btn {
+            background: linear-gradient(135deg, #1DB954 0%, #179643 100%);
+            color: #fff;
+            width: 75px;
+            height: 75px;
+            box-shadow: 0 10px 20px rgba(29, 185, 84, 0.4);
+        }
+
+        .play-pause-btn svg {
+            width: 38px;
+            height: 38px;
+        }
+
+        .play-pause-btn:hover {
+            box-shadow: 0 15px 25px rgba(29, 185, 84, 0.6);
+            color: #fff;
+            transform: scale(1.08);
+        }
+
+        .play-pause-btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 5px 10px rgba(29, 185, 84, 0.4);
+        }
+
+        .active-green {
+            color: #1DB954 !important;
+        }
+
+        audio {
+            display: none;
+        }
+
+        /* BIBLIOTEKA */
+        .playlist-section {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 25px;
+            border-radius: 20px;
+            max-width: 380px;
+            margin: 0 auto;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .playlist-section h3 {
+            margin-top: 0;
+            text-align: left;
+            padding-left: 10px;
+            color: #fff;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        button.item-btn {
+            width: 100%;
+            text-align: left;
+            padding: 12px 15px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            border: 1px solid transparent;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: 0.2s;
+            touch-action: manipulation;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            /* Układ flex dla miniaturki! */
+        }
+
+        button.item-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        button.item-btn:active {
+            transform: scale(0.98);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        /* Style nowej miniaturki w piosence */
+        .song-thumb {
+            width: 45px;
+            height: 45px;
+            border-radius: 8px;
+            object-fit: cover;
+            background: linear-gradient(45deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+            /* Szkieletowanie w czasie ładowania */
+            flex-shrink: 0;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .song-info {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .song-name {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 15px;
+        }
+
+        .song-artist {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.5);
+            margin-top: 3px;
+        }
+
+        .folder-btn {
+            border-left: 4px solid #1DB954;
+            font-weight: bold;
+            font-size: 16px;
+            padding: 18px 15px !important;
+        }
+
+        #backBtn {
+            background-color: rgba(0, 0, 0, 0.3);
+            color: white;
+            display: none;
+            margin-bottom: 20px;
+            font-weight: bold;
+            text-align: center;
+            justify-content: center;
+        }
+
+        #backBtn:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        #overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 12, 41, 0.95);
+            backdrop-filter: blur(15px);
+            z-index: 1000;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #joinBtn {
+            background: linear-gradient(135deg, #1DB954 0%, #179643 100%);
+            box-shadow: 0 10px 20px rgba(29, 185, 84, 0.4);
+            color: white;
+            font-size: 18px;
+            padding: 16px 40px;
+            border-radius: 50px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            border: none;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        #joinBtn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 15px 30px rgba(29, 185, 84, 0.6);
+        }
+
+        #joinBtn:active {
+            transform: scale(0.95);
+        }
     </style>
 </head>
+
 <body>
 
     <div id="overlay">
@@ -114,7 +384,7 @@
 
     <div class="player-container">
         <div class="cover-art" id="coverArt">🎵</div>
-        
+
         <div class="track-info">
             <h2 class="track-title" id="trackTitle">Wybierz utwór</h2>
             <p class="track-artist" id="trackArtist">Nieznany wykonawca</p>
@@ -127,25 +397,39 @@
                 <span id="durationDisp">0:00</span>
             </div>
         </div>
-        
+
         <div class="controls">
             <button id="shuffleBtn" class="ctrl-btn" title="Losowanie">
-                <svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z" />
+                </svg>
             </button>
             <button id="prevBtn" class="ctrl-btn" title="Poprzedni">
-                <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                <svg viewBox="0 0 24 24">
+                    <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+                </svg>
             </button>
             <button id="playPauseBtn" class="ctrl-btn play-pause-btn" title="Graj/Pauza">
-                <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                <svg id="icon-play" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                </svg>
             </button>
             <button id="nextBtn" class="ctrl-btn" title="Następny">
-                <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                <svg viewBox="0 0 24 24">
+                    <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+                </svg>
+            </button>
+            <button id="repeatBtn" class="ctrl-btn" title="Powtarzanie">
+                <svg viewBox="0 0 24 24">
+                    <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z" />
+                </svg>
             </button>
         </div>
 
         <audio id="audioPlayer"></audio>
     </div>
-    
+
     <div class="playlist-section">
         <h3>Biblioteka</h3>
         <button id="backBtn" class="item-btn">⬅ Wróć do folderów</button>
@@ -153,7 +437,7 @@
         <div id="songsContainer" style="display: none;"></div>
     </div>
 
-<script>
+    <script>
         const audio = document.getElementById("audioPlayer");
         const statusText = document.getElementById("status");
         const trackTitle = document.getElementById("trackTitle");
@@ -163,25 +447,29 @@
         const durationDisp = document.getElementById("durationDisp");
         const coverArt = document.getElementById("coverArt"); // NOWE
         const shuffleBtn = document.getElementById("shuffleBtn");
-        
+
         const foldersContainer = document.getElementById("foldersContainer");
         const songsContainer = document.getElementById("songsContainer");
         const backBtn = document.getElementById("backBtn");
         const overlay = document.getElementById("overlay");
-        
+
         const socket = new WebSocket("ws://" + window.location.host + "/ws");
-        
-        let ignoreEvents = false; 
-        let pendingPlay = false; 
-        let syncReceivedTime = 0; 
-        let syncAudioTime = 0;    
-        let shouldBePlaying = false; 
-        
+
+        let pendingPlay = false;
+        let syncReceivedTime = 0;
+        let syncAudioTime = 0;
+        let shouldBePlaying = false;
+
         let currentPlaylist = [];
         let currentSongPath = "";
-        let isShuffle = false; 
-        let lastKnownTime = -1; 
-        let isDraggingProgress = false; 
+        let currentFolderName = ""; // NOWE: Nazwa aktualnie odtwarzanego folderu
+        let isShuffle = false;
+        let isRepeat = 0; // 0 = off, 1 = playlist, 2 = track 
+        let lastKnownTime = -1;
+        let isDraggingProgress = false;
+
+        // --- Historia tasowania ---
+        let playedHistory = [];
 
         const svgPlay = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
         const svgPause = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
@@ -198,59 +486,86 @@
             statusText.style.color = "#1DB954";
         };
 
-        const sendSync = (data) => {
-            if (!ignoreEvents) socket.send(JSON.stringify(data));
-        };
-
         const updateNowPlaying = (path) => {
             if (!path) return;
             const parts = path.split('/');
-            let filename = parts[parts.length - 1].replace(/\.[^/.]+$/, ""); 
+            let filename = parts[parts.length - 1].replace(/\.[^/.]+$/, "");
             trackTitle.innerText = filename;
-            document.getElementById("trackArtist").innerText = "Z biblioteki"; 
-            
+            document.getElementById("trackArtist").innerText = "Z biblioteki";
+
             const coverUrl = `/api/cover?song=${encodeURIComponent(path)}`;
-            
+
             // FIX: Ręcznie zabezpieczamy apostrofy i cudzysłowy, żeby nie zepsuły CSSa!
             const safeCssUrl = coverUrl.replace(/'/g, "%27").replace(/"/g, "%22").replace(/\(/g, "%28").replace(/\)/g, "%29");
-            
+
             const img = new Image();
             img.onload = () => {
                 coverArt.style.backgroundImage = `url('${safeCssUrl}')`;
                 coverArt.style.backgroundSize = "cover";
                 coverArt.style.backgroundPosition = "center";
-                coverArt.innerHTML = ""; 
+                coverArt.innerHTML = "";
             };
             img.onerror = () => {
                 console.warn("Przeglądarka odrzuciła obrazek dla:", path);
                 coverArt.style.backgroundImage = "linear-gradient(45deg, #2a2a2a, #3a3a3a)";
                 coverArt.innerHTML = "🎵";
             };
-            img.src = coverUrl; 
+            img.src = coverUrl;
         };
 
-        // --- GLOBALNY SHUFFLE ---
+        // --- GLOBALNY SHUFFLE ORAZ REPEAT ---
         const updateShuffleUI = (state) => {
             isShuffle = state;
-            shuffleBtn.classList.toggle("active", isShuffle);
+            document.getElementById("shuffleBtn").classList.toggle("active-green", isShuffle);
         };
 
-        shuffleBtn.onclick = () => {
+        const updateRepeatUI = (state) => {
+            isRepeat = state;
+            const btn = document.getElementById("repeatBtn");
+            if (isRepeat === 0) {
+                btn.classList.remove("active-green");
+                btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>';
+            } else if (isRepeat === 1) {
+                btn.classList.add("active-green");
+                btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>';
+            } else if (isRepeat === 2) {
+                btn.classList.add("active-green");
+                // Ikona pętli utworu (z cyferką 1 wewnątrz)
+                btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zm-4-2V9h-1l-2 1v1h1.5v4H13z"/></svg>';
+            }
+        };
+
+        document.getElementById("shuffleBtn").onclick = () => {
             if (navigator.vibrate) navigator.vibrate(30);
             const newState = !isShuffle;
-            updateShuffleUI(newState);
-            // Wysyłamy informację do wszystkich!
             socket.send(JSON.stringify({ action: "shuffle", state: newState }));
+        };
+
+        document.getElementById("repeatBtn").onclick = () => {
+            if (navigator.vibrate) navigator.vibrate(30);
+            const newState = (isRepeat + 1) % 3;
+            socket.send(JSON.stringify({ action: "repeat", state: newState }));
         };
 
         // --- LIVENESS PROBE ---
         setInterval(() => {
             if (!shouldBePlaying) return;
+
+            // Jeśli utwór dopiero się ładuje (nie ma wystarczająco danych, by ruszyć), nie wyrzucamy błędu
+            if (audio.readyState < 3) return;
+
             const isActuallyMoving = audio.currentTime > lastKnownTime;
             lastKnownTime = audio.currentTime;
+
             if (audio.paused || !isActuallyMoving) {
-                audio.play().catch(() => {
-                    if (!pendingPlay) { pendingPlay = true; overlay.style.display = "flex"; }
+                audio.play().catch((err) => {
+                    // Reagujemy tylko na wyciszenia systemowe (autoplay blocked)
+                    if (err.name === 'NotAllowedError') {
+                        if (!pendingPlay) {
+                            pendingPlay = true;
+                            overlay.style.display = "flex";
+                        }
+                    }
                 });
             }
         }, 800);
@@ -273,7 +588,12 @@
 
         playPauseBtn.onclick = () => {
             if (navigator.vibrate) navigator.vibrate(50);
-            if (audio.paused) audio.play(); else audio.pause(); 
+            // SERVER-DRIVEN: Wysyłamy żądanie do serwera. Serwer odeśle akcje 'play'/'pause'
+            if (!shouldBePlaying) {
+                socket.send(JSON.stringify({ action: "play", time: audio.currentTime }));
+            } else {
+                socket.send(JSON.stringify({ action: "pause", time: audio.currentTime }));
+            }
         };
 
         progressBar.addEventListener('input', () => {
@@ -283,56 +603,87 @@
 
         progressBar.addEventListener('change', () => {
             isDraggingProgress = false;
-            audio.currentTime = progressBar.value;
-            if (!ignoreEvents) {
-                sendSync({ action: "seek", time: parseFloat(progressBar.value), isPlaying: shouldBePlaying });
-            }
+            socket.send(JSON.stringify({ action: "seek", time: parseFloat(progressBar.value), isPlaying: shouldBePlaying }));
         });
 
+        // Eventy onplay / onpause tylko do kosmetyki lokalnej. Nie psują websocketa!
         audio.onplay = () => {
-            playPauseBtn.innerHTML = svgPause; 
-            if (ignoreEvents) return;
-            shouldBePlaying = true;
-            sendSync({ action: "play", time: audio.currentTime });
+            playPauseBtn.innerHTML = svgPause;
+            coverArt.classList.add("playing"); // Włącz animację winyla
         };
 
         audio.onpause = () => {
-            playPauseBtn.innerHTML = svgPlay; 
-            if (ignoreEvents || audio.readyState < 2) return; 
-            shouldBePlaying = false;
-            sendSync({ action: "pause", time: audio.currentTime });
+            playPauseBtn.innerHTML = svgPlay;
+            coverArt.classList.remove("playing"); // Zatrzymaj winyl
         };
 
-        const playNext = () => {
+        let isHandlingEnd = false; // Anti-race condition dla onended
+
+        const playNext = (isNaturalEnd = false) => {
             if (navigator.vibrate) navigator.vibrate(30);
             if (currentPlaylist.length === 0) return;
+
+            // Zabezpieczenie przed Race Condition jeśli piosenka kończy się u wszystkich naraz
+            if (isNaturalEnd) {
+                if (isHandlingEnd) return;
+                isHandlingEnd = true;
+                setTimeout(() => { isHandlingEnd = false; }, 2000);
+            }
+
+            // OBSŁUGA REPEAT-ONE: zapętlamy ten sam utwór i wychodzimy. (tylko na naturalnym końcu)
+            if (isNaturalEnd && isRepeat === 2) {
+                socket.send(JSON.stringify({ action: "seek", time: 0, isPlaying: true }));
+                return;
+            }
+
+            // Dodajemy obecny utwór do historii przed przejściem dalej
+            if (currentSongPath && !isNaturalEnd) { // Jeśli to nie naturalny koniec, w obu przypadkach wpada do historii
+                playedHistory.push(currentSongPath);
+            } else if (currentSongPath && isNaturalEnd && isRepeat !== 2) {
+                playedHistory.push(currentSongPath);
+            }
+
             let nextIndex = 0;
             if (isShuffle) {
                 nextIndex = Math.floor(Math.random() * currentPlaylist.length);
             } else {
                 const currentIndex = currentPlaylist.findIndex(s => s.path === currentSongPath);
                 nextIndex = currentIndex + 1;
-                if (nextIndex >= currentPlaylist.length) nextIndex = 0; 
+                if (nextIndex >= currentPlaylist.length) {
+                    if (isRepeat === 0 && isNaturalEnd) {
+                        // Odtwarzanie dobiegło końca listy i Repeat wyłączony: Pauzujemy
+                        socket.send(JSON.stringify({ action: "pause", time: 0 }));
+                        return;
+                    }
+                    nextIndex = 0;
+                }
             }
-            socket.send(JSON.stringify({ action: "load", song: currentPlaylist[nextIndex].path }));
+            socket.send(JSON.stringify({ action: "load", song: currentPlaylist[nextIndex].path, folder: currentFolderName }));
         };
 
         const playPrev = () => {
             if (navigator.vibrate) navigator.vibrate(30);
             if (currentPlaylist.length === 0) return;
+
+            if (playedHistory.length > 0) {
+                const prevSongPath = playedHistory.pop();
+                socket.send(JSON.stringify({ action: "load", song: prevSongPath, isPrev: true, folder: currentFolderName }));
+                return;
+            }
+
             const currentIndex = currentPlaylist.findIndex(s => s.path === currentSongPath);
             let prevIndex = currentIndex - 1;
             if (prevIndex < 0) prevIndex = currentPlaylist.length - 1;
-            socket.send(JSON.stringify({ action: "load", song: currentPlaylist[prevIndex].path }));
+            socket.send(JSON.stringify({ action: "load", song: currentPlaylist[prevIndex].path, isPrev: true, folder: currentFolderName }));
         };
 
-        document.getElementById("nextBtn").onclick = playNext;
+        document.getElementById("nextBtn").onclick = () => playNext(false);
         document.getElementById("prevBtn").onclick = playPrev;
 
-        audio.onended = () => { if (!ignoreEvents) playNext(); };
+        audio.onended = () => { playNext(true); };
 
         document.getElementById("joinBtn").onclick = () => {
-            overlay.style.display = "none"; 
+            overlay.style.display = "none";
             pendingPlay = false;
             const waitTimeSeconds = (Date.now() - syncReceivedTime) / 1000;
             audio.currentTime = syncAudioTime + waitTimeSeconds;
@@ -340,8 +691,10 @@
             audio.play();
         };
 
+        let allGroupsCache = {}; // Zapisujemy playlisty by móc do nich wracać globalnie
+
         fetch('/api/songs').then(r => r.json()).then(songs => {
-            if(!songs || songs.length === 0) return;
+            if (!songs || songs.length === 0) return;
             const groups = {};
             songs.forEach(path => {
                 const parts = path.split('/');
@@ -349,6 +702,7 @@
                 if (!groups[folder]) groups[folder] = [];
                 groups[folder].push({ path, name: parts.length > 1 ? parts.slice(1).join('/') : path });
             });
+            allGroupsCache = groups;
 
             const showFolders = () => {
                 foldersContainer.style.display = "block"; songsContainer.style.display = "none";
@@ -360,14 +714,32 @@
                     b.onclick = () => {
                         foldersContainer.style.display = "none"; songsContainer.style.display = "block";
                         backBtn.style.display = "block"; songsContainer.innerHTML = "";
-                        
+
                         currentPlaylist = groups[f];
-                        
+
                         groups[f].forEach(s => {
                             const sb = document.createElement("button");
-                            sb.className = "item-btn"; 
-                            sb.innerText = "🎵 " + s.name.replace(/\.[^/.]+$/, ""); 
-                            sb.onclick = () => socket.send(JSON.stringify({ action: "load", song: s.path }));
+                            sb.className = "item-btn";
+
+                            // NOWE: Generujemy lazy-loading img jako miniaturki do piosenek!
+                            const safeEncode = encodeURIComponent(s.path).replace(/'/g, "%27").replace(/"/g, "%22");
+                            const thumbUrl = `/api/cover?song=${safeEncode}`;
+
+                            const justName = s.name.replace(/\.[^/.]+$/, "");
+
+                            sb.innerHTML = `
+                                <img src="${thumbUrl}" class="song-thumb" loading="lazy" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'45\\' height=\\'45\\'><rect width=\\'45\\' height=\\'45\\' fill=\\'%23333\\'/><text x=\\'50%\\' y=\\'50%\\' font-size=\\'20\\' text-anchor=\\'middle\\' dominant-baseline=\\'middle\\' fill=\\'%23555\\'>🎵</text></svg>'">
+                                <div class="song-info">
+                                    <span class="song-name">${justName}</span>
+                                    <span class="song-artist">Z biblioteki</span>
+                                </div>
+                            `;
+
+                            // NOWE: Przesyłamy też nazwę folderu "f" w akcji "load"
+                            sb.onclick = () => {
+                                currentFolderName = f; // Zapisujemy także dla strzałek Next/Prev z UI
+                                socket.send(JSON.stringify({ action: "load", song: s.path, folder: f }));
+                            };
                             songsContainer.appendChild(sb);
                         });
                     };
@@ -381,22 +753,43 @@
         // --- ODBIERANIE ROZKAZÓW Z SERWERA ---
         socket.onmessage = (event) => {
             const msg = JSON.parse(event.data);
-            ignoreEvents = true;
 
             if (msg.action === "sync") {
+                // Jeśli serwer od razu nam powiedział, jaka lista gra u innych
+                if (msg.folder && allGroupsCache[msg.folder]) {
+                    currentFolderName = msg.folder;
+                    currentPlaylist = allGroupsCache[msg.folder];
+                }
+
                 audio.src = "/music/" + msg.song;
                 currentSongPath = msg.song;
                 updateNowPlaying(currentSongPath);
-                
+
                 audio.currentTime = msg.time;
                 syncReceivedTime = Date.now();
                 syncAudioTime = msg.time;
                 shouldBePlaying = msg.isPlaying;
-                
-                // Odbieramy stan shuffle!
+
                 if (msg.isShuffle !== undefined) updateShuffleUI(msg.isShuffle);
-                
+                if (msg.isRepeat !== undefined) updateRepeatUI(msg.isRepeat);
+
             } else if (msg.action === "load") {
+                // NOWE: Odbieramy nazwę globalnego folderu od tego kto wciskał Play
+                if (msg.folder && allGroupsCache[msg.folder]) {
+                    currentFolderName = msg.folder;
+                    currentPlaylist = allGroupsCache[msg.folder];
+                }
+
+                // Jeśli komenda nie jest rezultatem cofania to zapisujemy historię
+                if (!msg.isPrev && currentSongPath && currentSongPath !== msg.song) {
+                    playedHistory.push(currentSongPath);
+                } else if (msg.isPrev) {
+                    // Synchronizacja ściągania za stosu również dla wszystkich jeśli to możliwe by zachować racjonalny rozmiar pamieci
+                    if (playedHistory.length > 0 && playedHistory[playedHistory.length - 1] === msg.song) {
+                        playedHistory.pop();
+                    }
+                }
+
                 audio.src = "/music/" + msg.song;
                 currentSongPath = msg.song;
                 updateNowPlaying(currentSongPath);
@@ -411,14 +804,14 @@
             } else if (msg.action === "seek") {
                 audio.currentTime = msg.time;
                 shouldBePlaying = msg.isPlaying;
-                lastKnownTime = -1; 
+                lastKnownTime = -1;
             } else if (msg.action === "shuffle") {
-                // Ktoś inny kliknął przycisk shuffle!
                 updateShuffleUI(msg.state);
+            } else if (msg.action === "repeat") {
+                updateRepeatUI(msg.state);
             }
-
-            setTimeout(() => { ignoreEvents = false; }, 800);
         };
     </script>
 </body>
+
 </html>

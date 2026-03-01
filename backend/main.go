@@ -25,7 +25,9 @@ var currentSong string
 var isPlaying bool
 var currentPosition float64
 var lastUpdate time.Time
-var isShuffleGlobal bool // NOWE: Globalny stan Shuffle
+var isShuffleGlobal bool // Globalny stan Shuffle
+var isRepeatGlobal int   // 0 = off, 1 = playlist, 2 = track
+var currentFolder string // NOWE: Globalny folder playlisty
 
 // Pobieranie listy plików (bez zmian)
 func handleGetSongs(w http.ResponseWriter, r *http.Request) {
@@ -113,14 +115,19 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			"song":      currentSong,
 			"time":      pos,
 			"isPlaying": isPlaying,
-			"isShuffle": isShuffleGlobal, // Synchronizujemy Shuffle!
+			"isShuffle": isShuffleGlobal,
+			"isRepeat":  isRepeatGlobal,
+			"folder":    currentFolder, // Synchronizujemy folder
 		}
 		ws.WriteJSON(syncMsg)
 	} else {
-		// Jeśli nic nie gra, chociaż wyślijmy mu, czy shuffle jest włączone
 		ws.WriteJSON(map[string]interface{}{
 			"action":    "shuffle",
 			"state":     isShuffleGlobal,
+		})
+		ws.WriteJSON(map[string]interface{}{
+			"action":    "repeat",
+			"state":     isRepeatGlobal,
 		})
 	}
 	stateMutex.Unlock()
@@ -145,6 +152,9 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 					isPlaying = true
 					lastUpdate = time.Now()
 				}
+				if f, ok := msg["folder"].(string); ok {
+					currentFolder = f
+				}
 			case "play":
 				if t, ok := msg["time"].(float64); ok { currentPosition = t }
 				isPlaying = true
@@ -160,10 +170,15 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				if playing, ok := msg["isPlaying"].(bool); ok {
 					isPlaying = playing
 				}
-			// NOWE: Zapamiętujemy Shuffle globalnie
+			// Zapamiętujemy Shuffle globalnie
 			case "shuffle":
 				if st, ok := msg["state"].(bool); ok {
 					isShuffleGlobal = st
+				}
+			// NOWE: Zapamiętujemy Pętlę globalnie
+			case "repeat":
+				if st, ok := msg["state"].(float64); ok { // JSON przysyła float64
+					isRepeatGlobal = int(st)
 				}
 			}
 		}
