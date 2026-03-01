@@ -1,12 +1,12 @@
 import { fetchSongsLibrary } from './api.js';
-import { SyncWebSocket } from './websocket.js';
+import { SyncWebTransport } from './webtransport.js';
 import { initPlayer } from './player.js';
 
 /**
  * Main Application Entry Point
  * 
  * Responsible for orchestrating the application's lifecycle on the browser:
- * - Bootstrapping the WebSocket connection.
+ * - Bootstrapping the WebTransport connection.
  * - Initializing the Music Player instance.
  * - Loading media libraries on startup and rendering the folder tree.
  */
@@ -22,7 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    const socket = new SyncWebSocket();
+    const socket = new SyncWebTransport();
     const player = initPlayer(socket);
 
     socket.onMessage((msg) => {

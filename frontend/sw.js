@@ -7,7 +7,7 @@ const STATIC_ASSETS = [
     '/src/styles/main.css',
     '/src/js/main.js',
     '/src/js/player.js',
-    '/src/js/websocket.js',
+    '/src/js/webtransport.js',
     '/src/js/api.js'
 ];
 
@@ -47,10 +47,10 @@ self.addEventListener('fetch', (event) => {
         event.respondWith(
             caches.match(event.request).then((cachedResponse) => {
                 if (cachedResponse) {
-                   console.log('[SW] Serving audio from cache:', url.pathname);
-                   return cachedResponse;
+                    console.log('[SW] Serving audio from cache:', url.pathname);
+                    return cachedResponse;
                 }
-                
+
                 // If not in cache, fetch and put in cache.
                 return fetch(event.request).then((networkResponse) => {
                     // Only cache successful, complete responses (don't cache 206 partial content by default via basic block cache)
@@ -80,7 +80,7 @@ self.addEventListener('fetch', (event) => {
             return response || fetch(event.request).then(netRes => {
                 // Ignore API data caching to keep song list fresh (optional: can cache library API for total offline)
                 if (url.pathname.startsWith('/api/')) {
-                   return netRes;
+                    return netRes;
                 }
 
                 if (!netRes || netRes.status !== 200 || netRes.type !== 'basic') {
@@ -99,7 +99,7 @@ self.addEventListener('fetch', (event) => {
 self.addEventListener('message', (event) => {
     if (event.data && event.data.action === 'precache') {
         const urlsToCache = event.data.urls || [];
-        
+
         event.waitUntil(
             caches.open(CACHE_NAME).then((cache) => {
                 return Promise.all(urlsToCache.map(urlStr => {
@@ -110,7 +110,7 @@ self.addEventListener('message', (event) => {
                             // Fetch whole file without CORS mode restrictions causing issues for same-origin
                             return fetch(req).then(netRes => {
                                 if (netRes && netRes.status === 200) {
-                                     cache.put(req, netRes);
+                                    cache.put(req, netRes);
                                 }
                             }).catch(err => console.log('[SW] Precache failed for', urlStr, err));
                         }

@@ -1,13 +1,30 @@
-version: '3.8'
+# SyncMusic — Docker Compose
 
 services:
   sync-app:
     build:
       context: ./backend
     ports:
-      - "12137:12137" # Mapujemy port 12137 z Twojego PC na port 12137 w kontenerze
+      - "12137:12137" # HTTP/1.1 API
+      - "4433:4433/udp" # HTTP/3 WebTransport
     volumes:
-      - "/c/Muzyka:/app/music" # Montujemy katalog z muzyką, jeśli chcesz mieć lokalne pliki do testów
+      - "/c/Muzyka:/app/music" # Mount the host music library into the container
+
+  caddy:
+    build:
+      context: ./caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - sync-app
+      - sync-frontend
 
   sync-frontend:
     build:
@@ -16,6 +33,10 @@ services:
       - "5173:5173"
     volumes:
       - ./frontend:/app
-      - /app/node_modules # Anonimowy wolumen chronujący node_modules przed nadpisaniem przez bind mount w Windowsie
+      - /app/node_modules # Anonymous volume — prevents the Windows bind mount from overwriting the container's node_modules
     depends_on:
       - sync-app
+
+volumes:
+  caddy_data:
+  caddy_config:

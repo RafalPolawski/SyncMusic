@@ -1,0 +1,60 @@
+# local_certs forces Caddy's internal CA for LAN access (192.168.x.x)
+# For MagicDNS access, run on the Windows host:
+#   tailscale serve --bg https / http://localhost:80
+{
+	auto_https off
+	local_certs
+	on_demand_tls {
+		ask http://sync-app:12137/api/ok
+	}
+}
+
+# Port 80 (HTTP) — proxied by tailscale serve for MagicDNS HTTPS access
+http://:80 {
+	@api {
+		path /api/*
+	}
+
+	@music {
+		path /music/*
+	}
+
+	handle @api {
+		reverse_proxy sync-app:12137
+	}
+
+	handle @music {
+		reverse_proxy sync-app:12137
+	}
+
+	handle {
+		reverse_proxy sync-frontend:5173
+	}
+}
+
+# Port 443 (HTTPS) — for direct LAN access (192.168.x.x), one-time browser warning
+:443 {
+	tls internal {
+		on_demand
+	}
+
+	@api {
+		path /api/*
+	}
+
+	@music {
+		path /music/*
+	}
+
+	handle @api {
+		reverse_proxy sync-app:12137
+	}
+
+	handle @music {
+		reverse_proxy sync-app:12137
+	}
+
+	handle {
+		reverse_proxy sync-frontend:5173
+	}
+}

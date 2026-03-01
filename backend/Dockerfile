@@ -1,19 +1,19 @@
-# Używamy oficjalnego obrazu z językiem Go (lekka wersja alpine)
+# Build the Go backend for SyncMusic
 FROM golang:1.26-alpine
 
-# Ustawiamy katalog roboczy wewnątrz kontenera
+# Set working directory inside the container
 WORKDIR /app
 
-# Kopiujemy nasz kod źródłowy do kontenera
+# Copy the single-file source
 COPY main.go .
 
-# Inicjalizujemy projekt Go i pobieramy bibliotekę do WebSocketów oraz tagów
+# Initialise the module and pull dependencies
 RUN go mod init gym-sync
-RUN go get github.com/gorilla/websocket
+RUN go get github.com/quic-go/webtransport-go
 RUN go get github.com/dhowden/tag
 
-# Kompilujemy nasz program do pliku binarnego o nazwie 'server'
+# Compile the binary
 RUN go build -o server .
 
-# Mówimy kontenerowi, co ma uruchomić po starcie
+# Start the server
 CMD ["./server"]
