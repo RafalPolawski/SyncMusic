@@ -1,3 +1,13 @@
+/**
+ * Player Initialization Module
+ * 
+ * Encapsulates all logic, state, and UI binding for the custom HTML5 Audio Player interface.
+ * Implements strict, server-authoritative playback mapping (Server-Driven Execution),
+ * preventing client-side race conditions when syncing across multiple devices.
+ * 
+ * @param {SyncWebSocket} socket - An initialized WebSocket interface to push action commands upstream.
+ * @returns {Object} A set of closure functions hooked by the WebSocket listener to pipe state downstream.
+ */
 export function initPlayer(socket) {
     const audio = document.getElementById("audioPlayer");
     const trackTitle = document.getElementById("trackTitle");
@@ -41,7 +51,7 @@ export function initPlayer(socket) {
         const parts = path.split('/');
         let filename = parts[parts.length - 1].replace(/\.[^/.]+$/, "");
         trackTitle.innerText = filename;
-        document.getElementById("trackArtist").innerText = "Z biblioteki";
+        document.getElementById("trackArtist").innerText = "From Library";
 
         const coverUrl = `/api/cover?song=${encodeURIComponent(path)}`;
         const safeCssUrl = coverUrl.replace(/'/g, "%27").replace(/"/g, "%22").replace(/\(/g, "%28").replace(/\)/g, "%29");

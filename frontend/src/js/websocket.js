@@ -9,7 +9,7 @@ export class SyncWebSocket {
         this.socket.onopen = () => {
             const statusText = document.getElementById("status");
             if (statusText) {
-                statusText.innerText = "Podłączono! 🟢";
+                statusText.innerText = "Connected! 🟢";
                 statusText.style.color = "#1DB954";
             }
         };

@@ -1,9 +1,10 @@
-/* GŁÓWNY MOTYW */
+/* MAIN THEME */
 body {
     font-family: 'Inter', sans-serif;
     text-align: center;
     margin: 0;
-    padding: 20px;
+    padding: 2vh 4vw;
+    /* Zmiana sztywnego paddingu na relatywny ekranowo vw/vh */
     background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
     color: white;
     min-height: 100vh;
@@ -25,7 +26,7 @@ p {
     color: #b0b0b0;
 }
 
-/* GŁÓWNY KONTENER ODTWARZACZA - Glassmorphism */
+/* MAIN PLAYER CONTAINER - Glassmorphism */
 .player-container {
     background: rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(20px);
@@ -33,7 +34,10 @@ p {
     border: 1px solid rgba(255, 255, 255, 0.1);
     padding: 30px 20px;
     border-radius: 24px;
-    max-width: 380px;
+    max-width: 400px;
+    width: 100%;
+    /* Rozciągnięcie na telefonach na max dostepną przestrzeń box-sizing! */
+    box-sizing: border-box;
     margin: 0 auto 30px auto;
     box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
     display: flex;
@@ -43,26 +47,29 @@ p {
 }
 
 .cover-art {
-    width: 280px;
-    height: 280px;
+    width: 70vw;
+    /* Względna szerokość okładki by nie wypychać przycisków! */
+    max-width: 280px;
+    aspect-ratio: 1 / 1;
+    /* Idealne kółko względem vw */
     border-radius: 50%;
-    /* Efekt Winyla! */
+    /* Vinyl Effect! */
     background: linear-gradient(45deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), inset 0 0 0 8px #111, inset 0 0 0 12px #222;
-    /* Rowki winylowe */
+    /* Vinyl grooves */
     display: flex;
     justify-content: center;
     align-items: center;
     font-size: 80px;
-    margin-bottom: 30px;
+    margin-bottom: 25px;
 
-    /* Animacja płyty */
+    /* Cover spin animation */
     animation: spin 12s linear infinite;
     animation-play-state: paused;
     transition: box-shadow 0.4s ease;
 }
 
-/* Klasa dodawana gdy muzyka gra */
+/* Active class added during playback */
 .cover-art.playing {
     animation-play-state: running;
     box-shadow: 0 20px 45px rgba(29, 185, 84, 0.3), inset 0 0 0 8px #111, inset 0 0 0 12px #222;
@@ -100,7 +107,7 @@ p {
     font-weight: 500;
 }
 
-/* PASEK POSTĘPU - Grubszy dla palców! */
+/* PROGRESS BAR - Thickened for touch target */
 .progress-container {
     width: 100%;
     padding: 0 15px;
@@ -131,8 +138,9 @@ input[type="range"] {
 input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 18px;
-    height: 18px;
+    width: 24px;
+    /* POWIĘKSZONY touch-target kuli na progressbarze */
+    height: 24px;
     border-radius: 50%;
     background: #1DB954;
     cursor: pointer;
@@ -144,7 +152,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
     transform: scale(1.3);
 }
 
-/* KONTROLKI ODTWARZANIA - Zoptymalizowane pod dotyk */
+/* PLAYBACK CONTROLS - Optimized for touch */
 .controls {
     display: flex;
     justify-content: space-evenly;
@@ -161,7 +169,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 15px;
+    padding: 20px;
+    /* Zwiększony padding - grubszy obszar łapania wcelowania */
     border-radius: 50%;
     transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     touch-action: manipulation;
@@ -183,7 +192,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
     background: rgba(255, 255, 255, 0.1);
 }
 
-/* Wielki przycisk Play/Pause */
+/* Large Play/Pause button */
 .play-pause-btn {
     background: linear-gradient(135deg, #1DB954 0%, #179643 100%);
     color: #fff;
@@ -216,7 +225,7 @@ audio {
     display: none;
 }
 
-/* BIBLIOTEKA */
+/* LIBRARY SECTION */
 .playlist-section {
     background: rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(20px);
@@ -241,13 +250,15 @@ audio {
 button.item-btn {
     width: 100%;
     text-align: left;
-    padding: 12px 15px;
+    padding: 14px 15px;
+    /* Delikatne rozciągniecie przycisków w pionie na liście by palec miał swobodę klikania! */
     background: rgba(255, 255, 255, 0.05);
     color: #fff;
     border: 1px solid transparent;
     border-radius: 12px;
-    margin-bottom: 10px;
-    font-size: 15px;
+    margin-bottom: 12px;
+    font-size: 16px;
+    /* Wyraźniejsze literki na liście */
     font-weight: 500;
     cursor: pointer;
     transition: 0.2s;
@@ -255,7 +266,7 @@ button.item-btn {
     display: flex;
     align-items: center;
     gap: 15px;
-    /* Układ flex dla miniaturki! */
+    /* Flex layout for thumbnail */
 }
 
 button.item-btn:hover {
@@ -270,8 +281,9 @@ button.item-btn:active {
 
 /* Style nowej miniaturki w piosence */
 .song-thumb {
-    width: 45px;
-    height: 45px;
+    width: 50px;
+    /* Minimalnie powiększona miniatura do grubszego kafelka przycisku */
+    height: 50px;
     border-radius: 8px;
     object-fit: cover;
     background: linear-gradient(45deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
@@ -356,4 +368,72 @@ button.item-btn:active {
 
 #joinBtn:active {
     transform: scale(0.95);
+}
+
+/* 📱 REGUŁY RESPONSOWNE (MEDIA QUERIES) DLA EKRANÓW MOBILNYCH (0px do 480px width, + małe heighty) */
+@media (max-width: 480px) {
+    body {
+        padding: 5px 10px;
+        /* Całkowicie obcinamy paddingi by odzyskać max miejsca ekranu */
+    }
+
+    h1 {
+        font-size: 24px;
+        /* Zmniejsz nagłówek "SyncMusic", oddaje cenne miejsce na przyciski w pionie */
+        margin-bottom: 2px;
+    }
+
+    p {
+        font-size: 12px;
+        margin-bottom: 10px;
+    }
+
+    .player-container {
+        padding: 20px 15px 15px 15px;
+        border-radius: 20px;
+        margin-bottom: 20px;
+    }
+
+    .track-title {
+        font-size: 21px;
+        /* Skalowanie lekko zbyt bujnej czcionki jeśli artysta ma dłuższą nazwę */
+    }
+
+    /* Dopasowanie przycisku Play, by mieścił się idealnie w zasięgu jednej dłoni trzymając telefon na dole */
+    .play-pause-btn {
+        width: 65px;
+        height: 65px;
+    }
+
+    .play-pause-btn svg {
+        width: 32px;
+        height: 32px;
+    }
+
+    .ctrl-btn svg {
+        width: 24px;
+        /* Minimalna redukcja wielkości ikon pobocznych by zyskać na powietrzu paddingowym */
+        height: 24px;
+    }
+
+    .playlist-section {
+        padding: 15px;
+        border-radius: 16px;
+    }
+
+    .playlist-section h3 {
+        font-size: 18px;
+    }
+}
+
+/* Obsługa bardzo wąskich w poziomie telefonów (gdy piosenki mogłyby wyrzucać controlsy w górę) */
+@media (max-height: 700px) {
+    .cover-art {
+        width: 55vw;
+        /* Zabieramy z okładki jeśli telefon jest niski */
+        max-width: 200px;
+        font-size: 50px;
+        margin-bottom: 15px;
+        /* Skracamy separację winyla od reszty elementów by unikać paska przesuwu w odtwarzaczu */
+    }
 }

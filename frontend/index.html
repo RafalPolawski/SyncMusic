@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SyncMusic</title>
-    <!-- Nowoczesna Czcionka Inter dla poczucia Premium -->
+    <!-- Modern Inter Font for a Premium Feel -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -15,19 +15,19 @@
 <body>
 
     <div id="overlay">
-        <h2 style="color: white; margin-bottom: 30px;">Dołącz do synchronizacji</h2>
-        <button id="joinBtn">DOŁĄCZ DO ODSŁUCHU 🎧</button>
+        <h2 style="color: white; margin-bottom: 30px;">Join synchronization</h2>
+        <button id="joinBtn">JOIN SESSION 🎧</button>
     </div>
 
     <h1>SyncMusic</h1>
-    <p>Status: <span id="status" style="color: yellow;">Łączenie...</span></p>
+    <p>Status: <span id="status" style="color: yellow;">Connecting...</span></p>
 
     <div class="player-container">
         <div class="cover-art" id="coverArt">🎵</div>
 
         <div class="track-info">
-            <h2 class="track-title" id="trackTitle">Wybierz utwór</h2>
-            <p class="track-artist" id="trackArtist">Nieznany wykonawca</p>
+            <h2 class="track-title" id="trackTitle">Select a track</h2>
+            <p class="track-artist" id="trackArtist">Unknown Artist</p>
         </div>
 
         <div class="progress-container">
@@ -39,28 +39,28 @@
         </div>
 
         <div class="controls">
-            <button id="shuffleBtn" class="ctrl-btn" title="Losowanie">
+            <button id="shuffleBtn" class="ctrl-btn" title="Shuffle">
                 <svg viewBox="0 0 24 24">
                     <path
                         d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z" />
                 </svg>
             </button>
-            <button id="prevBtn" class="ctrl-btn" title="Poprzedni">
+            <button id="prevBtn" class="ctrl-btn" title="Previous">
                 <svg viewBox="0 0 24 24">
                     <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
                 </svg>
             </button>
-            <button id="playPauseBtn" class="ctrl-btn play-pause-btn" title="Graj/Pauza">
+            <button id="playPauseBtn" class="ctrl-btn play-pause-btn" title="Play/Pause">
                 <svg id="icon-play" viewBox="0 0 24 24">
                     <path d="M8 5v14l11-7z" />
                 </svg>
             </button>
-            <button id="nextBtn" class="ctrl-btn" title="Następny">
+            <button id="nextBtn" class="ctrl-btn" title="Next">
                 <svg viewBox="0 0 24 24">
                     <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
                 </svg>
             </button>
-            <button id="repeatBtn" class="ctrl-btn" title="Powtarzanie">
+            <button id="repeatBtn" class="ctrl-btn" title="Repeat">
                 <svg viewBox="0 0 24 24">
                     <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z" />
                 </svg>
@@ -71,8 +71,8 @@
     </div>
 
     <div class="playlist-section">
-        <h3>Biblioteka</h3>
-        <button id="backBtn" class="item-btn">⬅ Wróć do folderów</button>
+        <h3>Library</h3>
+        <button id="backBtn" class="item-btn">⬅ Back to folders</button>
         <div id="foldersContainer"></div>
         <div id="songsContainer" style="display: none;"></div>
     </div>

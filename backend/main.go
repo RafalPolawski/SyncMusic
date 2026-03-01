@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dhowden/tag" // NOWA BIBLIOTEKA DO CZYTANIA TAGÓW!
+	"github.com/dhowden/tag"
 	"github.com/gorilla/websocket"
 )
 
@@ -29,7 +29,7 @@ var isShuffleGlobal bool // Globalny stan Shuffle
 var isRepeatGlobal int   // 0 = off, 1 = playlist, 2 = track
 var currentFolder string // NOWE: Globalny folder playlisty
 
-// Pobieranie listy plików (bez zmian)
+// Fetching list of files
 func handleGetSongs(w http.ResponseWriter, r *http.Request) {
 	var songs []string
 	err := filepath.Walk("./music", func(path string, info os.FileInfo, err error) error {
@@ -51,7 +51,7 @@ func handleGetSongs(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(songs)
 }
 
-// NOWA FUNKCJA: Wyciąganie okładki z pliku w locie (Teraz z logowaniem!)
+// NEW FUNCTION: Extracting cover art from file on the fly (Now with logging!)
 func handleGetCover(w http.ResponseWriter, r *http.Request) {
 	songPath := r.URL.Query().Get("song")
 	if songPath == "" {
@@ -108,7 +108,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[INFO] Client connected: %s. Total clients: %d\n", clientIP, totalClients)
 
-	// POWITANIE NOWEGO UŻYTKOWNIKA (wysyłamy też stan Shuffle!)
+	// GREETING NEW USER (we also send Shuffle state!)
 	stateMutex.Lock()
 	if currentSong != "" {
 		pos := currentPosition
@@ -122,7 +122,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 			"isPlaying": isPlaying,
 			"isShuffle": isShuffleGlobal,
 			"isRepeat":  isRepeatGlobal,
-			"folder":    currentFolder, // Synchronizujemy folder
+			"folder":    currentFolder, // Synchronize folder
 		}
 		ws.WriteJSON(syncMsg)
 	} else {
@@ -182,7 +182,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 				if playing, ok := msg["isPlaying"].(bool); ok {
 					isPlaying = playing
 				}
-			// Zapamiętujemy Shuffle globalnie
+			// Remember Shuffle globally
 			case "shuffle":
 				if st, ok := msg["state"].(bool); ok {
 					isShuffleGlobal = st
@@ -190,7 +190,7 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 					if st { stateStr = "ON" }
 					log.Printf("[ACTION] Client %s toggled SHUFFLE to %s\n", clientIP, stateStr)
 				}
-			// Zapamiętujemy Pętlę globalnie
+			// Remember Repeat globally
 			case "repeat":
 				if st, ok := msg["state"].(float64); ok { // JSON przysyła float64
 					isRepeatGlobal = int(st)
@@ -213,12 +213,12 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(`<h1>Cześć!</h1><p>Backend Go działa poprawnie. Twój interfejs frontendowy znajduje się teraz pod adresem deweloperskim Vite: <a href="http://localhost:5173">http://localhost:5173</a>.</p>`))
+		w.Write([]byte(`<h1>Hello!</h1><p>Go backend is working correctly. Your frontend interface is now located at the Vite development address: <a href="http://localhost:5173">http://localhost:5173</a>.</p>`))
 	})
 	http.Handle("/music/", http.StripPrefix("/music/", http.FileServer(http.Dir("./music"))))
 	http.HandleFunc("/api/songs", handleGetSongs)
 	
-	// NOWY ENDPOINT DLA OKŁADEK!
+	// NEW ENDPOINT FOR COVERS!
 	http.HandleFunc("/api/cover", handleGetCover)
 	
 	http.HandleFunc("/ws", handleConnections)

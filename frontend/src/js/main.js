@@ -2,6 +2,14 @@ import { fetchSongsLibrary } from './api.js';
 import { SyncWebSocket } from './websocket.js';
 import { initPlayer } from './player.js';
 
+/**
+ * Main Application Entry Point
+ * 
+ * Responsible for orchestrating the application's lifecycle on the browser:
+ * - Bootstrapping the WebSocket connection.
+ * - Initializing the Music Player instance.
+ * - Loading media libraries on startup and rendering the folder tree.
+ */
 document.addEventListener("DOMContentLoaded", () => {
     const socket = new SyncWebSocket();
     const player = initPlayer(socket);
@@ -19,7 +27,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const groups = {};
         songs.forEach(path => {
             const parts = path.split('/');
-            const folder = parts.length > 1 ? parts[0] : "Luzem";
+            const folder = parts.length > 1 ? parts[0] : "Loose Tracks";
             if (!groups[folder]) groups[folder] = [];
             groups[folder].push({ path, name: parts.length > 1 ? parts.slice(1).join('/') : path });
         });
@@ -56,7 +64,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             <img src="${thumbUrl}" class="song-thumb" loading="lazy" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'45\\' height=\\'45\\'><rect width=\\'45\\' height=\\'45\\' fill=\\'%23333\\'/><text x=\\'50%\\' y=\\'50%\\' font-size=\\'20\\' text-anchor=\\'middle\\' dominant-baseline=\\'middle\\' fill=\\'%23555\\'>🎵</text></svg>'">
                             <div class="song-info">
                                 <span class="song-name">${justName}</span>
-                                <span class="song-artist">Z biblioteki</span>
+                                <span class="song-artist">From Library</span>
                             </div>
                         `;
 
