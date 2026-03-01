@@ -29,26 +29,125 @@ var isShuffleGlobal bool // Globalny stan Shuffle
 var isRepeatGlobal int   // 0 = off, 1 = playlist, 2 = track
 var currentFolder string // NOWE: Globalny folder playlisty
 
-// Fetching list of files
+// ----------------------
+// LIBRARY CACHING SYSTEM
+// ----------------------
+var (
+	cachedSongs   []SongMeta
+	libraryMutex  sync.RWMutex
+	libraryLoaded bool
+)
+
+// Data structure mapped for Frontend Library 
+type SongMeta struct {
+	Path   string `json:"path"`
+	Title  string `json:"title"`
+	Artist string `json:"artist"`
+}
+
+// Fetching list of files with Metadata Parsing, Concurrency and RAM Caching
 func handleGetSongs(w http.ResponseWriter, r *http.Request) {
-	var songs []string
+	// 1. FAST PATH: Return from Memory Cache if already loaded
+	libraryMutex.RLock()
+	if libraryLoaded && len(cachedSongs) > 0 {
+		libraryMutex.RUnlock()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(cachedSongs)
+		return
+	}
+	libraryMutex.RUnlock()
+
+	// 2. SLOW PATH: Build Cache using concurrency
+	libraryMutex.Lock()
+	// Double check pattern
+	if libraryLoaded {
+		defer libraryMutex.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(cachedSongs)
+		return
+	}
+
+	var tempSongs []SongMeta
+	var paths []string
+
+	// Walk directory synchronously to gather all valid paths first
 	err := filepath.Walk("./music", func(path string, info os.FileInfo, err error) error {
 		if err != nil { return err }
 		ext := filepath.Ext(path)
 		if !info.IsDir() && (ext == ".mp3" || ext == ".opus") {
-			relPath, _ := filepath.Rel("music", path)
-			relPath = filepath.ToSlash(relPath)
-			songs = append(songs, relPath)
+			paths = append(paths, path)
 		}
 		return nil
 	})
+
 	if err != nil {
+		libraryMutex.Unlock()
 		log.Printf("[ERROR] Failed to walk music directory: %v\n", err)
 		http.Error(w, "Failed to load songs", http.StatusInternalServerError)
 		return
 	}
+
+	// 3. Process ID3 tags efficiently using a worker pool (20 concurrent handles to avoid OS limit)
+	var wg sync.WaitGroup
+	var resultsMutex sync.Mutex
+	semaphore := make(chan struct{}, 20) 
+
+	for _, p := range paths {
+		wg.Add(1)
+		semaphore <- struct{}{} // Block if 20 goroutines are running
+
+		go func(path string) {
+			defer wg.Done()
+			defer func() { <-semaphore }()
+
+			relPath, _ := filepath.Rel("music", path)
+			relPath = filepath.ToSlash(relPath)
+			
+			f, fsErr := os.Open(path)
+			if fsErr != nil { return }
+			defer f.Close()
+
+			fileName := filepath.Base(path)
+			ext := filepath.Ext(path)
+			title := fileName // fallback
+			artist := "Unknown Artist"
+			
+			m, tagErr := tag.ReadFrom(f)
+			if tagErr == nil && m != nil {
+				if m.Title() != "" {
+					title = m.Title()
+				} else {
+					title = title[:len(title)-len(ext)]
+				}
+				if m.Artist() != "" {
+					artist = m.Artist()
+				}
+			} else {
+				title = title[:len(title)-len(ext)]
+			}
+
+			// Save to temp array safely using mutex
+			resultsMutex.Lock()
+			tempSongs = append(tempSongs, SongMeta{
+				Path:   relPath,
+				Title:  title,
+				Artist: artist,
+			})
+			resultsMutex.Unlock()
+		}(p)
+	}
+
+	wg.Wait() // Wait for all tag reading to finish
+
+	// Save to global RAM cache
+	cachedSongs = tempSongs
+	libraryLoaded = true
+	libraryMutex.Unlock()
+
+	log.Printf("[INFO] Master library compiled into RAM successfully! Cached %d tracks.", len(cachedSongs))
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(songs)
+	json.NewEncoder(w).Encode(cachedSongs)
 }
 
 // NEW FUNCTION: Extracting cover art from file on the fly (Now with logging!)

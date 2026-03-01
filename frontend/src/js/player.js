@@ -48,10 +48,22 @@ export function initPlayer(socket) {
 
     const updateNowPlaying = (path) => {
         if (!path) return;
-        const parts = path.split('/');
-        let filename = parts[parts.length - 1].replace(/\.[^/.]+$/, "");
-        trackTitle.innerText = filename;
-        document.getElementById("trackArtist").innerText = "From Library";
+
+        let displayTitle = path.split('/').pop().replace(/\.[^/.]+$/, "");
+        let displayArtist = "Unknown Artist";
+
+        // Reverse lookup over all groups to find the currently playing song's rich metadata
+        for (const folder in allGroupsCache) {
+            const foundNode = allGroupsCache[folder].find(s => s.path === path);
+            if (foundNode) {
+                displayTitle = foundNode.title;
+                displayArtist = foundNode.artist;
+                break;
+            }
+        }
+
+        trackTitle.innerText = displayTitle;
+        document.getElementById("trackArtist").innerText = displayArtist;
 
         const coverUrl = `/api/cover?song=${encodeURIComponent(path)}`;
         const safeCssUrl = coverUrl.replace(/'/g, "%27").replace(/"/g, "%22").replace(/\(/g, "%28").replace(/\)/g, "%29");

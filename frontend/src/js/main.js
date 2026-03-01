@@ -25,11 +25,16 @@ document.addEventListener("DOMContentLoaded", () => {
     fetchSongsLibrary().then(songs => {
         if (!songs || songs.length === 0) return;
         const groups = {};
-        songs.forEach(path => {
+        songs.forEach(song => {
+            const path = song.path;
             const parts = path.split('/');
             const folder = parts.length > 1 ? parts[0] : "Loose Tracks";
             if (!groups[folder]) groups[folder] = [];
-            groups[folder].push({ path, name: parts.length > 1 ? parts.slice(1).join('/') : path });
+            groups[folder].push({
+                path: path,
+                artist: song.artist,
+                title: song.title
+            });
         });
 
         player.setCacheGroups(groups);
@@ -58,13 +63,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
                         const safeEncode = encodeURIComponent(s.path).replace(/'/g, "%27").replace(/"/g, "%22");
                         const thumbUrl = `/api/cover?song=${safeEncode}`;
-                        const justName = s.name.replace(/\.[^/.]+$/, "");
 
                         sb.innerHTML = `
                             <img src="${thumbUrl}" class="song-thumb" loading="lazy" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'45\\' height=\\'45\\'><rect width=\\'45\\' height=\\'45\\' fill=\\'%23333\\'/><text x=\\'50%\\' y=\\'50%\\' font-size=\\'20\\' text-anchor=\\'middle\\' dominant-baseline=\\'middle\\' fill=\\'%23555\\'>🎵</text></svg>'">
                             <div class="song-info">
-                                <span class="song-name">${justName}</span>
-                                <span class="song-artist">From Library</span>
+                                <span class="song-name">${s.title}</span>
+                                <span class="song-artist">${s.artist}</span>
                             </div>
                         `;
 
