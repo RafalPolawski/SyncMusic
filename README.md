@@ -2,6 +2,8 @@
 
 > **Listen together. Perfectly in sync.**
 
+🤖 *Concept and execution designed by a human, coded 100% by AI.*
+
 SyncMusic is a self-hosted, low-latency music synchronization server. Every connected client plays the same song at the same position — simultaneously. Built on cutting-edge web protocols: **HTTP/3**, **WebTransport**, and **QUIC**.
 
 ---
