@@ -78,6 +78,16 @@ export function initPlayer(socket) {
         const coverUrl = `/api/cover?song=${encodeURIComponent(path)}`;
         const safeCssUrl = coverUrl.replace(/'/g, "%27").replace(/"/g, "%22").replace(/\(/g, "%28").replace(/\)/g, "%29");
 
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: displayTitle,
+                artist: displayArtist,
+                artwork: [
+                    { src: coverUrl, sizes: '512x512', type: 'image/jpeg' }
+                ]
+            });
+        }
+
         const img = new Image();
         img.onload = () => {
             coverArt.style.backgroundImage = `url('${safeCssUrl}')`;
@@ -346,6 +356,25 @@ export function initPlayer(socket) {
     document.getElementById("prevBtn").onclick = playPrev;
     miniPrevBtn.onclick = playPrev;
     audio.onended = () => { playNext(true); };
+
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
+        navigator.mediaSession.setActionHandler('nexttrack', () => playNext(false));
+        // Seek actions
+        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+            const skipTime = details.seekOffset || 10;
+            const newTime = Math.max(audio.currentTime - skipTime, 0);
+            socket.sendCommand("seek", { time: newTime, isPlaying: shouldBePlaying });
+        });
+        navigator.mediaSession.setActionHandler('seekforward', (details) => {
+            const skipTime = details.seekOffset || 10;
+            const newTime = Math.min(audio.currentTime + skipTime, audio.duration || 0);
+            socket.sendCommand("seek", { time: newTime, isPlaying: shouldBePlaying });
+        });
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+            socket.sendCommand("seek", { time: details.seekTime, isPlaying: shouldBePlaying });
+        });
+    }
 
     document.getElementById("joinBtn").onclick = () => {
         overlay.style.display = "none";
