@@ -4,7 +4,7 @@ body {
     text-align: center;
     margin: 0;
     padding: 2vh 4vw;
-    /* Zmiana sztywnego paddingu na relatywny ekranowo vw/vh */
+    /* Change hardcoded padding to relative viewport units (vw/vh) */
     background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
     color: white;
     min-height: 100vh;
@@ -36,7 +36,7 @@ p {
     border-radius: 24px;
     max-width: 400px;
     width: 100%;
-    /* Rozciągnięcie na telefonach na max dostepną przestrzeń box-sizing! */
+    /* Stretch out on phones to max available space using box-sizing! */
     box-sizing: border-box;
     margin: 0 auto 30px auto;
     box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
@@ -48,10 +48,10 @@ p {
 
 .cover-art {
     width: 70vw;
-    /* Względna szerokość okładki by nie wypychać przycisków! */
+    /* Relative width for the cover so it doesn't push the buttons! */
     max-width: 280px;
     aspect-ratio: 1 / 1;
-    /* Idealne kółko względem vw */
+    /* Perfect circle relative to vw */
     border-radius: 50%;
     /* Vinyl Effect! */
     background: linear-gradient(45deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
@@ -139,7 +139,7 @@ input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 24px;
-    /* POWIĘKSZONY touch-target kuli na progressbarze */
+    /* INCREASED touch-target for the progress bar thumb */
     height: 24px;
     border-radius: 50%;
     background: #1DB954;
@@ -170,7 +170,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
     justify-content: center;
     align-items: center;
     padding: 20px;
-    /* Zwiększony padding - grubszy obszar łapania wcelowania */
+    /* Increased padding - thicker hit area */
     border-radius: 50%;
     transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     touch-action: manipulation;
@@ -281,14 +281,14 @@ button.item-btn {
     width: 100%;
     text-align: left;
     padding: 14px 15px;
-    /* Delikatne rozciągniecie przycisków w pionie na liście by palec miał swobodę klikania! */
+    /* Slight vertical stretch of buttons on the list for easier tapping! */
     background: rgba(255, 255, 255, 0.05);
     color: #fff;
     border: 1px solid transparent;
     border-radius: 12px;
     margin-bottom: 12px;
     font-size: 16px;
-    /* Wyraźniejsze literki na liście */
+    /* Crisper text on the list */
     font-weight: 500;
     cursor: pointer;
     transition: 0.2s;
@@ -325,15 +325,15 @@ button.item-btn:active {
     font-weight: 700;
 }
 
-/* Style nowej miniaturki w piosence */
+/* New song thumbnail style */
 .song-thumb {
     width: 50px;
-    /* Minimalnie powiększona miniatura do grubszego kafelka przycisku */
+    /* Slightly enlarged thumbnail for thicker button styling */
     height: 50px;
     border-radius: 8px;
     object-fit: cover;
     background: linear-gradient(45deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
-    /* Szkieletowanie w czasie ładowania */
+    /* Skeleton loader while loading */
     flex-shrink: 0;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
 }
@@ -416,16 +416,16 @@ button.item-btn:active {
     transform: scale(0.95);
 }
 
-/* 📱 REGUŁY RESPONSOWNE (MEDIA QUERIES) DLA EKRANÓW MOBILNYCH (0px do 480px width, + małe heighty) */
+/* 📱 RESPONSIVE RULES (MEDIA QUERIES) FOR MOBILE SCREENS (0px to 480px width, + small heights) */
 @media (max-width: 480px) {
     body {
         padding: 5px 10px;
-        /* Całkowicie obcinamy paddingi by odzyskać max miejsca ekranu */
+        /* Completely remove paddings to reclaim max screen space */
     }
 
     h1 {
         font-size: 24px;
-        /* Zmniejsz nagłówek "SyncMusic", oddaje cenne miejsce na przyciski w pionie */
+        /* Shrink "SyncMusic" header, saves valuable vertical space for buttons */
         margin-bottom: 2px;
     }
 
@@ -442,10 +442,10 @@ button.item-btn:active {
 
     .track-title {
         font-size: 21px;
-        /* Skalowanie lekko zbyt bujnej czcionki jeśli artysta ma dłuższą nazwę */
+        /* Scale down slightly too large font if the artist has a longer name */
     }
 
-    /* Dopasowanie przycisku Play, by mieścił się idealnie w zasięgu jednej dłoni trzymając telefon na dole */
+    /* Adjust Play button so it fits perfectly in one hand's reach at the bottom */
     .play-pause-btn {
         width: 65px;
         height: 65px;
@@ -458,7 +458,7 @@ button.item-btn:active {
 
     .ctrl-btn svg {
         width: 24px;
-        /* Minimalna redukcja wielkości ikon pobocznych by zyskać na powietrzu paddingowym */
+        /* Minimal reduction of side icons to gain some padding breathing room */
         height: 24px;
     }
 
@@ -472,14 +472,14 @@ button.item-btn:active {
     }
 }
 
-/* Obsługa bardzo wąskich w poziomie telefonów (gdy piosenki mogłyby wyrzucać controlsy w górę) */
+/* Handle very narrow horizontal phones (where songs could push controls upwards) */
 @media (max-height: 700px) {
     .cover-art {
         width: 55vw;
-        /* Zabieramy z okładki jeśli telefon jest niski */
+        /* Steal space from cover if phone is short */
         max-width: 200px;
         font-size: 50px;
         margin-bottom: 15px;
-        /* Skracamy separację winyla od reszty elementów by unikać paska przesuwu w odtwarzaczu */
+        /* Reduce vinyl separation from rest of elements to avoid scrollbar in player */
     }
 }

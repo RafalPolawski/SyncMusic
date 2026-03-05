@@ -1,14 +1,9 @@
-const CACHE_NAME = 'syncmusic-cache-v1';
+const CACHE_NAME = 'syncmusic-cache-v3';
 
 // Assets to cache on installation
 const STATIC_ASSETS = [
     '/',
-    '/index.html',
-    '/src/styles/main.css',
-    '/src/js/main.js',
-    '/src/js/player.js',
-    '/src/js/webtransport.js',
-    '/src/js/api.js'
+    '/index.html'
 ];
 
 self.addEventListener('install', (event) => {
@@ -74,22 +69,29 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Default API / other requests Cache First -> then Network
+    // Default strategy: Network First -> Fallback to Cache
+    // This is required for Vite dev server (HMR and dynamic HTML injection) to work on refresh.
     event.respondWith(
-        caches.match(event.request).then((response) => {
-            return response || fetch(event.request).then(netRes => {
-                // Ignore API data caching to keep song list fresh (optional: can cache library API for total offline)
-                if (url.pathname.startsWith('/api/')) {
-                    return netRes;
-                }
+        fetch(event.request).then((netRes) => {
+            // Don't cache API or Vite dev files to keep them fresh and avoid wrapper issues
+            if (url.pathname.startsWith('/api/') ||
+                url.pathname.startsWith('/src/') ||
+                url.pathname.startsWith('/@vite/') ||
+                url.pathname.startsWith('/node_modules/')) {
+                return netRes;
+            }
 
-                if (!netRes || netRes.status !== 200 || netRes.type !== 'basic') {
-                    return netRes;
-                }
+            // Cache valid responses for offline use
+            if (netRes && netRes.status === 200 && netRes.type === 'basic') {
                 const responseToCache = netRes.clone();
                 caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
-                return netRes;
-            });
+            }
+
+            return netRes;
+        }).catch(() => {
+            // If network fails (user is offline), return from cache
+            console.log('[SW] Network failed, falling back to cache for:', url.pathname);
+            return caches.match(event.request);
         })
     );
 });

@@ -268,7 +268,15 @@ export function initPlayer(socket) {
         overlay.style.display = "none";
         pendingPlay = false;
         const waitTimeSeconds = (Date.now() - syncReceivedTime) / 1000;
-        audio.currentTime = syncAudioTime + waitTimeSeconds;
+        let targetTime = syncAudioTime + waitTimeSeconds;
+
+        // Prevent race condition: if calculated time exceeds duration (network lag),
+        // clamping it prevents instantly firing 'onended' and skipping track for everyone.
+        if (audio.duration && targetTime >= audio.duration) {
+            targetTime = Math.max(0, audio.duration - 0.5);
+        }
+
+        audio.currentTime = targetTime;
         shouldBePlaying = true;
         audio.play();
     };
@@ -276,9 +284,11 @@ export function initPlayer(socket) {
     return {
         handleSocketMessage: (msg) => {
             if (msg.action === "sync") {
-                if (msg.folder && allGroupsCache[msg.folder]) {
+                if (msg.folder) {
                     currentFolderName = msg.folder;
-                    currentPlaylist = allGroupsCache[msg.folder];
+                    if (allGroupsCache[msg.folder]) {
+                        currentPlaylist = allGroupsCache[msg.folder];
+                    }
                 }
                 audio.src = "/music/" + msg.song;
                 currentSongPath = msg.song;
@@ -319,7 +329,14 @@ export function initPlayer(socket) {
             } else if (msg.action === "shuffle") updateShuffleUI(msg.state);
             else if (msg.action === "repeat") updateRepeatUI(msg.state);
         },
-        setCacheGroups: (groups) => allGroupsCache = groups,
+        setCacheGroups: (groups) => {
+            allGroupsCache = groups;
+            // If we already received a sync before library loaded, hydrate the playlist now
+            if (currentFolderName && currentPlaylist.length === 0 && allGroupsCache[currentFolderName]) {
+                currentPlaylist = allGroupsCache[currentFolderName];
+                precacheNextTracks(); // trigger immediate buffer for late joiners
+            }
+        },
         setCurrentPlaylistFolder: (folder) => { currentFolderName = folder; currentPlaylist = allGroupsCache[folder]; },
         onTrackChanged: (cb) => { onTrackChangeCallback = cb; },
         getCurrentState: () => ({ path: currentSongPath, folder: currentFolderName })
