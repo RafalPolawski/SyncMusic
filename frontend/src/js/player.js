@@ -18,6 +18,14 @@ export function initPlayer(socket) {
     const coverArt = document.getElementById("coverArt");
     const shuffleBtn = document.getElementById("shuffleBtn");
     const overlay = document.getElementById("overlay");
+    const playerContainer = document.getElementById("playerContainer");
+    const miniPlayerClickZone = document.getElementById("miniPlayerClickZone");
+    const playerToggleBtn = document.getElementById("playerToggleBtn");
+    const miniPlayPauseBtn = document.getElementById("miniPlayPauseBtn");
+    const miniNextBtn = document.getElementById("miniNextBtn");
+    const miniPrevBtn = document.getElementById("miniPrevBtn");
+    const miniShuffleBtn = document.getElementById("miniShuffleBtn");
+    const miniRepeatBtn = document.getElementById("miniRepeatBtn");
 
     let pendingPlay = false;
     let syncReceivedTime = 0;
@@ -128,28 +136,96 @@ export function initPlayer(socket) {
     const updateShuffleUI = (state) => {
         isShuffle = state;
         document.getElementById("shuffleBtn").classList.toggle("active-green", isShuffle);
+        miniShuffleBtn.classList.toggle("active-green", isShuffle);
     };
 
     const updateRepeatUI = (state) => {
         isRepeat = state;
         const btn = document.getElementById("repeatBtn");
         btn.classList.toggle("active-green", isRepeat > 0);
+        miniRepeatBtn.classList.toggle("active-green", isRepeat > 0);
+
+        let repeatIconHtml = '';
         if (isRepeat === 0 || isRepeat === 1) {
-            btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>';
+            repeatIconHtml = '<svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>';
         } else if (isRepeat === 2) {
-            btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zm-4-2V9h-1l-2 1v1h1.5v4H13z"/></svg>';
+            repeatIconHtml = '<svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zm-4-2V9h-1l-2 1v1h1.5v4H13z"/></svg>';
         }
+        btn.innerHTML = repeatIconHtml;
+        miniRepeatBtn.innerHTML = repeatIconHtml;
     };
 
-    document.getElementById("shuffleBtn").onclick = () => {
+    const toggleShuffle = () => {
         if (navigator.vibrate) navigator.vibrate(30);
         socket.sendCommand("shuffle", { state: !isShuffle });
     };
 
-    document.getElementById("repeatBtn").onclick = () => {
+    const toggleRepeat = () => {
         if (navigator.vibrate) navigator.vibrate(30);
         socket.sendCommand("repeat", { state: (isRepeat + 1) % 3 });
     };
+
+    document.getElementById("shuffleBtn").onclick = toggleShuffle;
+    miniShuffleBtn.onclick = toggleShuffle;
+
+    document.getElementById("repeatBtn").onclick = toggleRepeat;
+    miniRepeatBtn.onclick = toggleRepeat;
+
+    // Mobile Player Expand / Collapse Logic
+    let isExpanded = false;
+
+    const collapsePlayer = () => {
+        if (isExpanded) {
+            isExpanded = false;
+            playerContainer.classList.remove("player-expanded");
+        }
+    };
+
+    const expandPlayer = () => {
+        // Only expand if we are on a mobile-sized screen
+        if (!isExpanded && window.innerWidth < 1024) {
+            isExpanded = true;
+            playerContainer.classList.add("player-expanded");
+            // Push a history state so device back button closes it
+            history.pushState({ playerOpen: true }, "");
+        }
+    };
+
+    miniPlayerClickZone.onclick = (e) => {
+        // Prevent expansion if clicking on mini controls
+        if (e.target.closest('#miniControls')) return;
+        expandPlayer();
+    };
+
+    playerToggleBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (isExpanded) {
+            history.back(); // Trigger popstate
+        }
+    };
+
+    window.addEventListener('popstate', () => {
+        collapsePlayer();
+    });
+
+    // Touch gesture: Pull down to close
+    let touchStartY = 0;
+    playerContainer.addEventListener('touchstart', (e) => {
+        touchStartY = e.changedTouches[0].screenY;
+    }, { passive: true });
+
+    playerContainer.addEventListener('touchend', (e) => {
+        if (!isExpanded) return;
+        // Ignore pull down if user is interacting with the progress bar
+        if (e.target === progressBar) return;
+        
+        const touchEndY = e.changedTouches[0].screenY;
+        if (touchEndY - touchStartY > 80) { // 80px swipe down threshold
+            if (isExpanded) {
+                history.back();
+            }
+        }
+    }, { passive: true });
 
     setInterval(() => {
         if (!shouldBePlaying) return;
@@ -184,10 +260,13 @@ export function initPlayer(socket) {
         durationDisp.innerText = formatTime(audio.duration);
     });
 
-    playPauseBtn.onclick = () => {
+    const togglePlayPause = () => {
         if (navigator.vibrate) navigator.vibrate(50);
         socket.sendCommand(shouldBePlaying ? "pause" : "play", { time: audio.currentTime });
     };
+
+    playPauseBtn.onclick = togglePlayPause;
+    miniPlayPauseBtn.onclick = togglePlayPause;
 
     progressBar.addEventListener('input', () => {
         isDraggingProgress = true;
@@ -201,11 +280,13 @@ export function initPlayer(socket) {
 
     audio.onplay = () => {
         playPauseBtn.innerHTML = svgPause;
+        miniPlayPauseBtn.innerHTML = svgPause;
         coverArt.classList.add("playing");
     };
 
     audio.onpause = () => {
         playPauseBtn.innerHTML = svgPlay;
+        miniPlayPauseBtn.innerHTML = svgPlay;
         coverArt.classList.remove("playing");
     };
 
@@ -261,7 +342,9 @@ export function initPlayer(socket) {
     };
 
     document.getElementById("nextBtn").onclick = () => playNext(false);
+    miniNextBtn.onclick = () => playNext(false);
     document.getElementById("prevBtn").onclick = playPrev;
+    miniPrevBtn.onclick = playPrev;
     audio.onended = () => { playNext(true); };
 
     document.getElementById("joinBtn").onclick = () => {

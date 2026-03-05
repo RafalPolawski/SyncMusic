@@ -3,7 +3,15 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- PWA Setup -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1DB954">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/icon-192.png">
+    <link rel="icon" type="image/png" href="/icon-192.png">
+
     <title>SyncMusic</title>
     <!-- Modern Inter Font for a Premium Feel -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,67 +27,121 @@
         <button id="joinBtn">JOIN SESSION 🎧</button>
     </div>
 
-    <h1>SyncMusic</h1>
-    <p>Status: <span id="status" style="color: yellow;">Connecting...</span></p>
+    <div id="app-wrapper">
+        <div class="left-panel">
+            <h1>SyncMusic</h1>
+            <p>Status: <span id="status" style="color: yellow;">Connecting...</span></p>
 
-    <div class="player-container">
-        <div class="cover-art" id="coverArt">🎵</div>
+            <div class="player-container" id="playerContainer">
+                <!-- Mobile pull indicator / collapse button -->
+                <button id="playerToggleBtn" class="player-toggle-btn">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z" />
+                    </svg>
+                </button>
 
-        <div class="track-info">
-            <h2 class="track-title" id="trackTitle">Select a track</h2>
-            <p class="track-artist" id="trackArtist">Unknown Artist</p>
-        </div>
+                <!-- Clickable zone for mobile mini-player expansion -->
+                <div class="mini-player-click-zone" id="miniPlayerClickZone">
+                    <div class="cover-art" id="coverArt">🎵</div>
 
-        <div class="progress-container">
-            <input type="range" id="progressBar" min="0" max="100" value="0" step="0.1">
-            <div class="time-display">
-                <span id="currentTimeDisp">0:00</span>
-                <span id="durationDisp">0:00</span>
+                    <div class="track-info">
+                        <h2 class="track-title" id="trackTitle">Select a track</h2>
+                        <p class="track-artist" id="trackArtist">Unknown Artist</p>
+                    </div>
+
+                    <!-- Mobile mini-player quick controls (play/pause, next) -->
+                    <div class="mini-controls" id="miniControls">
+                        <button id="miniShuffleBtn" class="ctrl-btn mini-btn" title="Shuffle">
+                            <svg viewBox="0 0 24 24">
+                                <path
+                                    d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z" />
+                            </svg>
+                        </button>
+                        <button id="miniPrevBtn" class="ctrl-btn mini-btn" title="Previous">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+                            </svg>
+                        </button>
+                        <button id="miniPlayPauseBtn" class="ctrl-btn mini-btn play-pause-mini-btn" title="Play/Pause">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z" />
+                            </svg>
+                        </button>
+                        <button id="miniNextBtn" class="ctrl-btn mini-btn" title="Next">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+                            </svg>
+                        </button>
+                        <button id="miniRepeatBtn" class="ctrl-btn mini-btn" title="Repeat">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="progress-container">
+                    <input type="range" id="progressBar" min="0" max="100" value="0" step="0.1">
+                    <div class="time-display">
+                        <span id="currentTimeDisp">0:00</span>
+                        <span id="durationDisp">0:00</span>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <button id="shuffleBtn" class="ctrl-btn" title="Shuffle">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z" />
+                        </svg>
+                    </button>
+                    <button id="prevBtn" class="ctrl-btn" title="Previous">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
+                        </svg>
+                    </button>
+                    <button id="playPauseBtn" class="ctrl-btn play-pause-btn" title="Play/Pause">
+                        <svg id="icon-play" viewBox="0 0 24 24">
+                            <path d="M8 5v14l11-7z" />
+                        </svg>
+                    </button>
+                    <button id="nextBtn" class="ctrl-btn" title="Next">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
+                        </svg>
+                    </button>
+                    <button id="repeatBtn" class="ctrl-btn" title="Repeat">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z" />
+                        </svg>
+                    </button>
+                </div>
+
+                <audio id="audioPlayer"></audio>
             </div>
-        </div>
+        </div> <!-- End left-panel -->
 
-        <div class="controls">
-            <button id="shuffleBtn" class="ctrl-btn" title="Shuffle">
-                <svg viewBox="0 0 24 24">
-                    <path
-                        d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z" />
-                </svg>
-            </button>
-            <button id="prevBtn" class="ctrl-btn" title="Previous">
-                <svg viewBox="0 0 24 24">
-                    <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
-                </svg>
-            </button>
-            <button id="playPauseBtn" class="ctrl-btn play-pause-btn" title="Play/Pause">
-                <svg id="icon-play" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z" />
-                </svg>
-            </button>
-            <button id="nextBtn" class="ctrl-btn" title="Next">
-                <svg viewBox="0 0 24 24">
-                    <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
-                </svg>
-            </button>
-            <button id="repeatBtn" class="ctrl-btn" title="Repeat">
-                <svg viewBox="0 0 24 24">
-                    <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z" />
-                </svg>
-            </button>
-        </div>
+        <div class="right-panel">
+            <div class="playlist-section">
+                <h3>Library</h3>
+                <div id="loadingIndicator" class="loading-indicator">
+                    <div class="spinner"></div>
+                    <span>Loading library...</span>
+                </div>
+                <button id="backBtn" class="item-btn">⬅ Back to folders</button>
+                <div id="foldersContainer" style="display: none;"></div>
+                <div id="songsContainer" style="display: none;"></div>
 
-        <audio id="audioPlayer"></audio>
-    </div>
-
-    <div class="playlist-section">
-        <h3>Library</h3>
-        <div id="loadingIndicator" class="loading-indicator">
-            <div class="spinner"></div>
-            <span>Loading library...</span>
-        </div>
-        <button id="backBtn" class="item-btn">⬅ Back to folders</button>
-        <div id="foldersContainer" style="display: none;"></div>
-        <div id="songsContainer" style="display: none;"></div>
-    </div>
+                <!-- Locator FAB -->
+                <button id="locateTrackBtn" class="locate-fab" title="Locate Playing Track">
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                    </svg>
+                </button>
+            </div>
+        </div> <!-- End right-panel -->
+    </div> <!-- End app-wrapper -->
 
     <script type="module" src="/src/js/main.js"></script>
 </body>

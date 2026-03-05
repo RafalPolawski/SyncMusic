@@ -33,6 +33,12 @@ document.addEventListener("DOMContentLoaded", () => {
     let globalPlayingPath = null;
     let globalPlayingFolder = null;
 
+    const foldersContainer = document.getElementById("foldersContainer");
+    const songsContainer = document.getElementById("songsContainer");
+    const backBtn = document.getElementById("backBtn");
+    const loadingIndicator = document.getElementById("loadingIndicator");
+    const locateTrackBtn = document.getElementById("locateTrackBtn");
+
     const updateHighlights = () => {
         // Hydrate from player if missing (useful when player syncs before UI is built)
         if (!globalPlayingPath || !globalPlayingFolder) {
@@ -51,14 +57,24 @@ document.addEventListener("DOMContentLoaded", () => {
             if (folderBtn) folderBtn.classList.add('active-folder');
         }
 
+        let isTrackActiveInCurrentView = false;
+
         // Highlight active track
         if (globalPlayingPath) {
             const trackBtns = document.querySelectorAll('#songsContainer .item-btn');
             trackBtns.forEach(btn => {
                 if (btn.dataset.path === globalPlayingPath) {
                     btn.classList.add('active-track');
+                    isTrackActiveInCurrentView = true;
                 }
             });
+        }
+
+        // Show or hide the Locate FAB based on if we are in a track view and the track is playing here
+        if (isTrackActiveInCurrentView && songsContainer.style.display !== "none") {
+            locateTrackBtn.classList.add('visible');
+        } else {
+            locateTrackBtn.classList.remove('visible');
         }
     };
 
@@ -69,10 +85,12 @@ document.addEventListener("DOMContentLoaded", () => {
         updateHighlights();
     });
 
-    const foldersContainer = document.getElementById("foldersContainer");
-    const songsContainer = document.getElementById("songsContainer");
-    const backBtn = document.getElementById("backBtn");
-    const loadingIndicator = document.getElementById("loadingIndicator");
+    locateTrackBtn.onclick = () => {
+        const activeTrack = document.querySelector('.active-track');
+        if (activeTrack) {
+            activeTrack.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    };
 
     fetchSongsLibrary().then(songs => {
         loadingIndicator.style.display = "none";
@@ -96,6 +114,7 @@ document.addEventListener("DOMContentLoaded", () => {
             foldersContainer.style.display = "block";
             songsContainer.style.display = "none";
             backBtn.style.display = "none";
+            locateTrackBtn.classList.remove('visible');
             foldersContainer.innerHTML = "";
 
             for (const f in groups) {
@@ -109,6 +128,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     songsContainer.style.display = "block";
                     backBtn.style.display = "block";
                     songsContainer.innerHTML = "";
+                    locateTrackBtn.classList.remove('visible'); // Will be re-added inside updateHighlights if needed
 
                     player.setCurrentPlaylistFolder(f);
 
