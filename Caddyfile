@@ -5,7 +5,7 @@
 	auto_https off
 	local_certs
 	on_demand_tls {
-		ask http://sync-app:12137/api/ok
+		ask http://syncmusic-backend:12137/api/ok
 	}
 }
 
@@ -20,15 +20,15 @@ http://:80 {
 	}
 
 	handle @api {
-		reverse_proxy sync-app:12137
+		reverse_proxy syncmusic-backend:12137
 	}
 
 	handle @music {
-		reverse_proxy sync-app:12137
+		reverse_proxy syncmusic-backend:12137
 	}
 
 	handle {
-		reverse_proxy sync-frontend:5173
+		reverse_proxy syncmusic-frontend:5173
 	}
 }
 
@@ -47,14 +47,14 @@ http://:80 {
 	}
 
 	handle @api {
-		reverse_proxy sync-app:12137
+		reverse_proxy syncmusic-backend:12137
 	}
 
 	handle @music {
-		reverse_proxy sync-app:12137
+		reverse_proxy syncmusic-backend:12137
 	}
 
 	handle {
-		reverse_proxy sync-frontend:5173
+		reverse_proxy syncmusic-frontend:5173
 	}
 }

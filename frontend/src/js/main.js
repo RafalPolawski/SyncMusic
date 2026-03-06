@@ -110,6 +110,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         player.setCacheGroups(groups);
 
+        let savedScrollWindow = 0;
+        let savedScrollPanel = 0;
+
         const showFolders = () => {
             foldersContainer.style.display = "block";
             songsContainer.style.display = "none";
@@ -124,6 +127,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 b.dataset.folder = f;
                 b.innerText = `📁 ${f} (${groups[f].length})`;
                 b.onclick = () => {
+                    // Save scroll position before hiding folders
+                    savedScrollWindow = window.scrollY || document.documentElement.scrollTop;
+                    const rp = document.querySelector('.right-panel');
+                    savedScrollPanel = rp ? rp.scrollTop : 0;
+
                     foldersContainer.style.display = "none";
                     songsContainer.style.display = "block";
                     backBtn.style.display = "block";
@@ -158,9 +166,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
                     // Reapply highlights since DOM elements were just recreated for the songs view
                     updateHighlights();
+
+                    // Reset scroll to top for the new playlist view
+                    window.scrollTo(0, 0);
+                    if (rp) rp.scrollTo(0, 0);
                 };
                 foldersContainer.appendChild(b);
             }
+
+            // Restore scroll position after rendering folders
+            window.scrollTo(0, savedScrollWindow);
+            const rp = document.querySelector('.right-panel');
+            if (rp) rp.scrollTo(0, savedScrollPanel);
         };
 
         showFolders();

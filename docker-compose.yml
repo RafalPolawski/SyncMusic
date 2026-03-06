@@ -1,7 +1,8 @@
 # SyncMusic — Docker Compose
 
 services:
-  sync-app:
+  syncmusic-backend:
+    container_name: syncmusic-backend
     build:
       context: ./backend
     ports:
@@ -10,7 +11,8 @@ services:
     volumes:
       - "/c/Muzyka:/app/music" # Mount the host music library into the container
 
-  caddy:
+  syncmusic-proxy:
+    container_name: syncmusic-proxy
     build:
       context: ./caddy
     restart: unless-stopped
@@ -23,10 +25,11 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - sync-app
-      - sync-frontend
+      - syncmusic-backend
+      - syncmusic-frontend
 
-  sync-frontend:
+  syncmusic-frontend:
+    container_name: syncmusic-frontend
     build:
       context: ./frontend
     ports:
@@ -35,7 +38,7 @@ services:
       - ./frontend:/app
       - /app/node_modules # Anonymous volume — prevents the Windows bind mount from overwriting the container's node_modules
     depends_on:
-      - sync-app
+      - syncmusic-backend
 
 volumes:
   caddy_data:
