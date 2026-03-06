@@ -18,7 +18,8 @@ SyncMusic is a self-hosted, low-latency music synchronization server. Every conn
 | **Global playback state** | Play, pause, seek, and track changes are broadcast to all connected clients instantly |
 | **New client sync** | Clients joining mid-session receive the current song, position, shuffle & repeat state immediately |
 | **Shuffle & Repeat modes** | Three repeat modes (off / playlist / track) and shuffle — state shared across all clients |
-| **Music library scan** | Backend walks the mounted music directory and reads `.opus` tags (title, artist) concurrently |
+| **Music library scan** | Backend walks the mounted music directory and reads tags (title, artist) from supported audio files concurrently |
+| **Broad audio support** | Supports `.opus`, `.mp3`, `.flac`, `.wav`, `.ogg`, `.m4a`, and `.aac` files natively |
 | **Library caching** | Library is scanned once and served from RAM on subsequent requests |
 | **Embedded album art** | `/api/cover` extracts and serves embedded artwork from audio file tags |
 | **Folder-based browsing** | Frontend groups tracks by folder; active folder is highlighted globally |
@@ -41,7 +42,6 @@ SyncMusic is a self-hosted, low-latency music synchronization server. Every conn
 | **Queue management** | 📋 Planned | Add-to-queue, reorder queue, view upcoming tracks — shared state across clients |
 | **User identity / nicknames** | 📋 Planned | Each client announces a display name; server shows who is currently controlling playback |
 | **Lyrics display** | 📋 Planned | Fetch synchronized lyrics (e.g. LRCLIB API) and display them in sync with playback position |
-| **Audio format support** | 📋 Planned | Currently only `.opus`; extend to `.mp3`, `.flac`, `.m4a` |
 | **Persistent state (Redis)** | 📋 Planned | Replace in-memory globals with Redis for crash recovery and multi-instance support |
 | **User accounts (PostgreSQL)** | 📋 Planned | Playlists, listening history, per-user settings |
 | **MinIO / S3 file storage** | 📋 Planned | Move music files out of bind-mount into S3-compatible object storage for scalability |
@@ -218,7 +218,7 @@ go run main.go
 
 ## 📝 Notes
 
-- **Audio format**: Currently only `.opus` files are scanned. Support for `.mp3`, `.flac`, and `.m4a` is planned.
+- **Audio format**: The application fully supports and scans `.opus`, `.mp3`, `.flac`, `.wav`, `.ogg`, `.m4a`, and `.aac` files.
 - **WebTransport TLS**: The self-signed certificate regenerates on every container restart. The browser fetches the new hash automatically via `/api/cert-hash`.
 - **MagicDNS**: WebTransport connects directly to the host IP (not via MagicDNS hostname) due to browser restrictions on self-signed certificates for arbitrary hostnames.
 

@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 	"net"
+	"strings"
 
 	"github.com/dhowden/tag"
 	"github.com/quic-go/quic-go/http3"
@@ -86,8 +87,12 @@ func handleGetSongs(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		ext := filepath.Ext(path)
-		if !info.IsDir() && ext == ".opus" {
+		ext := strings.ToLower(filepath.Ext(path))
+		validExts := map[string]bool{
+			".opus": true, ".mp3": true, ".flac": true,
+			".wav": true, ".ogg": true, ".m4a": true, ".aac": true,
+		}
+		if !info.IsDir() && validExts[ext] {
 			paths = append(paths, path)
 		}
 		return nil

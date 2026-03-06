@@ -56,6 +56,8 @@ export function initPlayer(socket) {
         return `${m}:${s}`;
     };
 
+    const encodePath = (path) => path.split('/').map(encodeURIComponent).join('/');
+
     const updateNowPlaying = (path) => {
         if (!path) return;
 
@@ -118,7 +120,7 @@ export function initPlayer(socket) {
             // Buffer up to 3 random tracks if shuffling
             for (let i = 0; i < 3; i++) {
                 const randIndex = Math.floor(Math.random() * currentPlaylist.length);
-                urlsToCache.push(`/music/${currentPlaylist[randIndex].path}`);
+                urlsToCache.push(`/music/${encodePath(currentPlaylist[randIndex].path)}`);
             }
         } else {
             // Buffer the next 2 tracks linearly
@@ -127,9 +129,9 @@ export function initPlayer(socket) {
                 for (let i = 1; i <= 2; i++) {
                     let nextIndex = currentIndex + i;
                     if (nextIndex < currentPlaylist.length) {
-                        urlsToCache.push(`/music/${currentPlaylist[nextIndex].path}`);
+                        urlsToCache.push(`/music/${encodePath(currentPlaylist[nextIndex].path)}`);
                     } else if (isRepeat !== 0) { // wrap around if repeat is on
-                        urlsToCache.push(`/music/${currentPlaylist[nextIndex % currentPlaylist.length].path}`);
+                        urlsToCache.push(`/music/${encodePath(currentPlaylist[nextIndex % currentPlaylist.length].path)}`);
                     }
                 }
             }
@@ -228,7 +230,7 @@ export function initPlayer(socket) {
         if (!isExpanded) return;
         // Ignore pull down if user is interacting with the progress bar
         if (e.target === progressBar) return;
-        
+
         const touchEndY = e.changedTouches[0].screenY;
         if (touchEndY - touchStartY > 80) { // 80px swipe down threshold
             if (isExpanded) {
@@ -402,7 +404,7 @@ export function initPlayer(socket) {
                         currentPlaylist = allGroupsCache[msg.folder];
                     }
                 }
-                audio.src = "/music/" + msg.song;
+                audio.src = "/music/" + encodePath(msg.song);
                 currentSongPath = msg.song;
                 updateNowPlaying(currentSongPath);
                 audio.currentTime = msg.time;
@@ -422,7 +424,7 @@ export function initPlayer(socket) {
                 } else if (msg.isPrev) {
                     if (playedHistory.length > 0 && playedHistory[playedHistory.length - 1] === msg.song) playedHistory.pop();
                 }
-                audio.src = "/music/" + msg.song;
+                audio.src = "/music/" + encodePath(msg.song);
                 currentSongPath = msg.song;
                 updateNowPlaying(currentSongPath);
                 shouldBePlaying = true;
