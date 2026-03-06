@@ -14,13 +14,12 @@ import (
 	"encoding/pem"
 	"log"
 	"math/big"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
-	"net"
-	"strings"
 
 	"github.com/dhowden/tag"
 	"github.com/quic-go/quic-go/http3"
@@ -28,33 +27,83 @@ import (
 )
 
 type WTClient struct {
-	Session *webtransport.Session
-	Stream  *webtransport.Stream
-	mu      sync.Mutex
+	Session  *webtransport.Session
+	Stream   *webtransport.Stream
+	SendChan chan []byte
+	cancel   context.CancelFunc
+	Nickname string
 }
 
-var clients = make(map[*WTClient]bool)
-var mutex sync.Mutex
+type Room struct {
+	Clients         map[*WTClient]bool
+	ClientsMutex    sync.Mutex
+	StateMutex      sync.Mutex
+	CurrentSong     string
+	IsPlaying       bool
+	CurrentPosition float64
+	LastUpdate      time.Time
+	IsShuffleGlobal bool
+	IsRepeatGlobal  int
+	CurrentFolder   string
+	GlobalVolume    float64
+}
 
-var stateMutex sync.Mutex
-var currentSong string
-var isPlaying bool
-var currentPosition float64
-var lastUpdate time.Time
-var isShuffleGlobal bool
-var isRepeatGlobal int
-var currentFolder string
+func NewRoom() *Room {
+	return &Room{
+		Clients:      make(map[*WTClient]bool),
+		GlobalVolume: 1.0, // Default 100%
+	}
+}
+
+var globalRoom = NewRoom()
+
+func (r *Room) Broadcast(msg []byte) {
+	r.ClientsMutex.Lock()
+	defer r.ClientsMutex.Unlock()
+	for c := range r.Clients {
+		select {
+		case c.SendChan <- msg:
+		default:
+			log.Printf("[WARN] Client SendChan full, dropping message\n")
+		}
+	}
+}
+
+func (r *Room) BroadcastPresence() {
+	r.ClientsMutex.Lock()
+	var users []string
+	for c := range r.Clients {
+		if c.Nickname != "" {
+			users = append(users, c.Nickname)
+		} else {
+			users = append(users, "Anonymous")
+		}
+	}
+	r.ClientsMutex.Unlock()
+
+	msg := map[string]interface{}{
+		"action": "presence",
+		"users":  users,
+	}
+	b, _ := json.Marshal(msg)
+	r.Broadcast(append(b, '\n'))
+}
+
+func clientWriter(ctx context.Context, client *WTClient) {
+	defer client.Stream.Close()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-client.SendChan:
+			client.Stream.Write(msg)
+		}
+	}
+}
 
 var certHashStr string
 
-// ----------------------
-// LIBRARY CACHING SYSTEM
-// ----------------------
-var (
-	cachedSongs   []SongMeta
-	libraryMutex  sync.RWMutex
-	libraryLoaded bool
-)
+// initDB() from db.go will handle setup
 
 type SongMeta struct {
 	Path   string `json:"path"`
@@ -63,108 +112,30 @@ type SongMeta struct {
 }
 
 func handleGetSongs(w http.ResponseWriter, r *http.Request) {
-	libraryMutex.RLock()
-	if libraryLoaded && len(cachedSongs) > 0 {
-		libraryMutex.RUnlock()
+	status := GetScanStatus()
+	if status.IsScanning {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(cachedSongs)
-		return
-	}
-	libraryMutex.RUnlock()
-
-	libraryMutex.Lock()
-	if libraryLoaded {
-		defer libraryMutex.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(cachedSongs)
+		json.NewEncoder(w).Encode(status)
 		return
 	}
 
-	var tempSongs []SongMeta
-	var paths []string
-
-	err := filepath.Walk("./music", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		ext := strings.ToLower(filepath.Ext(path))
-		validExts := map[string]bool{
-			".opus": true, ".mp3": true, ".flac": true,
-			".wav": true, ".ogg": true, ".m4a": true, ".aac": true,
-		}
-		if !info.IsDir() && validExts[ext] {
-			paths = append(paths, path)
-		}
-		return nil
-	})
-
+	songs, err := getSongsFromDB()
 	if err != nil {
-		libraryMutex.Unlock()
-		log.Printf("[ERROR] Failed to walk music directory: %v\n", err)
-		http.Error(w, "Failed to load songs", http.StatusInternalServerError)
+		log.Printf("[ERROR] Database query Failed: %v\n", err)
+		http.Error(w, "Failed to load songs from database", http.StatusInternalServerError)
 		return
 	}
 
-	var wg sync.WaitGroup
-	var resultsMutex sync.Mutex
-	semaphore := make(chan struct{}, 20)
-
-	for _, p := range paths {
-		wg.Add(1)
-		semaphore <- struct{}{}
-
-		go func(path string) {
-			defer wg.Done()
-			defer func() { <-semaphore }()
-
-			relPath, _ := filepath.Rel("music", path)
-			relPath = filepath.ToSlash(relPath)
-
-			f, fsErr := os.Open(path)
-			if fsErr != nil {
-				return
-			}
-			defer f.Close()
-
-			fileName := filepath.Base(path)
-			ext := filepath.Ext(path)
-			title := fileName // fallback
-			artist := "Unknown Artist"
-
-			m, tagErr := tag.ReadFrom(f)
-			if tagErr == nil && m != nil {
-				if m.Title() != "" {
-					title = m.Title()
-				} else {
-					title = title[:len(title)-len(ext)]
-				}
-				if m.Artist() != "" {
-					artist = m.Artist()
-				}
-			} else {
-				title = title[:len(title)-len(ext)]
-			}
-
-			resultsMutex.Lock()
-			tempSongs = append(tempSongs, SongMeta{
-				Path:   relPath,
-				Title:  title,
-				Artist: artist,
-			})
-			resultsMutex.Unlock()
-		}(p)
+	// First run, empty DB fallback
+	if len(songs) == 0 {
+		go scanLibraryToDB()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(GetScanStatus())
+		return
 	}
-
-	wg.Wait()
-
-	cachedSongs = tempSongs
-	libraryLoaded = true
-	libraryMutex.Unlock()
-
-	log.Printf("[INFO] Master library compiled into RAM successfully! Cached %d tracks.", len(cachedSongs))
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(cachedSongs)
+	json.NewEncoder(w).Encode(songs)
 }
 
 func handleGetCover(w http.ResponseWriter, r *http.Request) {
@@ -264,52 +235,60 @@ func handleWTSession(session *webtransport.Session) {
 		return
 	}
 
-	client := &WTClient{Session: session, Stream: stream}
+	ctx, cancel := context.WithCancel(context.Background())
+	client := &WTClient{
+		Session:  session,
+		Stream:   stream,
+		SendChan: make(chan []byte, 100),
+		cancel:   cancel,
+	}
 
-	mutex.Lock()
-	clients[client] = true
-	totalClients := len(clients)
-	mutex.Unlock()
+	go clientWriter(ctx, client)
+
+	globalRoom.ClientsMutex.Lock()
+	globalRoom.Clients[client] = true
+	totalClients := len(globalRoom.Clients)
+	globalRoom.ClientsMutex.Unlock()
 
 	log.Printf("[INFO] WT Client connected: %s. Total clients: %d\n", clientIP, totalClients)
 
 	defer func() {
-		mutex.Lock()
-		delete(clients, client)
-		remaining := len(clients)
-		mutex.Unlock()
+		client.cancel()
+		globalRoom.ClientsMutex.Lock()
+		delete(globalRoom.Clients, client)
+		remaining := len(globalRoom.Clients)
+		globalRoom.ClientsMutex.Unlock()
 		log.Printf("[INFO] WT Client disconnected: %s. Total clients: %d\n", clientIP, remaining)
+		globalRoom.BroadcastPresence()
 		session.CloseWithError(0, "")
 	}()
 
-	stateMutex.Lock()
-	if currentSong != "" {
-		pos := currentPosition
-		if isPlaying {
-			pos += time.Since(lastUpdate).Seconds()
+	globalRoom.StateMutex.Lock()
+	if globalRoom.CurrentSong != "" {
+		pos := globalRoom.CurrentPosition
+		if globalRoom.IsPlaying {
+			pos += time.Since(globalRoom.LastUpdate).Seconds()
 		}
 		syncMsg := map[string]interface{}{
 			"action":    "sync",
-			"song":      currentSong,
+			"song":      globalRoom.CurrentSong,
 			"time":      pos,
-			"isPlaying": isPlaying,
-			"isShuffle": isShuffleGlobal,
-			"isRepeat":  isRepeatGlobal,
-			"folder":    currentFolder,
+			"server_ts": time.Now().UnixMilli(),
+			"isPlaying": globalRoom.IsPlaying,
+			"isShuffle": globalRoom.IsShuffleGlobal,
+			"isRepeat":  globalRoom.IsRepeatGlobal,
+			"folder":    globalRoom.CurrentFolder,
+			"volume":    globalRoom.GlobalVolume,
 		}
 		b, _ := json.Marshal(syncMsg)
-		client.mu.Lock()
-		stream.Write(append(b, '\n'))
-		client.mu.Unlock()
+		client.SendChan <- append(b, '\n')
 	} else {
-		m1, _ := json.Marshal(map[string]interface{}{"action": "shuffle", "state": isShuffleGlobal})
-		m2, _ := json.Marshal(map[string]interface{}{"action": "repeat", "state": isRepeatGlobal})
-		client.mu.Lock()
-		stream.Write(append(m1, '\n'))
-		stream.Write(append(m2, '\n'))
-		client.mu.Unlock()
+		m1, _ := json.Marshal(map[string]interface{}{"action": "shuffle", "state": globalRoom.IsShuffleGlobal})
+		m2, _ := json.Marshal(map[string]interface{}{"action": "repeat", "state": globalRoom.IsRepeatGlobal})
+		client.SendChan <- append(m1, '\n')
+		client.SendChan <- append(m2, '\n')
 	}
-	stateMutex.Unlock()
+	globalRoom.StateMutex.Unlock()
 
 	decoder := json.NewDecoder(stream)
 	for {
@@ -319,46 +298,72 @@ func handleWTSession(session *webtransport.Session) {
 			break
 		}
 
-		stateMutex.Lock()
+		globalRoom.StateMutex.Lock()
 		if action, ok := msg["action"].(string); ok {
 			switch action {
+			case "join":
+				if nick, ok := msg["nickname"].(string); ok {
+					client.Nickname = nick
+					log.Printf("[INFO] Client %s associated with nickname: %s\n", clientIP, nick)
+				}
+				globalRoom.StateMutex.Unlock()
+				globalRoom.BroadcastPresence()
+				continue // Do not blindly broadcast join
+
+			case "ping":
+				if clientTime, ok := msg["clientTime"].(float64); ok {
+					pongMsg := map[string]interface{}{
+						"action":     "pong",
+						"clientTime": clientTime,
+						"serverTime": time.Now().UnixMilli(),
+					}
+					b, _ := json.Marshal(pongMsg)
+					client.SendChan <- append(b, '\n')
+				}
+				globalRoom.StateMutex.Unlock()
+				continue // Do not broadcast ping
+
 			case "load":
 				if s, ok := msg["song"].(string); ok {
-					currentSong = s
-					currentPosition = 0
-					isPlaying = true
-					lastUpdate = time.Now()
+					globalRoom.CurrentSong = s
+					globalRoom.CurrentPosition = 0
+					globalRoom.IsPlaying = true
+					globalRoom.LastUpdate = time.Now()
 					log.Printf("[ACTION] Client %s loaded song: %s\n", clientIP, s)
 				}
 				if f, ok := msg["folder"].(string); ok {
-					currentFolder = f
+					globalRoom.CurrentFolder = f
 					log.Printf("[ACTION] Client %s set active folder to: %s\n", clientIP, f)
 				}
+				msg["server_ts"] = time.Now().UnixMilli()
 			case "play":
 				if t, ok := msg["time"].(float64); ok {
-					currentPosition = t
+					globalRoom.CurrentPosition = t
 				}
-				isPlaying = true
-				lastUpdate = time.Now()
-				log.Printf("[ACTION] Client %s pressed PLAY at %.2fs\n", clientIP, currentPosition)
+				globalRoom.IsPlaying = true
+				globalRoom.LastUpdate = time.Now()
+				msg["server_ts"] = time.Now().UnixMilli()
+				log.Printf("[ACTION] Client %s pressed PLAY at %.2fs\n", clientIP, globalRoom.CurrentPosition)
 			case "pause":
 				if t, ok := msg["time"].(float64); ok {
-					currentPosition = t
+					globalRoom.CurrentPosition = t
 				}
-				isPlaying = false
-				log.Printf("[ACTION] Client %s pressed PAUSE at %.2fs\n", clientIP, currentPosition)
+				globalRoom.IsPlaying = false
+				msg["server_ts"] = time.Now().UnixMilli()
+				log.Printf("[ACTION] Client %s pressed PAUSE at %.2fs\n", clientIP, globalRoom.CurrentPosition)
 			case "seek":
 				if t, ok := msg["time"].(float64); ok {
-					currentPosition = t
-					lastUpdate = time.Now()
-					log.Printf("[ACTION] Client %s SEEK to %.2fs\n", clientIP, currentPosition)
+					globalRoom.CurrentPosition = t
+					globalRoom.LastUpdate = time.Now()
+					log.Printf("[ACTION] Client %s SEEK to %.2fs\n", clientIP, globalRoom.CurrentPosition)
 				}
 				if playing, ok := msg["isPlaying"].(bool); ok {
-					isPlaying = playing
+					globalRoom.IsPlaying = playing
 				}
+				msg["server_ts"] = time.Now().UnixMilli()
 			case "shuffle":
 				if st, ok := msg["state"].(bool); ok {
-					isShuffleGlobal = st
+					globalRoom.IsShuffleGlobal = st
 					stateStr := "OFF"
 					if st {
 						stateStr = "ON"
@@ -367,33 +372,35 @@ func handleWTSession(session *webtransport.Session) {
 				}
 			case "repeat":
 				if st, ok := msg["state"].(float64); ok {
-					isRepeatGlobal = int(st)
+					globalRoom.IsRepeatGlobal = int(st)
 					mode := "OFF"
-					if isRepeatGlobal == 1 {
+					if globalRoom.IsRepeatGlobal == 1 {
 						mode = "PLAYLIST"
-					} else if isRepeatGlobal == 2 {
+					} else if globalRoom.IsRepeatGlobal == 2 {
 						mode = "TRACK"
 					}
 					log.Printf("[ACTION] Client %s changed REPEAT to %s\n", clientIP, mode)
 				}
+			case "volume":
+				if vol, ok := msg["level"].(float64); ok {
+					globalRoom.GlobalVolume = vol
+					log.Printf("[ACTION] Client %s changed VOLUME to %.2f\n", clientIP, vol)
+				}
 			}
 		}
-		stateMutex.Unlock()
+		globalRoom.StateMutex.Unlock()
 
 		outMsg, _ := json.Marshal(msg)
 		outMsg = append(outMsg, '\n')
 
-		mutex.Lock()
-		for c := range clients {
-			c.mu.Lock()
-			c.Stream.Write(outMsg)
-			c.mu.Unlock()
-		}
-		mutex.Unlock()
+		globalRoom.Broadcast(outMsg)
 	}
 }
 
 func main() {
+	initDB() // Initialize SQLite DB
+	defer db.Close()
+
 	tlsCert, hash := generateIdentity()
 	certHashStr = hash
 	log.Printf("[INFO] Initialized WebTransport TLS with hash: %s\n", certHashStr)
@@ -403,17 +410,26 @@ func main() {
 		http.NotFound(w, r)
 	})
 	apiMux.Handle("/music/", http.StripPrefix("/music/", http.FileServer(http.Dir("./music"))))
-	
+
 	apiMux.HandleFunc("/api/songs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		handleGetSongs(w, r)
 	})
 	apiMux.HandleFunc("/api/cover", handleGetCover)
-	
+
 	apiMux.HandleFunc("/api/cert-hash", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"hash": certHashStr})
+	})
+
+	apiMux.HandleFunc("/api/rescan", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		go func() {
+			scanLibraryToDB()
+		}()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "scanning"})
 	})
 
 	// Used by Caddy's on_demand_tls 'ask' to allow cert generation for any hostname

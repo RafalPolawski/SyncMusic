@@ -8,6 +8,7 @@ export class SyncWebTransport {
         this.wtUrl = `https://${host}:4433/wt`;
 
         this.onMessageCallback = null;
+        this.onReconnect = null;
         this.transport = null;
         this.writer = null;
 
@@ -55,8 +56,22 @@ export class SyncWebTransport {
             const stream = await this.transport.createBidirectionalStream();
             this.writer = stream.writable.getWriter();
 
+            this.serverTimeOffset = 0;
+            this.rtt = 0;
+
             // Read from the stream
             this.readStream(stream.readable);
+
+            // Start pinging for latency measurement
+            this.pingInterval = setInterval(() => {
+                this.sendCommand("ping", { clientTime: Date.now() });
+            }, 5000);
+            this.sendCommand("ping", { clientTime: Date.now() });
+
+            // Notify app about reconnection
+            if (this.onReconnect) {
+                this.onReconnect();
+            }
 
         } catch (error) {
             console.error("WebTransport connection failed:", error);
@@ -81,9 +96,17 @@ export class SyncWebTransport {
                     const line = buffer.substring(0, newlineIndex);
                     buffer = buffer.substring(newlineIndex + 1);
 
-                    if (line.trim().length > 0 && this.onMessageCallback) {
+                    if (line.trim().length > 0) {
                         try {
-                            this.onMessageCallback(JSON.parse(line));
+                            const parsed = JSON.parse(line);
+                            if (parsed.action === 'pong') {
+                                const now = Date.now();
+                                this.rtt = now - parsed.clientTime;
+                                const currentServerTime = parsed.serverTime + (this.rtt / 2);
+                                this.serverTimeOffset = currentServerTime - now;
+                            } else if (this.onMessageCallback) {
+                                this.onMessageCallback(parsed);
+                            }
                         } catch (e) {
                             console.error("Failed to parse WT message", e);
                         }
@@ -98,6 +121,14 @@ export class SyncWebTransport {
 
     onMessage(callback) {
         this.onMessageCallback = callback;
+    }
+
+    getServerTime() {
+        return Date.now() + (this.serverTimeOffset || 0);
+    }
+
+    getRtt() {
+        return this.rtt || 0;
     }
 
     sendCommand(action, payload = {}) {

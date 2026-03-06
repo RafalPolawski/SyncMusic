@@ -17,6 +17,7 @@ export function initPlayer(socket) {
     const durationDisp = document.getElementById("durationDisp");
     const coverArt = document.getElementById("coverArt");
     const shuffleBtn = document.getElementById("shuffleBtn");
+    const volumeSlider = document.getElementById("volumeSlider");
     const overlay = document.getElementById("overlay");
     const playerContainer = document.getElementById("playerContainer");
     const miniPlayerClickZone = document.getElementById("miniPlayerClickZone");
@@ -31,6 +32,7 @@ export function initPlayer(socket) {
     let syncReceivedTime = 0;
     let syncAudioTime = 0;
     let shouldBePlaying = false;
+    let hasJoined = false;
 
     let currentPlaylist = [];
     let currentSongPath = "";
@@ -240,6 +242,7 @@ export function initPlayer(socket) {
     }, { passive: true });
 
     setInterval(() => {
+        if (!hasJoined) return;
         if (!shouldBePlaying) return;
         if (audio.readyState < 3) return;
 
@@ -301,6 +304,11 @@ export function initPlayer(socket) {
         miniPlayPauseBtn.innerHTML = svgPlay;
         coverArt.classList.remove("playing");
     };
+
+    volumeSlider.addEventListener('input', () => {
+        audio.volume = volumeSlider.value;
+        socket.sendCommand("volume", { level: parseFloat(volumeSlider.value) });
+    });
 
     const playNext = (isNaturalEnd = false) => {
         if (navigator.vibrate) navigator.vibrate(30);
@@ -378,10 +386,14 @@ export function initPlayer(socket) {
         });
     }
 
-    document.getElementById("joinBtn").onclick = () => {
-        overlay.style.display = "none";
+    const handleJoinUserInit = () => {
+        hasJoined = true;
         pendingPlay = false;
-        const waitTimeSeconds = (Date.now() - syncReceivedTime) / 1000;
+
+        let waitTimeSeconds = 0;
+        if (shouldBePlaying) {
+            waitTimeSeconds = (Date.now() - syncReceivedTime) / 1000;
+        }
         let targetTime = syncAudioTime + waitTimeSeconds;
 
         // Prevent race condition: if calculated time exceeds duration (network lag),
@@ -391,12 +403,23 @@ export function initPlayer(socket) {
         }
 
         audio.currentTime = targetTime;
-        shouldBePlaying = true;
-        audio.play();
+        if (shouldBePlaying) {
+            audio.play().catch(e => console.error("Play error:", e));
+        }
     };
 
     return {
+        handleJoinUserInit,
         handleSocketMessage: (msg) => {
+            let offsetTime = msg.time;
+
+            // Adjust offsetTime if server_ts is provided (Precision Sync)
+            if (msg.server_ts && socket.getServerTime && msg.action !== "pause") {
+                const timePassedSinceServerSent = (socket.getServerTime() - msg.server_ts) / 1000;
+                // Add minimum bound to prevent negative times if clocks skew wildly
+                offsetTime = msg.time + Math.max(0, timePassedSinceServerSent);
+            }
+
             if (msg.action === "sync") {
                 if (msg.folder) {
                     currentFolderName = msg.folder;
@@ -407,12 +430,16 @@ export function initPlayer(socket) {
                 audio.src = "/music/" + encodePath(msg.song);
                 currentSongPath = msg.song;
                 updateNowPlaying(currentSongPath);
-                audio.currentTime = msg.time;
+                audio.currentTime = offsetTime;
                 syncReceivedTime = Date.now();
-                syncAudioTime = msg.time;
+                syncAudioTime = offsetTime;
                 shouldBePlaying = msg.isPlaying;
                 if (msg.isShuffle !== undefined) updateShuffleUI(msg.isShuffle);
                 if (msg.isRepeat !== undefined) updateRepeatUI(msg.isRepeat);
+                if (msg.volume !== undefined) {
+                    audio.volume = msg.volume;
+                    volumeSlider.value = msg.volume;
+                }
 
             } else if (msg.action === "load") {
                 if (msg.folder && allGroupsCache[msg.folder]) {
@@ -430,18 +457,28 @@ export function initPlayer(socket) {
                 shouldBePlaying = true;
 
             } else if (msg.action === "play") {
-                audio.currentTime = msg.time;
+                if (hasJoined) audio.currentTime = offsetTime;
                 shouldBePlaying = true;
+                syncAudioTime = offsetTime;
+                syncReceivedTime = Date.now();
             } else if (msg.action === "pause") {
                 shouldBePlaying = false;
-                audio.pause();
-                audio.currentTime = msg.time;
+                if (hasJoined) audio.pause();
+                if (hasJoined) audio.currentTime = msg.time;
+                syncAudioTime = msg.time;
+                syncReceivedTime = Date.now();
             } else if (msg.action === "seek") {
-                audio.currentTime = msg.time;
+                if (hasJoined) audio.currentTime = offsetTime;
                 shouldBePlaying = msg.isPlaying === undefined ? true : msg.isPlaying;
                 lastKnownTime = -1;
+                syncAudioTime = offsetTime;
+                syncReceivedTime = Date.now();
             } else if (msg.action === "shuffle") updateShuffleUI(msg.state);
             else if (msg.action === "repeat") updateRepeatUI(msg.state);
+            else if (msg.action === "volume") {
+                audio.volume = msg.level;
+                volumeSlider.value = msg.level;
+            }
         },
         setCacheGroups: (groups) => {
             allGroupsCache = groups;
