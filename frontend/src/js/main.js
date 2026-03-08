@@ -60,6 +60,74 @@ document.addEventListener("DOMContentLoaded", () => {
     const loadingIndicator = document.getElementById("loadingIndicator");
     const locateTrackBtn = document.getElementById("locateTrackBtn");
 
+    const tabLibrary = document.getElementById("tabLibrary");
+    const tabQueue = document.getElementById("tabQueue");
+    const libraryView = document.getElementById("libraryView");
+    const queueView = document.getElementById("queueView");
+    const queueContainer = document.getElementById("queueContainer");
+    const queueCountBadge = document.getElementById("queueCountBadge");
+
+    if (tabLibrary && tabQueue) {
+        tabLibrary.onclick = () => {
+            tabLibrary.classList.add("active-tab");
+            tabQueue.classList.remove("active-tab");
+            libraryView.style.display = "block";
+            queueView.style.display = "none";
+        };
+
+        tabQueue.onclick = () => {
+            tabQueue.classList.add("active-tab");
+            tabLibrary.classList.remove("active-tab");
+            queueView.style.display = "block";
+            libraryView.style.display = "none";
+        };
+    }
+
+    const renderQueue = (queue) => {
+        if (!queueCountBadge || !queueContainer) return;
+        queueCountBadge.innerText = queue.length;
+        queueCountBadge.style.display = queue.length > 0 ? "inline-block" : "none";
+
+        if (queue.length === 0) {
+            queueContainer.innerHTML = '<div class="empty-queue-msg">Queue is empty.</div>';
+            return;
+        }
+
+        queueContainer.innerHTML = "";
+        queue.forEach((item, index) => {
+            const qBtn = document.createElement("div"); // Using div to avoid button nesting issue
+            qBtn.className = "item-btn"; // using item-btn style
+            
+            const safeEncode = encodeURIComponent(item.path).replace(/'/g, "%27").replace(/"/g, "%22");
+            const thumbUrl = `/api/cover?song=${safeEncode}`;
+
+            qBtn.innerHTML = `
+                <img src="${thumbUrl}" class="song-thumb" loading="lazy" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'45\\' height=\\'45\\'><rect width=\\'45\\' height=\\'45\\' fill=\\'%23333\\'/><text x=\\'50%\\' y=\\'50%\\' font-size=\\'20\\' text-anchor=\\'middle\\' dominant-baseline=\\'middle\\' fill=\\'%23555\\'>🎵</text></svg>'">
+                <div class="song-info">
+                    <span class="song-name">${item.title}</span>
+                    <span class="song-artist">${item.artist}</span>
+                </div>
+                <button class="remove-queue-btn" title="Remove from queue">
+                    <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+            `;
+
+            // Double Click / Click to play immediately
+            qBtn.onclick = (e) => {
+                if (e.target.closest('.remove-queue-btn')) {
+                    socket.sendCommand("dequeue", { id: item.id });
+                    return;
+                }
+                socket.sendCommand("load", { song: item.path, folder: "Queue" });
+                socket.sendCommand("dequeue", { id: item.id });
+            };
+
+            queueContainer.appendChild(qBtn);
+        });
+    };
+
+    player.onQueueUpdate(renderQueue);
+
     const updateHighlights = () => {
         // Hydrate from player if missing (useful when player syncs before UI is built)
         if (!globalPlayingPath || !globalPlayingFolder) {
@@ -189,7 +257,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         player.setCurrentPlaylistFolder(f);
 
                         groups[f].forEach(s => {
-                            const sb = document.createElement("button");
+                            // Use div for item to avoid nesting buttons incorrectly
+                            const sb = document.createElement("div");
                             sb.className = "item-btn";
                             sb.dataset.path = s.path;
 
@@ -202,11 +271,27 @@ document.addEventListener("DOMContentLoaded", () => {
                                 <span class="song-name">${s.title}</span>
                                 <span class="song-artist">${s.artist}</span>
                             </div>
+                            <button class="add-queue-btn" title="Add to Queue">
+                                <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+                            </button>
                         `;
 
-                            sb.onclick = () => {
-                                // Don't update player's folder directly here to prevent UI desyncs before WS response
-                                // The server load response will update the player and fire onTrackChanged anyway
+                            sb.onclick = (e) => {
+                                const addBtn = e.target.closest('.add-queue-btn');
+                                if (addBtn) {
+                                    socket.sendCommand("enqueue", { item: { path: s.path, title: s.title, artist: s.artist } });
+                                    
+                                    // Show visual feedback
+                                    const icon = addBtn.innerHTML;
+                                    addBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+                                    addBtn.style.color = "#1DB954";
+                                    setTimeout(() => {
+                                        addBtn.innerHTML = icon;
+                                        addBtn.style.color = "";
+                                    }, 1000);
+                                    return;
+                                }
+                                
                                 socket.sendCommand("load", { song: s.path, folder: f });
                             };
                             songsContainer.appendChild(sb);

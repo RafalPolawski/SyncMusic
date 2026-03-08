@@ -29,7 +29,9 @@ SyncMusic is a self-hosted, low-latency music synchronization server. Every conn
 | **Dockerized deployment** | Three-service `docker-compose.yml`: `sync-app` (Go), `sync-frontend` (Vite), `caddy` |
 | **Vite frontend build** | Modular ES module frontend with `api.js`, `player.js`, `webtransport.js`, `main.js` |
 | **Service Worker (PWA)** | Offline functionality via `sw.js` — caches static assets |
-| **Mobile-friendly UI** | Responsive layout with mobile-first considerations |
+| **Mobile-friendly UI** | Responsive layout, pull-to-dismiss gesture, History API integration, and native media controls (`MediaSession` API) |
+| **Scan progress UI** | Real-time loading screen tracking the backend's initialization and library scan progress |
+| **Global Queue Management** | Add-to-queue and remove functionality with synchronized state superseding default folder playlists |
 
 ---
 
@@ -39,7 +41,6 @@ SyncMusic is a self-hosted, low-latency music synchronization server. Every conn
 |---|---|---|
 | **NTP-style precision sync** | 📋 Planned | Client measures RTT on connect, calculates clock offset; server sends scheduled `PLAY_AT` timestamp instead of immediate command |
 | **PWA full install support** | 📋 Planned | `manifest.json`, app icons, `display: standalone` for home-screen install on Android/iOS |
-| **Queue management** | 📋 Planned | Add-to-queue, reorder queue, view upcoming tracks — shared state across clients |
 | **User identity / nicknames** | 📋 Planned | Each client announces a display name; server shows who is currently controlling playback |
 | **Lyrics display** | 📋 Planned | Fetch synchronized lyrics (e.g. LRCLIB API) and display them in sync with playback position |
 | **Persistent state (Redis)** | 📋 Planned | Replace in-memory globals with Redis for crash recovery and multi-instance support |
@@ -92,8 +93,11 @@ Messages are newline-delimited JSON:
 | Client → Server | `seek` | `{ time, isPlaying }` |
 | Client → Server | `shuffle` | `{ state: bool }` |
 | Client → Server | `repeat` | `{ state: 0\|1\|2 }` |
-| Server → Client | `sync` | `{ song, time, isPlaying, isShuffle, isRepeat, folder }` *(on connect)* |
-| Server → All | *(echo)* | All actions are broadcast verbatim to every connected client |
+| Client → Server | `enqueue` | `{ item: {path, title, artist} }` |
+| Client → Server | `dequeue` | `{ id: float64 }` |
+| Server → Client | `sync` | `{ song, time, isPlaying, isShuffle, isRepeat, folder, queue }` *(on connect)* |
+| Server → All | `queue_update` | `{ queue: [...] }` |
+| Server → All | *(echo)* | All playback actions are broadcast verbatim to every connected client |
 
 ---
 
@@ -172,7 +176,8 @@ All endpoints are served by the Go backend on `:12137` (proxied via Caddy).
 SyncMusic/
 ├── backend/
 │   ├── Dockerfile
-│   └── main.go            # Go server: REST API + WebTransport sync engine
+│   ├── main.go            # Go server: REST API + WebTransport sync engine
+│   └── db.go              # SQLite session parsing and cache layers
 ├── frontend/
 │   ├── Dockerfile
 │   ├── index.html

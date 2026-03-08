@@ -45,8 +45,10 @@ export function initPlayer(socket) {
     let isHandlingEnd = false; // Anti-race condition
 
     let allGroupsCache = {};
+    let globalQueue = [];
 
     let onTrackChangeCallback = null;
+    let onQueueUpdateCallback = null;
 
     const svgPlay = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
     const svgPause = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
@@ -312,8 +314,7 @@ export function initPlayer(socket) {
 
     const playNext = (isNaturalEnd = false) => {
         if (navigator.vibrate) navigator.vibrate(30);
-        if (currentPlaylist.length === 0) return;
-
+        
         if (isNaturalEnd) {
             if (isHandlingEnd) return;
             isHandlingEnd = true;
@@ -328,6 +329,15 @@ export function initPlayer(socket) {
         if (currentSongPath && (!isNaturalEnd || isRepeat !== 2)) {
             playedHistory.push(currentSongPath);
         }
+
+        if (globalQueue.length > 0) {
+            const nextItem = globalQueue[0];
+            socket.sendCommand("load", { song: nextItem.path, folder: "Queue" });
+            socket.sendCommand("dequeue", { id: nextItem.id });
+            return;
+        }
+
+        if (currentPlaylist.length === 0) return;
 
         let nextIndex = 0;
         if (isShuffle) {
@@ -421,6 +431,10 @@ export function initPlayer(socket) {
             }
 
             if (msg.action === "sync") {
+                if (msg.queue !== undefined) {
+                    globalQueue = msg.queue || [];
+                    if (onQueueUpdateCallback) onQueueUpdateCallback(globalQueue);
+                }
                 if (msg.folder) {
                     currentFolderName = msg.folder;
                     if (allGroupsCache[msg.folder]) {
@@ -441,6 +455,9 @@ export function initPlayer(socket) {
                     volumeSlider.value = msg.volume;
                 }
 
+            } else if (msg.action === "queue_update") {
+                globalQueue = msg.queue || [];
+                if (onQueueUpdateCallback) onQueueUpdateCallback(globalQueue);
             } else if (msg.action === "load") {
                 if (msg.folder && allGroupsCache[msg.folder]) {
                     currentFolderName = msg.folder;
@@ -490,6 +507,8 @@ export function initPlayer(socket) {
         },
         setCurrentPlaylistFolder: (folder) => { currentFolderName = folder; currentPlaylist = allGroupsCache[folder]; },
         onTrackChanged: (cb) => { onTrackChangeCallback = cb; },
+        onQueueUpdate: (cb) => { onQueueUpdateCallback = cb; },
+        getQueue: () => globalQueue,
         getCurrentState: () => ({ path: currentSongPath, folder: currentFolderName })
     };
 }

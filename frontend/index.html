@@ -134,22 +134,34 @@
 
         <div class="right-panel">
             <div class="playlist-section">
-                <h3>Library</h3>
-                <div id="loadingIndicator" class="loading-indicator">
-                    <div class="spinner"></div>
-                    <span>Loading library...</span>
+                <div class="tabs-container">
+                    <button id="tabLibrary" class="tab-btn active-tab">Library</button>
+                    <button id="tabQueue" class="tab-btn">Queue <span id="queueCountBadge" style="display: none;">0</span></button>
                 </div>
-                <button id="backBtn" class="item-btn">⬅ Back to folders</button>
-                <div id="foldersContainer" style="display: none;"></div>
-                <div id="songsContainer" style="display: none;"></div>
 
-                <!-- Locator FAB -->
-                <button id="locateTrackBtn" class="locate-fab" title="Locate Playing Track">
-                    <svg viewBox="0 0 24 24">
-                        <path
-                            d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-                    </svg>
-                </button>
+                <div id="libraryView">
+                    <div id="loadingIndicator" class="loading-indicator">
+                        <div class="spinner"></div>
+                        <span>Loading library...</span>
+                    </div>
+                    <button id="backBtn" class="item-btn">⬅ Back to folders</button>
+                    <div id="foldersContainer" style="display: none;"></div>
+                    <div id="songsContainer" style="display: none;"></div>
+
+                    <!-- Locator FAB -->
+                    <button id="locateTrackBtn" class="locate-fab" title="Locate Playing Track">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div id="queueView" style="display: none;">
+                    <div id="queueContainer" class="queue-list">
+                        <div class="empty-queue-msg">Queue is empty.</div>
+                    </div>
+                </div>
 
                 <!-- Presence List -->
                 <div class="presence-container">

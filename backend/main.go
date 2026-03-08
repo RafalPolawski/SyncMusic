@@ -46,12 +46,14 @@ type Room struct {
 	IsRepeatGlobal  int
 	CurrentFolder   string
 	GlobalVolume    float64
+	Queue           []map[string]interface{}
 }
 
 func NewRoom() *Room {
 	return &Room{
 		Clients:      make(map[*WTClient]bool),
 		GlobalVolume: 1.0, // Default 100%
+		Queue:        make([]map[string]interface{}, 0),
 	}
 }
 
@@ -279,14 +281,17 @@ func handleWTSession(session *webtransport.Session) {
 			"isRepeat":  globalRoom.IsRepeatGlobal,
 			"folder":    globalRoom.CurrentFolder,
 			"volume":    globalRoom.GlobalVolume,
+			"queue":     globalRoom.Queue,
 		}
 		b, _ := json.Marshal(syncMsg)
 		client.SendChan <- append(b, '\n')
 	} else {
 		m1, _ := json.Marshal(map[string]interface{}{"action": "shuffle", "state": globalRoom.IsShuffleGlobal})
 		m2, _ := json.Marshal(map[string]interface{}{"action": "repeat", "state": globalRoom.IsRepeatGlobal})
+		m3, _ := json.Marshal(map[string]interface{}{"action": "queue_update", "queue": globalRoom.Queue})
 		client.SendChan <- append(m1, '\n')
 		client.SendChan <- append(m2, '\n')
+		client.SendChan <- append(m3, '\n')
 	}
 	globalRoom.StateMutex.Unlock()
 
@@ -386,6 +391,75 @@ func handleWTSession(session *webtransport.Session) {
 					globalRoom.GlobalVolume = vol
 					log.Printf("[ACTION] Client %s changed VOLUME to %.2f\n", clientIP, vol)
 				}
+			case "enqueue":
+				if item, ok := msg["item"].(map[string]interface{}); ok {
+					item["id"] = float64(time.Now().UnixNano())
+					globalRoom.Queue = append(globalRoom.Queue, item)
+					queueMsg := map[string]interface{}{"action": "queue_update", "queue": globalRoom.Queue}
+					b, _ := json.Marshal(queueMsg)
+					globalRoom.Broadcast(append(b, '\n'))
+					log.Printf("[ACTION] Client %s enqueued song: %v\n", clientIP, item["path"])
+				}
+				globalRoom.StateMutex.Unlock()
+				continue // already broadcasted explicitly
+			case "dequeue":
+				if idVal, ok := msg["id"].(float64); ok {
+					foundIdx := -1
+					for i, qItem := range globalRoom.Queue {
+						if qID, qOk := qItem["id"].(float64); qOk && qID == idVal {
+							foundIdx = i
+							break
+						}
+					}
+					if foundIdx != -1 {
+						globalRoom.Queue = append(globalRoom.Queue[:foundIdx], globalRoom.Queue[foundIdx+1:]...)
+						queueMsg := map[string]interface{}{"action": "queue_update", "queue": globalRoom.Queue}
+						b, _ := json.Marshal(queueMsg)
+						globalRoom.Broadcast(append(b, '\n'))
+						log.Printf("[ACTION] Client %s dequeued id: %v\n", clientIP, idVal)
+					}
+				} else if idx, ok := msg["index"].(float64); ok {
+					i := int(idx)
+					if i >= 0 && i < len(globalRoom.Queue) {
+						globalRoom.Queue = append(globalRoom.Queue[:i], globalRoom.Queue[i+1:]...)
+						queueMsg := map[string]interface{}{"action": "queue_update", "queue": globalRoom.Queue}
+						b, _ := json.Marshal(queueMsg)
+						globalRoom.Broadcast(append(b, '\n'))
+						log.Printf("[ACTION] Client %s dequeued index: %d\n", clientIP, i)
+					}
+				}
+				globalRoom.StateMutex.Unlock()
+				continue // already broadcasted explicitly
+			case "queue_move":
+				if fromIdx, ok1 := msg["from"].(float64); ok1 {
+					if toIdx, ok2 := msg["to"].(float64); ok2 {
+						f := int(fromIdx)
+						t := int(toIdx)
+						if f >= 0 && f < len(globalRoom.Queue) && t >= 0 && t < len(globalRoom.Queue) {
+							item := globalRoom.Queue[f]
+							globalRoom.Queue = append(globalRoom.Queue[:f], globalRoom.Queue[f+1:]...)
+							
+							var newQueue []map[string]interface{}
+							if t == 0 {
+								newQueue = append([]map[string]interface{}{item}, globalRoom.Queue...)
+							} else if t >= len(globalRoom.Queue) {
+								newQueue = append(globalRoom.Queue, item)
+							} else {
+								newQueue = append(newQueue, globalRoom.Queue[:t]...)
+								newQueue = append(newQueue, item)
+								newQueue = append(newQueue, globalRoom.Queue[t:]...)
+							}
+							globalRoom.Queue = newQueue
+							
+							queueMsg := map[string]interface{}{"action": "queue_update", "queue": globalRoom.Queue}
+							b, _ := json.Marshal(queueMsg)
+							globalRoom.Broadcast(append(b, '\n'))
+							log.Printf("[ACTION] Client %s moved queue item from %d to %d\n", clientIP, f, t)
+						}
+					}
+				}
+				globalRoom.StateMutex.Unlock()
+				continue
 			}
 		}
 		globalRoom.StateMutex.Unlock()
