@@ -73,10 +73,38 @@ export class SyncWebTransport {
                 this.onReconnect();
             }
 
+            // Monitor dropping transport proactively 
+            this.transport.closed.then(() => {
+                console.warn("WebTransport closed normally, reconnecting...");
+                this.reconnect();
+            }).catch((err) => {
+                console.error("WebTransport closed abruptly:", err);
+                this.reconnect();
+            });
+
         } catch (error) {
             console.error("WebTransport connection failed:", error);
-            setTimeout(() => this.connect(), 3000); // Reconnect
+            this.reconnect();
         }
+    }
+
+    reconnect() {
+        if (this.reconnecting) return;
+        this.reconnecting = true;
+        
+        if (this.transport) {
+            try { this.transport.close(); } catch (e) {}
+            this.transport = null;
+        }
+        if (this.pingInterval) {
+            clearInterval(this.pingInterval);
+            this.pingInterval = null;
+        }
+
+        setTimeout(() => {
+            this.reconnecting = false;
+            this.connect();
+        }, 2000);
     }
 
     async readStream(readable) {
@@ -114,6 +142,7 @@ export class SyncWebTransport {
                 }
             } catch (e) {
                 console.error("Stream read error:", e);
+                this.reconnect();
                 break;
             }
         }

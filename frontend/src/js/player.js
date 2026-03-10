@@ -42,6 +42,7 @@ export function initPlayer(socket) {
     let lastKnownTime = -1;
     let isDraggingProgress = false;
     let playedHistory = [];
+    let shuffleQueue = [];
     let isHandlingEnd = false; // Anti-race condition
 
     let allGroupsCache = {};
@@ -61,6 +62,19 @@ export function initPlayer(socket) {
     };
 
     const encodePath = (path) => path.split('/').map(encodeURIComponent).join('/');
+
+    const updatePositionState = () => {
+        if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
+            try {
+                navigator.mediaSession.setPositionState({
+                    duration: audio.duration || 0,
+                    playbackRate: audio.playbackRate || 1,
+                    position: audio.currentTime || 0
+                });
+            } catch (e) {}
+        }
+    };
+
 
     const updateNowPlaying = (path) => {
         if (!path) return;
@@ -84,14 +98,17 @@ export function initPlayer(socket) {
         const coverUrl = `/api/cover?song=${encodeURIComponent(path)}`;
         const safeCssUrl = coverUrl.replace(/'/g, "%27").replace(/"/g, "%22").replace(/\(/g, "%28").replace(/\)/g, "%29");
 
+        const absoluteCoverUrl = new URL(coverUrl, window.location.origin).href;
+
         if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: displayTitle,
                 artist: displayArtist,
                 artwork: [
-                    { src: coverUrl, sizes: '512x512', type: 'image/jpeg' }
+                    { src: absoluteCoverUrl, sizes: '512x512', type: 'image/jpeg' }
                 ]
             });
+            navigator.mediaSession.playbackState = shouldBePlaying ? 'playing' : 'paused';
         }
 
         const img = new Image();
@@ -243,23 +260,25 @@ export function initPlayer(socket) {
         }
     }, { passive: true });
 
-    setInterval(() => {
+    const forcePlay = () => {
         if (!hasJoined) return;
-        if (!shouldBePlaying) return;
+        audio.play().catch((err) => {
+            if (err.name === 'NotAllowedError' && !pendingPlay) {
+                pendingPlay = true;
+                overlay.style.display = "flex";
+            }
+        });
+    };
+
+    setInterval(() => {
+        if (!hasJoined || !shouldBePlaying) return;
         if (audio.readyState < 3) return;
 
         const isActuallyMoving = audio.currentTime > lastKnownTime;
         lastKnownTime = audio.currentTime;
 
         if (audio.paused || !isActuallyMoving) {
-            audio.play().catch((err) => {
-                if (err.name === 'NotAllowedError') {
-                    if (!pendingPlay) {
-                        pendingPlay = true;
-                        overlay.style.display = "flex";
-                    }
-                }
-            });
+            forcePlay();
         }
     }, 800);
 
@@ -275,6 +294,7 @@ export function initPlayer(socket) {
     audio.addEventListener('loadedmetadata', () => {
         progressBar.max = audio.duration;
         durationDisp.innerText = formatTime(audio.duration);
+        updatePositionState();
     });
 
     const togglePlayPause = () => {
@@ -304,23 +324,38 @@ export function initPlayer(socket) {
     });
 
     audio.onplay = () => {
-        shouldBePlaying = true;
         playPauseBtn.innerHTML = svgPause;
         miniPlayPauseBtn.innerHTML = svgPause;
         coverArt.classList.add("playing");
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+        updatePositionState();
     };
 
     audio.onpause = () => {
-        shouldBePlaying = false;
-        playPauseBtn.innerHTML = svgPlay;
-        miniPlayPauseBtn.innerHTML = svgPlay;
-        coverArt.classList.remove("playing");
+        if (!shouldBePlaying) {
+            playPauseBtn.innerHTML = svgPlay;
+            miniPlayPauseBtn.innerHTML = svgPlay;
+            coverArt.classList.remove("playing");
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
+            updatePositionState();
+        }
     };
 
     volumeSlider.addEventListener('input', () => {
         audio.volume = volumeSlider.value;
         socket.sendCommand("volume", { level: parseFloat(volumeSlider.value) });
     });
+
+    const handleEagerLoadAndPlay = (targetPath) => {
+        if (currentSongPath !== targetPath || !currentSongPath) {
+            audio.src = "/music/" + encodePath(targetPath);
+            currentSongPath = targetPath;
+            updateNowPlaying(currentSongPath);
+        }
+        shouldBePlaying = true;
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+        forcePlay();
+    };
 
     const playNext = (isNaturalEnd = false) => {
         if (navigator.vibrate) navigator.vibrate(30);
@@ -333,6 +368,9 @@ export function initPlayer(socket) {
 
         if (isNaturalEnd && isRepeat === 2) {
             socket.sendCommand("seek", { time: 0, isPlaying: true });
+            audio.currentTime = 0;
+            shouldBePlaying = true;
+            forcePlay();
             return;
         }
 
@@ -344,6 +382,7 @@ export function initPlayer(socket) {
             const nextItem = globalQueue[0];
             socket.sendCommand("load", { song: nextItem.path, folder: "Queue" });
             socket.sendCommand("dequeue", { id: nextItem.id });
+            handleEagerLoadAndPlay(nextItem.path);
             return;
         }
 
@@ -351,7 +390,21 @@ export function initPlayer(socket) {
 
         let nextIndex = 0;
         if (isShuffle) {
-            nextIndex = Math.floor(Math.random() * currentPlaylist.length);
+            if (shuffleQueue.length === 0) {
+                // Generate and shuffle new queue
+                shuffleQueue = Array.from({length: currentPlaylist.length}, (_, i) => i);
+                for (let i = shuffleQueue.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [shuffleQueue[i], shuffleQueue[j]] = [shuffleQueue[j], shuffleQueue[i]];
+                }
+                // Avoid immediate repeat of current song if we just re-shuffled
+                const currentIndex = currentPlaylist.findIndex(s => s.path === currentSongPath);
+                if (shuffleQueue[shuffleQueue.length - 1] === currentIndex && currentPlaylist.length > 1) {
+                    // Swap last element with the first to prevent repeating the currently playing song
+                    [shuffleQueue[shuffleQueue.length - 1], shuffleQueue[0]] = [shuffleQueue[0], shuffleQueue[shuffleQueue.length - 1]];
+                }
+            }
+            nextIndex = shuffleQueue.pop();
         } else {
             const currentIndex = currentPlaylist.findIndex(s => s.path === currentSongPath);
             nextIndex = currentIndex + 1;
@@ -363,7 +416,9 @@ export function initPlayer(socket) {
                 nextIndex = 0;
             }
         }
-        socket.sendCommand("load", { song: currentPlaylist[nextIndex].path, folder: currentFolderName });
+        const nextSongPath = currentPlaylist[nextIndex].path;
+        socket.sendCommand("load", { song: nextSongPath, folder: currentFolderName });
+        handleEagerLoadAndPlay(nextSongPath);
     };
 
     const playPrev = () => {
@@ -373,12 +428,15 @@ export function initPlayer(socket) {
         if (playedHistory.length > 0) {
             const prevSongPath = playedHistory.pop();
             socket.sendCommand("load", { song: prevSongPath, isPrev: true, folder: currentFolderName });
+            handleEagerLoadAndPlay(prevSongPath);
             return;
         }
 
         const currentIndex = currentPlaylist.findIndex(s => s.path === currentSongPath);
         let prevIndex = currentIndex - 1 < 0 ? currentPlaylist.length - 1 : currentIndex - 1;
-        socket.sendCommand("load", { song: currentPlaylist[prevIndex].path, isPrev: true, folder: currentFolderName });
+        const prevSongPath = currentPlaylist[prevIndex].path;
+        socket.sendCommand("load", { song: prevSongPath, isPrev: true, folder: currentFolderName });
+        handleEagerLoadAndPlay(prevSongPath);
     };
 
     document.getElementById("nextBtn").onclick = () => playNext(false);
@@ -445,7 +503,10 @@ export function initPlayer(socket) {
 
             // Adjust offsetTime if server_ts is provided (Precision Sync)
             if (msg.server_ts && socket.getServerTime && msg.action !== "pause") {
-                const timePassedSinceServerSent = (socket.getServerTime() - msg.server_ts) / 1000;
+                let timePassedSinceServerSent = (socket.getServerTime() - msg.server_ts) / 1000;
+                // Clamp network skew to handle OS hardware clock drift bounds (-2s to 5s max valid range)
+                timePassedSinceServerSent = Math.max(-2, Math.min(5, timePassedSinceServerSent));
+                
                 // Add minimum bound to prevent negative times if clocks skew wildly
                 offsetTime = msg.time + Math.max(0, timePassedSinceServerSent);
             }
@@ -464,9 +525,11 @@ export function initPlayer(socket) {
                 
                 const songChanged = currentSongPath !== msg.song;
                 
-                audio.src = "/music/" + encodePath(msg.song);
-                currentSongPath = msg.song;
-                updateNowPlaying(currentSongPath);
+                if (songChanged || !currentSongPath) {
+                    audio.src = "/music/" + encodePath(msg.song);
+                    currentSongPath = msg.song;
+                    updateNowPlaying(currentSongPath);
+                }
                 
                 // Soft-sync check
                 const drift = Math.abs(audio.currentTime - offsetTime);
@@ -477,6 +540,7 @@ export function initPlayer(socket) {
                 syncReceivedTime = Date.now();
                 syncAudioTime = offsetTime;
                 shouldBePlaying = msg.isPlaying;
+                if (shouldBePlaying) forcePlay();
                 if (msg.isShuffle !== undefined) updateShuffleUI(msg.isShuffle);
                 if (msg.isRepeat !== undefined) updateRepeatUI(msg.isRepeat);
                 if (msg.volume !== undefined) {
@@ -489,6 +553,7 @@ export function initPlayer(socket) {
                 if (onQueueUpdateCallback) onQueueUpdateCallback(globalQueue);
             } else if (msg.action === "load") {
                 if (msg.folder && allGroupsCache[msg.folder]) {
+                    if (currentFolderName !== msg.folder) shuffleQueue = []; 
                     currentFolderName = msg.folder;
                     currentPlaylist = allGroupsCache[msg.folder];
                 }
@@ -497,10 +562,14 @@ export function initPlayer(socket) {
                 } else if (msg.isPrev) {
                     if (playedHistory.length > 0 && playedHistory[playedHistory.length - 1] === msg.song) playedHistory.pop();
                 }
-                audio.src = "/music/" + encodePath(msg.song);
-                currentSongPath = msg.song;
-                updateNowPlaying(currentSongPath);
+                if (currentSongPath !== msg.song || !currentSongPath) {
+                    audio.src = "/music/" + encodePath(msg.song);
+                    currentSongPath = msg.song;
+                    updateNowPlaying(currentSongPath);
+                }
                 shouldBePlaying = true;
+                if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
+                forcePlay();
 
             } else if (msg.action === "play") {
                 const drift = Math.abs(audio.currentTime - offsetTime);
@@ -510,6 +579,7 @@ export function initPlayer(socket) {
                 shouldBePlaying = true;
                 syncAudioTime = offsetTime;
                 syncReceivedTime = Date.now();
+                forcePlay();
             } else if (msg.action === "pause") {
                 shouldBePlaying = false;
                 if (hasJoined) audio.pause();
@@ -522,6 +592,8 @@ export function initPlayer(socket) {
                 lastKnownTime = -1;
                 syncAudioTime = offsetTime;
                 syncReceivedTime = Date.now();
+                updatePositionState();
+                if (shouldBePlaying) forcePlay();
             } else if (msg.action === "shuffle") updateShuffleUI(msg.state);
             else if (msg.action === "repeat") updateRepeatUI(msg.state);
             else if (msg.action === "volume") {
@@ -537,7 +609,13 @@ export function initPlayer(socket) {
                 precacheNextTracks(); // trigger immediate buffer for late joiners
             }
         },
-        setCurrentPlaylistFolder: (folder) => { currentFolderName = folder; currentPlaylist = allGroupsCache[folder]; },
+        setCurrentPlaylistFolder: (folder) => { 
+            if (currentFolderName !== folder) {
+                shuffleQueue = []; // Reset shuffle queue on folder change
+            }
+            currentFolderName = folder; 
+            currentPlaylist = allGroupsCache[folder]; 
+        },
         onTrackChanged: (cb) => { onTrackChangeCallback = cb; },
         onQueueUpdate: (cb) => { onQueueUpdateCallback = cb; },
         getQueue: () => globalQueue,

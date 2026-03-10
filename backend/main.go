@@ -435,7 +435,7 @@ func handleWTSession(session *webtransport.Session) {
 					if toIdx, ok2 := msg["to"].(float64); ok2 {
 						f := int(fromIdx)
 						t := int(toIdx)
-						if f >= 0 && f < len(globalRoom.Queue) && t >= 0 && t < len(globalRoom.Queue) {
+						if f >= 0 && f < len(globalRoom.Queue) && t >= 0 && t <= len(globalRoom.Queue) {
 							item := globalRoom.Queue[f]
 							globalRoom.Queue = append(globalRoom.Queue[:f], globalRoom.Queue[f+1:]...)
 							

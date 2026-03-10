@@ -57,9 +57,6 @@ func initDB() {
 }
 
 func scanLibraryToDB() {
-	dbMutex.Lock()
-	defer dbMutex.Unlock()
-
 	log.Println("[INFO] Starting library scan to database...")
 
 	scanProgressMutex.Lock()
@@ -74,7 +71,10 @@ func scanLibraryToDB() {
 
 	// Clear existing tracks that might have been deleted (simplified: we just clear and rebuild for now,
 	// a robust sync would check file diffs, but rebuild is fast enough with SQLite)
+	dbMutex.Lock()
 	_, err := db.Exec("DELETE FROM songs")
+	dbMutex.Unlock()
+	
 	if err != nil {
 		log.Printf("[ERROR] Failed to clear DB before rescan: %v\n", err)
 		return
@@ -104,6 +104,9 @@ func scanLibraryToDB() {
 	scanProgressMutex.Lock()
 	currentScanStatus.ScanTotal = len(paths)
 	scanProgressMutex.Unlock()
+
+	dbMutex.Lock()
+	defer dbMutex.Unlock()
 
 	tx, err := db.Begin()
 	if err != nil {
