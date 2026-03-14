@@ -10,6 +10,15 @@ body {
     min-height: 100vh;
     -webkit-tap-highlight-color: transparent;
     overflow-x: hidden;
+    /* Disable text selection to prevent accidental highlighting on mobile */
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Re-enable text selection for input fields */
+input, textarea {
+    user-select: text;
+    -webkit-user-select: text;
 }
 
 /* APP WRAPPER LAYOUT */
