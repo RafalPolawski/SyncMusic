@@ -247,6 +247,12 @@ input[type="range"]::-webkit-slider-thumb:hover {
     height: 24px;
     fill: rgba(255, 255, 255, 0.7);
     flex-shrink: 0;
+    cursor: pointer;
+    transition: fill 0.2s;
+}
+
+.volume-container svg:hover {
+    fill: #fff;
 }
 
 #volumeSlider {
@@ -554,6 +560,18 @@ audio {
     flex-direction: column;
     justify-content: center;
     align-items: center;
+    animation: overlayFadeIn 0.5s cubic-bezier(0.25, 1, 0.5, 1) both;
+}
+
+@keyframes overlayFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 #joinBtn {
@@ -771,9 +789,25 @@ audio {
         overflow: hidden;
     }
 
+    /* Ticker animation for long titles in mini-player */
     .track-title {
         font-size: 16px;
         margin: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+        -webkit-mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+    }
+
+    .track-title.ticker-active {
+        animation: ticker-scroll 8s linear infinite;
+        animation-delay: 1.5s;
+        padding-right: 60px;
+    }
+
+    @keyframes ticker-scroll {
+        0%   { transform: translateX(0); }
+        100% { transform: translateX(-50%); }
     }
 
     .track-artist {

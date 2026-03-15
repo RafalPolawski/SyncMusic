@@ -8,6 +8,9 @@
  * @param {SyncWebTransport} socket - An initialized WebTransport interface to push action commands upstream.
  * @returns {Object} A set of closure functions hooked by the WebTransport listener to pipe state downstream.
  */
+
+// If the audio drifts more than this many seconds from the server, force a re-sync
+const SOFT_SYNC_THRESHOLD = 1.5;
 export function initPlayer(socket) {
     const audio = document.getElementById("audioPlayer");
     const trackTitle = document.getElementById("trackTitle");
@@ -18,6 +21,7 @@ export function initPlayer(socket) {
     const coverArt = document.getElementById("coverArt");
     const shuffleBtn = document.getElementById("shuffleBtn");
     const volumeSlider = document.getElementById("volumeSlider");
+    const volumeIcon = document.getElementById("volumeIcon");
     const overlay = document.getElementById("overlay");
     const playerContainer = document.getElementById("playerContainer");
     const miniPlayerClickZone = document.getElementById("miniPlayerClickZone");
@@ -33,6 +37,8 @@ export function initPlayer(socket) {
     let syncAudioTime = 0;
     let shouldBePlaying = false;
     let hasJoined = false;
+    let isMuted = false;
+    let volumeBeforeMute = 1;
 
     let currentPlaylist = [];
     let currentSongPath = null;
@@ -50,6 +56,11 @@ export function initPlayer(socket) {
 
     let onTrackChangeCallback = null;
     let onQueueUpdateCallback = null;
+
+    // Restore saved volume from localStorage
+    const savedVolume = parseFloat(localStorage.getItem("syncMusicVolume") ?? "1");
+    audio.volume = savedVolume;
+    volumeSlider.value = savedVolume;
 
     const svgPlay = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
     const svgPause = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
@@ -92,7 +103,17 @@ export function initPlayer(socket) {
             }
         }
 
-        trackTitle.innerText = displayTitle;
+        // Set title — activate ticker if text overflows in mini-player
+        trackTitle.classList.remove('ticker-active');
+        trackTitle.textContent = displayTitle;
+        // Use rAF to measure after paint so scrollWidth is accurate
+        requestAnimationFrame(() => {
+            if (window.innerWidth < 1024 && !isExpanded && trackTitle.scrollWidth > trackTitle.clientWidth) {
+                // Duplicate text for seamless looping
+                trackTitle.textContent = displayTitle + '\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0' + displayTitle;
+                trackTitle.classList.add('ticker-active');
+            }
+        });
         document.getElementById("trackArtist").innerText = displayArtist;
 
         const coverUrl = `/api/cover?song=${encodeURIComponent(path)}`;
@@ -320,6 +341,7 @@ export function initPlayer(socket) {
 
     progressBar.addEventListener('change', () => {
         isDraggingProgress = false;
+        if (navigator.vibrate) navigator.vibrate(20);
         socket.sendCommand("seek", { time: parseFloat(progressBar.value), isPlaying: shouldBePlaying });
     });
 
@@ -341,9 +363,40 @@ export function initPlayer(socket) {
         }
     };
 
+    const svgVolume = '<svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>';
+    const svgVolumeMute = '<svg viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>';
+
+    const updateVolumeIcon = () => {
+        if (!volumeIcon) return;
+        volumeIcon.innerHTML = (isMuted || audio.volume === 0) ? svgVolumeMute : svgVolume;
+    };
+
+    if (volumeIcon) {
+        volumeIcon.style.cursor = 'pointer';
+        volumeIcon.onclick = () => {
+            if (navigator.vibrate) navigator.vibrate(30);
+            if (isMuted) {
+                isMuted = false;
+                audio.volume = volumeBeforeMute;
+                volumeSlider.value = volumeBeforeMute;
+                socket.sendCommand("volume", { level: volumeBeforeMute });
+            } else {
+                isMuted = true;
+                volumeBeforeMute = audio.volume || 1;
+                audio.volume = 0;
+                volumeSlider.value = 0;
+                socket.sendCommand("volume", { level: 0 });
+            }
+            updateVolumeIcon();
+        };
+    }
+
     volumeSlider.addEventListener('input', () => {
+        isMuted = false;
         audio.volume = volumeSlider.value;
+        localStorage.setItem("syncMusicVolume", volumeSlider.value);
         socket.sendCommand("volume", { level: parseFloat(volumeSlider.value) });
+        updateVolumeIcon();
     });
 
     const handleEagerLoadAndPlay = (targetPath) => {
@@ -424,6 +477,13 @@ export function initPlayer(socket) {
     const playPrev = () => {
         if (navigator.vibrate) navigator.vibrate(30);
         if (currentPlaylist.length === 0) return;
+
+        // Spotify-style: if we're more than 3s into the track, seek to start instead of going back
+        if (audio.currentTime > 3) {
+            socket.sendCommand("seek", { time: 0, isPlaying: shouldBePlaying });
+            audio.currentTime = 0;
+            return;
+        }
 
         if (playedHistory.length > 0) {
             const prevSongPath = playedHistory.pop();
