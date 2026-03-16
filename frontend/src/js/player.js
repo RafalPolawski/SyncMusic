@@ -103,17 +103,7 @@ export function initPlayer(socket) {
             }
         }
 
-        // Set title — activate ticker if text overflows in mini-player
-        trackTitle.classList.remove('ticker-active');
         trackTitle.textContent = displayTitle;
-        // Use rAF to measure after paint so scrollWidth is accurate
-        requestAnimationFrame(() => {
-            if (window.innerWidth < 1024 && !isExpanded && trackTitle.scrollWidth > trackTitle.clientWidth) {
-                // Duplicate text for seamless looping
-                trackTitle.textContent = displayTitle + '\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0' + displayTitle;
-                trackTitle.classList.add('ticker-active');
-            }
-        });
         document.getElementById("trackArtist").innerText = displayArtist;
 
         const coverUrl = `/api/cover?song=${encodeURIComponent(path)}`;
