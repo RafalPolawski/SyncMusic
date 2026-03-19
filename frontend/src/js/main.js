@@ -109,7 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (state.labelEl) state.labelEl.textContent = `${state.songCount} / ${state.songCount} songs`;
                 if (state.btn) {
                     state.btn.disabled = true;
-                    state.btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Cached`;
+                    state.btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Cached (~${formatBytes(state.totalSize)})`;
                 }
                 cacheStateMap.delete(data.cacheId);
             }
@@ -257,9 +257,17 @@ document.addEventListener("DOMContentLoaded", () => {
     // Encode path segments for URL construction (same logic as player.js)
     const encodePath = (path) => path.split('/').map(encodeURIComponent).join('/');
 
+    const formatBytes = (bytes) => {
+        if (!+bytes) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+    };
+
     // Check SW cache status for a list of songs. Apply .cached to badges.
     // If all songs are already cached, update cacheBtn to "✓ Cached" state.
-    const checkCacheStatus = async (songs, cacheBtn) => {
+    const checkCacheStatus = async (songs, cacheBtn, totalSize) => {
         if (!('caches' in window)) return;
         try {
             const cache = await caches.open('syncmusic-cache-v3');
@@ -283,7 +291,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // If every song is already cached, reflect that on the button
             if (cacheBtn && cachedCount === songs.length && songs.length > 0) {
                 cacheBtn.disabled = true;
-                cacheBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Cached`;
+                cacheBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Cached (~${formatBytes(totalSize)})`;
             }
         } catch (e) { /* caches API unavailable */ }
     };
@@ -325,15 +333,21 @@ document.addEventListener("DOMContentLoaded", () => {
             loadingIndicator.style.display = "none";
             if (!songs || songs.length === 0) return;
             const groups = {};
+            let libraryTotalTracks = 0;
+            let libraryTotalSize = 0;
+
             songs.forEach(song => {
                 const path = song.path;
                 const parts = path.split('/');
                 const folder = parts.length > 1 ? parts[0] : "Loose Tracks";
                 if (!groups[folder]) groups[folder] = [];
+                libraryTotalTracks++;
+                libraryTotalSize += song.size || 0;
                 groups[folder].push({
                     path: path,
                     artist: song.artist,
-                    title: song.title
+                    title: song.title,
+                    size: song.size || 0
                 });
             });
 
@@ -348,6 +362,50 @@ document.addEventListener("DOMContentLoaded", () => {
                 backBtn.style.display = "none";
                 locateTrackBtn.classList.remove('visible');
                 foldersContainer.innerHTML = "";
+
+                // -- Cache All Library Button --
+                const cacheAllBtn = document.createElement("button");
+                cacheAllBtn.className = "cache-playlist-btn";
+                cacheAllBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> Cache Library (${libraryTotalTracks} tracks, ~${formatBytes(libraryTotalSize)})`;
+                foldersContainer.appendChild(cacheAllBtn);
+
+                const progressAllWrap = document.createElement('div');
+                progressAllWrap.className = 'cache-progress-wrap';
+                progressAllWrap.innerHTML = `
+                    <div class="cache-progress-track"><div class="cache-progress-fill"></div></div>
+                    <div class="cache-progress-label">0 / ${libraryTotalTracks * 2}</div>
+                `;
+                foldersContainer.appendChild(progressAllWrap);
+
+                cacheAllBtn.onclick = async () => {
+                    if (!confirm(`Cache entire library (${libraryTotalTracks} tracks, ~${formatBytes(libraryTotalSize)}) for offline playback?`)) return;
+
+                    let swReg;
+                    try { swReg = await navigator.serviceWorker.ready; } 
+                    catch (e) { alert('Service Worker unavailable on this origin. Caching requires HTTPS or localhost.'); return; }
+                    if (!swReg || !swReg.active) { alert('Service Worker not active yet — please try again in a moment.'); return; }
+
+                    const cacheId = `library-${Date.now()}`;
+                    const urls = [];
+                    songs.forEach(s => {
+                        urls.push('/music/' + encodePath(s.path));
+                        urls.push('/api/cover?song=' + encodeURIComponent(s.path));
+                    });
+
+                    progressAllWrap.classList.add('visible');
+                    const fillEl = progressAllWrap.querySelector('.cache-progress-fill');
+                    const labelEl = progressAllWrap.querySelector('.cache-progress-label');
+                    if (fillEl) fillEl.style.width = '0%';
+                    if (labelEl) labelEl.textContent = `0 / ${libraryTotalTracks} songs`;
+
+                    cacheStateMap.set(cacheId, { done: 0, songCount: libraryTotalTracks, totalSize: libraryTotalSize, btn: cacheAllBtn, fillEl, labelEl });
+                    cacheAllBtn.disabled = true;
+
+                    swReg.active.postMessage({ action: 'cache_playlist', urls, cacheId });
+                };
+
+                // Check cache status for entire library to auto-disable the button
+                checkCacheStatus(songs, cacheAllBtn, libraryTotalSize);
 
                 for (const f in groups) {
                     const b = document.createElement("button");
@@ -369,17 +427,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
                         player.setCurrentPlaylistFolder(f);
 
+                        let playlistSize = 0;
+                        groups[f].forEach(s => playlistSize += s.size || 0);
+
                         // -- Cache playlist button + progress bar --
                         const cacheBtn = document.createElement('button');
                         cacheBtn.className = 'cache-playlist-btn';
-                        cacheBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> Cache ${groups[f].length} tracks for offline`;
+                        cacheBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> Cache ${groups[f].length} tracks (~${formatBytes(playlistSize)})`;
                         songsContainer.appendChild(cacheBtn);
 
                         const progressWrap = document.createElement('div');
                         progressWrap.className = 'cache-progress-wrap';
                         progressWrap.innerHTML = `
-                            <div class="cache-progress-track"><div class="cache-progress-fill" id="cacheProgressFill"></div></div>
-                            <div class="cache-progress-label" id="cacheProgressLabel">0 / ${groups[f].length * 2}</div>
+                            <div class="cache-progress-track"><div class="cache-progress-fill"></div></div>
+                            <div class="cache-progress-label">0 / ${groups[f].length * 2}</div>
                         `;
                         songsContainer.appendChild(progressWrap);
 
@@ -420,7 +481,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             if (fillEl) fillEl.style.width = '0%';
                             if (labelEl) labelEl.textContent = `0 / ${groups[f].length} songs`;
 
-                            cacheStateMap.set(cacheId, { done: 0, songCount: groups[f].length, btn: cacheBtn, fillEl, labelEl });
+                            cacheStateMap.set(cacheId, { done: 0, songCount: groups[f].length, totalSize: playlistSize, btn: cacheBtn, fillEl, labelEl });
                             cacheBtn.disabled = true;
 
                             swReg.active.postMessage({ action: 'cache_playlist', urls, cacheId });
@@ -470,7 +531,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                         // Reapply highlights and check cache status
                         updateHighlights();
-                        checkCacheStatus(groups[f], cacheBtn);
+                        checkCacheStatus(groups[f], cacheBtn, playlistSize);
 
                         // Reset scroll to top for the new playlist view
                         window.scrollTo(0, 0);

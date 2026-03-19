@@ -45,13 +45,17 @@ func initDB() {
 		path TEXT UNIQUE,
 		title TEXT,
 		artist TEXT,
-		folder TEXT
+		folder TEXT,
+		size INTEGER DEFAULT 0
 	);`
 
 	_, err = db.Exec(createTableQuery)
 	if err != nil {
 		log.Fatalf("[ERROR] Failed to create table: %v", err)
 	}
+
+	// Ensure size column exists for older DBs
+	db.Exec("ALTER TABLE songs ADD COLUMN size INTEGER DEFAULT 0")
 
 	log.Println("[INFO] Database initialized successfully.")
 }
@@ -119,6 +123,7 @@ func scanLibraryToDB() {
 		Title  string
 		Artist string
 		Folder string
+		Size   int64
 	}
 	var records []SongRecord
 
@@ -145,6 +150,11 @@ func scanLibraryToDB() {
 			}
 			defer f.Close()
 
+			var fileSize int64
+			if stat, err := f.Stat(); err == nil {
+				fileSize = stat.Size()
+			}
+
 			fileName := filepath.Base(path)
 			ext := filepath.Ext(path)
 			title := fileName // fallback
@@ -170,6 +180,7 @@ func scanLibraryToDB() {
 				Title:  title,
 				Artist: artist,
 				Folder: folder,
+				Size:   fileSize,
 			})
 			resultsMutex.Unlock()
 
@@ -191,7 +202,7 @@ func scanLibraryToDB() {
 		return
 	}
 
-	stmt, err := tx.Prepare("INSERT INTO songs (path, title, artist, folder) VALUES (?, ?, ?, ?)")
+	stmt, err := tx.Prepare("INSERT INTO songs (path, title, artist, folder, size) VALUES (?, ?, ?, ?, ?)")
 	if err != nil {
 		log.Printf("[ERROR] Failed to prepare statement: %v\n", err)
 		tx.Rollback()
@@ -200,7 +211,7 @@ func scanLibraryToDB() {
 	defer stmt.Close()
 
 	for _, r := range records {
-		_, err = stmt.Exec(r.Path, r.Title, r.Artist, r.Folder)
+		_, err = stmt.Exec(r.Path, r.Title, r.Artist, r.Folder, r.Size)
 		if err != nil {
 			log.Printf("[WARN] Failed to insert song %s: %v\n", r.Path, err)
 		}
@@ -218,7 +229,7 @@ func getSongsFromDB() ([]SongMeta, error) {
 	dbMutex.Lock()
 	defer dbMutex.Unlock()
 
-	rows, err := db.Query("SELECT path, title, artist FROM songs ORDER BY folder, title")
+	rows, err := db.Query("SELECT path, title, artist, size FROM songs ORDER BY folder, title")
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +238,7 @@ func getSongsFromDB() ([]SongMeta, error) {
 	var songs []SongMeta
 	for rows.Next() {
 		var s SongMeta
-		if err := rows.Scan(&s.Path, &s.Title, &s.Artist); err != nil {
+		if err := rows.Scan(&s.Path, &s.Title, &s.Artist, &s.Size); err != nil {
 			continue
 		}
 		songs = append(songs, s)

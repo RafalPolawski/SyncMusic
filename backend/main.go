@@ -119,6 +119,7 @@ type SongMeta struct {
 	Path   string `json:"path"`
 	Title  string `json:"title"`
 	Artist string `json:"artist"`
+	Size   int64  `json:"size"`
 }
 
 func handleGetSongs(w http.ResponseWriter, r *http.Request) {
