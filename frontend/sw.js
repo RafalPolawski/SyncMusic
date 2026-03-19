@@ -133,29 +133,25 @@ self.addEventListener('message', (event) => {
     // Bulk playlist cache with progress reporting back to the requesting client
     if (event.data && event.data.action === 'cache_playlist') {
         const urls = event.data.urls || [];
+        const cacheId = event.data.cacheId || 'default'; // unique per cache operation
         const total = urls.length;
         if (total === 0) return;
 
-        const source = event.source; // The client Window that sent this message
+        const source = event.source;
 
-        const notifyProgress = (url, alreadyCached) => {
+        const notifyProgress = (url) => {
             if (source) {
-                source.postMessage({
-                    action: 'cache_progress',
-                    url,
-                    alreadyCached,
-                    total
-                });
+                source.postMessage({ action: 'cache_progress', url, total, cacheId });
             }
         };
 
         const notifyDone = () => {
             if (source) {
-                source.postMessage({ action: 'cache_done', total });
+                source.postMessage({ action: 'cache_done', total, cacheId });
             }
         };
 
-        const BATCH = 3; // concurrent downloads
+        const BATCH = 3;
 
         const process = async () => {
             const cache = await caches.open(CACHE_NAME);
@@ -165,7 +161,7 @@ self.addEventListener('message', (event) => {
                     const req = new Request(urlStr);
                     const existing = await cache.match(req);
                     if (existing) {
-                        notifyProgress(urlStr, true);
+                        notifyProgress(urlStr);
                         return;
                     }
                     try {
@@ -173,10 +169,10 @@ self.addEventListener('message', (event) => {
                         if (res && res.status === 200) {
                             await cache.put(req, res.clone());
                         }
-                        notifyProgress(urlStr, false);
+                        notifyProgress(urlStr);
                     } catch (e) {
                         console.log('[SW] cache_playlist fetch failed:', urlStr, e);
-                        notifyProgress(urlStr, false);
+                        notifyProgress(urlStr);
                     }
                 }));
             }

@@ -73,42 +73,45 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // SW → Page: handle cache_progress and cache_done messages
+    // Uses a Map keyed by cacheId to support multiple simultaneous playlist downloads
+    const cacheStateMap = new Map(); // cacheId → { done, songCount, btn, fillEl, labelEl }
+
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.addEventListener('message', (event) => {
             const data = event.data;
-            if (!data) return;
+            if (!data || !data.cacheId) return;
 
-            if (data.action === 'cache_progress' && activeCacheState) {
-                activeCacheState.done++;
-                const pct = Math.round((activeCacheState.done / data.total) * 100);
+            const state = cacheStateMap.get(data.cacheId);
+            if (!state) return;
 
-                if (activeCacheState.fillEl) activeCacheState.fillEl.style.width = pct + '%';
-                if (activeCacheState.labelEl) activeCacheState.labelEl.textContent = `${activeCacheState.done} / ${data.total}`;
+            if (data.action === 'cache_progress') {
+                state.done++;
+                // Each song = 2 URLs (audio + cover). Show song count to the user.
+                const songsProcessed = Math.floor(state.done / 2);
+                const pct = Math.round((state.done / data.total) * 100);
 
-                // Mark the individual song badge as cached
-                // URL is either /music/... or /api/cover?song=...
+                if (state.fillEl) state.fillEl.style.width = pct + '%';
+                if (state.labelEl) state.labelEl.textContent = `${songsProcessed} / ${state.songCount} songs`;
+
+                // Mark badge when the audio URL completes (not cover)
                 if (data.url) {
-                    const url = new URL(data.url, window.location.origin);
-                    let songPath = null;
-                    if (url.pathname.startsWith('/music/')) {
-                        songPath = decodeURIComponent(url.pathname.replace('/music/', ''));
-                    }
-                    if (songPath) {
+                    const u = new URL(data.url, window.location.origin);
+                    if (u.pathname.startsWith('/music/')) {
+                        const songPath = decodeURIComponent(u.pathname.slice('/music/'.length));
                         const badge = document.querySelector(`.cache-badge[data-path="${CSS.escape(songPath)}"]`);
                         if (badge) { badge.classList.remove('caching'); badge.classList.add('cached'); badge.textContent = '✓'; }
                     }
                 }
             }
 
-            if (data.action === 'cache_done' && activeCacheState) {
-                if (activeCacheState.fillEl) activeCacheState.fillEl.style.width = '100%';
-                if (activeCacheState.labelEl) activeCacheState.labelEl.textContent = 'Done!';
-                if (activeCacheState.btn) {
-                    activeCacheState.btn.disabled = false;
-                    activeCacheState.btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Cached`;
-                    activeCacheState.btn.style.color = '#1DB954';
+            if (data.action === 'cache_done') {
+                if (state.fillEl) state.fillEl.style.width = '100%';
+                if (state.labelEl) state.labelEl.textContent = `${state.songCount} / ${state.songCount} songs`;
+                if (state.btn) {
+                    state.btn.disabled = true;
+                    state.btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Cached`;
                 }
-                activeCacheState = null;
+                cacheStateMap.delete(data.cacheId);
             }
         });
     }
@@ -118,7 +121,6 @@ document.addEventListener("DOMContentLoaded", () => {
     let globalPlayingFolder = null;
     let activeTrackEl = null;  // direct ref to highlighted track element
     let activeFolderEl = null; // direct ref to highlighted folder element
-    let activeCacheState = null; // tracks active playlist cache operation
 
     const foldersContainer = document.getElementById("foldersContainer");
     const songsContainer = document.getElementById("songsContainer");
@@ -255,8 +257,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Encode path segments for URL construction (same logic as player.js)
     const encodePath = (path) => path.split('/').map(encodeURIComponent).join('/');
 
-    // Check SW cache status for a list of songs and apply .cached to their badges
-    const checkCacheStatus = async (songs) => {
+    // Check SW cache status for a list of songs. Apply .cached to badges.
+    // If all songs are already cached, update cacheBtn to "✓ Cached" state.
+    const checkCacheStatus = async (songs, cacheBtn) => {
         if (!('caches' in window)) return;
         try {
             const cache = await caches.open('syncmusic-cache-v3');
@@ -268,14 +271,23 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 return null;
             }).filter(Boolean));
+            let cachedCount = 0;
             songs.forEach(s => {
-                if (cachedPaths.has(encodePath(s.path)) || cachedPaths.has(s.path)) {
+                const isCached = cachedPaths.has(encodePath(s.path)) || cachedPaths.has(s.path);
+                if (isCached) {
+                    cachedCount++;
                     const badge = document.querySelector(`.cache-badge[data-path="${CSS.escape(s.path)}"]`);
                     if (badge) { badge.classList.add('cached'); badge.textContent = '✓'; }
                 }
             });
+            // If every song is already cached, reflect that on the button
+            if (cacheBtn && cachedCount === songs.length && songs.length > 0) {
+                cacheBtn.disabled = true;
+                cacheBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Cached`;
+            }
         } catch (e) { /* caches API unavailable */ }
     };
+
 
     let isPolling = false;
 
@@ -371,16 +383,30 @@ document.addEventListener("DOMContentLoaded", () => {
                         `;
                         songsContainer.appendChild(progressWrap);
 
-                        cacheBtn.onclick = () => {
+                        cacheBtn.onclick = async () => {
                             if (!confirm(`Cache ${groups[f].length} tracks for offline playback?`)) return;
-                            if (!navigator.serviceWorker.controller) { alert('Service Worker not ready, try again in a moment.'); return; }
+
+                            // Wait for SW registration — works on localhost AND Tailscale HTTPS
+                            let swReg;
+                            try {
+                                swReg = await navigator.serviceWorker.ready;
+                            } catch (e) {
+                                alert('Service Worker unavailable on this origin. Caching requires HTTPS or localhost.');
+                                return;
+                            }
+                            if (!swReg || !swReg.active) {
+                                alert('Service Worker not active yet — please try again in a moment.');
+                                return;
+                            }
+
+                            const cacheId = `${f}-${Date.now()}`; // unique per operation
 
                             // Build URL list: audio + covers
                             const urls = [];
                             groups[f].forEach(s => {
                                 urls.push('/music/' + encodePath(s.path));
                                 urls.push('/api/cover?song=' + encodeURIComponent(s.path));
-                                // Mark badge as "in progress"
+                                // Mark badge as "in progress" unless already cached
                                 const badge = document.querySelector(`.cache-badge[data-path="${CSS.escape(s.path)}"]`);
                                 if (badge && !badge.classList.contains('cached')) {
                                     badge.classList.add('caching');
@@ -389,15 +415,15 @@ document.addEventListener("DOMContentLoaded", () => {
                             });
 
                             progressWrap.classList.add('visible');
-                            const fillEl = document.getElementById('cacheProgressFill');
-                            const labelEl = document.getElementById('cacheProgressLabel');
+                            const fillEl = progressWrap.querySelector('.cache-progress-fill');
+                            const labelEl = progressWrap.querySelector('.cache-progress-label');
                             if (fillEl) fillEl.style.width = '0%';
-                            if (labelEl) labelEl.textContent = `0 / ${urls.length}`;
+                            if (labelEl) labelEl.textContent = `0 / ${groups[f].length} songs`;
 
-                            activeCacheState = { done: 0, btn: cacheBtn, fillEl, labelEl };
+                            cacheStateMap.set(cacheId, { done: 0, songCount: groups[f].length, btn: cacheBtn, fillEl, labelEl });
                             cacheBtn.disabled = true;
 
-                            navigator.serviceWorker.controller.postMessage({ action: 'cache_playlist', urls });
+                            swReg.active.postMessage({ action: 'cache_playlist', urls, cacheId });
                         };
 
                         // -- Render songs with cache badge --
@@ -444,7 +470,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                         // Reapply highlights and check cache status
                         updateHighlights();
-                        checkCacheStatus(groups[f]);
+                        checkCacheStatus(groups[f], cacheBtn);
 
                         // Reset scroll to top for the new playlist view
                         window.scrollTo(0, 0);
