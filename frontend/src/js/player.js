@@ -48,6 +48,7 @@ export function initPlayer(socket) {
     let lastKnownTime = -1;
     let isDraggingProgress = false;
     let playedHistory = [];
+    let forwardHistory = []; // Tracks skipped-over songs so back→forward is deterministic
     let shuffleQueue = [];
     let isHandlingEnd = false; // Anti-race condition
 
@@ -142,6 +143,8 @@ export function initPlayer(socket) {
         precacheNextTracks();
     };
 
+    const MAX_HISTORY = 100;
+
     const precacheNextTracks = () => {
         if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return;
         if (currentPlaylist.length === 0) return;
@@ -149,10 +152,11 @@ export function initPlayer(socket) {
         let urlsToCache = [];
 
         if (isShuffle) {
-            // Buffer up to 3 random tracks if shuffling
-            for (let i = 0; i < 3; i++) {
-                const randIndex = Math.floor(Math.random() * currentPlaylist.length);
-                urlsToCache.push(`/music/${encodePath(currentPlaylist[randIndex].path)}`);
+            // Buffer the actual upcoming tracks from the shuffle queue (peek, don't pop)
+            const peekCount = Math.min(3, shuffleQueue.length);
+            for (let i = 0; i < peekCount; i++) {
+                const idx = shuffleQueue[shuffleQueue.length - 1 - i];
+                urlsToCache.push(`/music/${encodePath(currentPlaylist[idx].path)}`);
             }
         } else {
             // Buffer the next 2 tracks linearly
@@ -402,12 +406,13 @@ export function initPlayer(socket) {
 
     const playNext = (isNaturalEnd = false) => {
         if (navigator.vibrate) navigator.vibrate(30);
-        
-        if (isNaturalEnd) {
-            if (isHandlingEnd) return;
-            isHandlingEnd = true;
-            setTimeout(() => { isHandlingEnd = false; }, 2000);
-        }
+
+        // Guard against race: both natural end AND manual skip firing at the same time.
+        // Manual skip uses a short 300ms window (enough to absorb a simultaneous onended).
+        // Natural end keeps 2000ms to handle network/latency-delayed duplicates.
+        if (isHandlingEnd) return;
+        isHandlingEnd = true;
+        setTimeout(() => { isHandlingEnd = false; }, isNaturalEnd ? 2000 : 300);
 
         if (isNaturalEnd && isRepeat === 2) {
             socket.sendCommand("seek", { time: 0, isPlaying: true });
@@ -417,8 +422,13 @@ export function initPlayer(socket) {
             return;
         }
 
-        if (currentSongPath && (!isNaturalEnd || isRepeat !== 2)) {
+        // Clear forwardHistory on natural progression (not going back-then-forward)
+        if (isNaturalEnd) forwardHistory = [];
+
+        if (currentSongPath && isRepeat !== 2) {
             playedHistory.push(currentSongPath);
+            // Cap history size to avoid unbounded memory growth
+            if (playedHistory.length > MAX_HISTORY) playedHistory.shift();
         }
 
         if (globalQueue.length > 0) {
@@ -431,26 +441,30 @@ export function initPlayer(socket) {
 
         if (currentPlaylist.length === 0) return;
 
-        let nextIndex = 0;
+        let nextSongPath;
         if (isShuffle) {
-            if (shuffleQueue.length === 0) {
-                // Generate and shuffle new queue
-                shuffleQueue = Array.from({length: currentPlaylist.length}, (_, i) => i);
-                for (let i = shuffleQueue.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [shuffleQueue[i], shuffleQueue[j]] = [shuffleQueue[j], shuffleQueue[i]];
+            // If we went back and now go forward again, replay the known next track
+            if (forwardHistory.length > 0) {
+                nextSongPath = forwardHistory.pop();
+            } else {
+                if (shuffleQueue.length === 0) {
+                    // Generate and shuffle new queue
+                    shuffleQueue = Array.from({length: currentPlaylist.length}, (_, i) => i);
+                    for (let i = shuffleQueue.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [shuffleQueue[i], shuffleQueue[j]] = [shuffleQueue[j], shuffleQueue[i]];
+                    }
+                    // Avoid immediate repeat of current song if we just re-shuffled
+                    const currentIndex = currentPlaylist.findIndex(s => s.path === currentSongPath);
+                    if (shuffleQueue[shuffleQueue.length - 1] === currentIndex && currentPlaylist.length > 1) {
+                        [shuffleQueue[shuffleQueue.length - 1], shuffleQueue[0]] = [shuffleQueue[0], shuffleQueue[shuffleQueue.length - 1]];
+                    }
                 }
-                // Avoid immediate repeat of current song if we just re-shuffled
-                const currentIndex = currentPlaylist.findIndex(s => s.path === currentSongPath);
-                if (shuffleQueue[shuffleQueue.length - 1] === currentIndex && currentPlaylist.length > 1) {
-                    // Swap last element with the first to prevent repeating the currently playing song
-                    [shuffleQueue[shuffleQueue.length - 1], shuffleQueue[0]] = [shuffleQueue[0], shuffleQueue[shuffleQueue.length - 1]];
-                }
+                nextSongPath = currentPlaylist[shuffleQueue.pop()].path;
             }
-            nextIndex = shuffleQueue.pop();
         } else {
             const currentIndex = currentPlaylist.findIndex(s => s.path === currentSongPath);
-            nextIndex = currentIndex + 1;
+            let nextIndex = currentIndex + 1;
             if (nextIndex >= currentPlaylist.length) {
                 if (isRepeat === 0 && isNaturalEnd) {
                     socket.sendCommand("pause", { time: 0 });
@@ -458,8 +472,8 @@ export function initPlayer(socket) {
                 }
                 nextIndex = 0;
             }
+            nextSongPath = currentPlaylist[nextIndex].path;
         }
-        const nextSongPath = currentPlaylist[nextIndex].path;
         socket.sendCommand("load", { song: nextSongPath, folder: currentFolderName });
         handleEagerLoadAndPlay(nextSongPath);
     };
@@ -476,6 +490,11 @@ export function initPlayer(socket) {
         }
 
         if (playedHistory.length > 0) {
+            // Save current song so going forward again returns here
+            if (currentSongPath) {
+                forwardHistory.push(currentSongPath);
+                if (forwardHistory.length > MAX_HISTORY) forwardHistory.shift();
+            }
             const prevSongPath = playedHistory.pop();
             socket.sendCommand("load", { song: prevSongPath, isPrev: true, folder: currentFolderName });
             handleEagerLoadAndPlay(prevSongPath);
@@ -603,12 +622,13 @@ export function initPlayer(socket) {
                 if (onQueueUpdateCallback) onQueueUpdateCallback(globalQueue);
             } else if (msg.action === "load") {
                 if (msg.folder && allGroupsCache[msg.folder]) {
-                    if (currentFolderName !== msg.folder) shuffleQueue = []; 
+                    if (currentFolderName !== msg.folder) { shuffleQueue = []; forwardHistory = []; }
                     currentFolderName = msg.folder;
                     currentPlaylist = allGroupsCache[msg.folder];
                 }
                 if (!msg.isPrev && currentSongPath && currentSongPath !== msg.song) {
                     playedHistory.push(currentSongPath);
+                    forwardHistory = []; // Manual forward jump clears the redo stack
                 } else if (msg.isPrev) {
                     if (playedHistory.length > 0 && playedHistory[playedHistory.length - 1] === msg.song) playedHistory.pop();
                 }

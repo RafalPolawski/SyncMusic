@@ -11,6 +11,8 @@ export class SyncWebTransport {
         this.onReconnect = null;
         this.transport = null;
         this.writer = null;
+        this._encoder = new TextEncoder();
+        this._decoder = new TextDecoder();
 
         this.connect();
     }
@@ -109,7 +111,6 @@ export class SyncWebTransport {
 
     async readStream(readable) {
         const reader = readable.getReader();
-        const decoder = new TextDecoder();
         let buffer = '';
 
         while (true) {
@@ -117,7 +118,7 @@ export class SyncWebTransport {
                 const { value, done } = await reader.read();
                 if (done) break;
 
-                buffer += decoder.decode(value, { stream: true });
+                buffer += this._decoder.decode(value, { stream: true });
 
                 let newlineIndex;
                 while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
@@ -163,7 +164,7 @@ export class SyncWebTransport {
     sendCommand(action, payload = {}) {
         if (this.writer) {
             const msg = { action, ...payload };
-            const encoded = new TextEncoder().encode(JSON.stringify(msg) + "\n");
+            const encoded = this._encoder.encode(JSON.stringify(msg) + "\n");
             this.writer.write(encoded);
         }
     }

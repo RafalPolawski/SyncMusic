@@ -69,12 +69,17 @@ func scanLibraryToDB() {
 		scanProgressMutex.Unlock()
 	}()
 
-	// Clear existing tracks that might have been deleted (simplified: we just clear and rebuild for now,
-	// a robust sync would check file diffs, but rebuild is fast enough with SQLite)
+	// Invalidate cover art cache so rescan picks up new/changed artwork
+	coverCache.Range(func(key, _ any) bool {
+		coverCache.Delete(key)
+		return true
+	})
+
+	// Clear existing tracks (rebuild is fast enough with SQLite)
 	dbMutex.Lock()
 	_, err := db.Exec("DELETE FROM songs")
 	dbMutex.Unlock()
-	
+
 	if err != nil {
 		log.Printf("[ERROR] Failed to clear DB before rescan: %v\n", err)
 		return
@@ -104,23 +109,6 @@ func scanLibraryToDB() {
 	scanProgressMutex.Lock()
 	currentScanStatus.ScanTotal = len(paths)
 	scanProgressMutex.Unlock()
-
-	dbMutex.Lock()
-	defer dbMutex.Unlock()
-
-	tx, err := db.Begin()
-	if err != nil {
-		log.Printf("[ERROR] Failed to start DB transaction: %v\n", err)
-		return
-	}
-
-	stmt, err := tx.Prepare("INSERT INTO songs (path, title, artist, folder) VALUES (?, ?, ?, ?)")
-	if err != nil {
-		log.Printf("[ERROR] Failed to prepare statement: %v\n", err)
-		tx.Rollback()
-		return
-	}
-	defer stmt.Close()
 
 	var wg sync.WaitGroup
 	var resultsMutex sync.Mutex
@@ -192,6 +180,24 @@ func scanLibraryToDB() {
 	}
 
 	wg.Wait()
+
+	// Only hold dbMutex for the transaction itself, not the entire parallel scan
+	dbMutex.Lock()
+	defer dbMutex.Unlock()
+
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("[ERROR] Failed to start DB transaction: %v\n", err)
+		return
+	}
+
+	stmt, err := tx.Prepare("INSERT INTO songs (path, title, artist, folder) VALUES (?, ?, ?, ?)")
+	if err != nil {
+		log.Printf("[ERROR] Failed to prepare statement: %v\n", err)
+		tx.Rollback()
+		return
+	}
+	defer stmt.Close()
 
 	for _, r := range records {
 		_, err = stmt.Exec(r.Path, r.Title, r.Artist, r.Folder)

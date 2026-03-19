@@ -53,6 +53,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // Global state for highlighting
     let globalPlayingPath = null;
     let globalPlayingFolder = null;
+    let activeTrackEl = null;  // direct ref to highlighted track element
+    let activeFolderEl = null; // direct ref to highlighted folder element
 
     const foldersContainer = document.getElementById("foldersContainer");
     const songsContainer = document.getElementById("songsContainer");
@@ -136,14 +138,16 @@ document.addEventListener("DOMContentLoaded", () => {
             if (state.folder) globalPlayingFolder = state.folder;
         }
 
-        // Clear all active classes
-        document.querySelectorAll('.folder-btn').forEach(btn => btn.classList.remove('active-folder'));
-        document.querySelectorAll('.item-btn:not(.folder-btn)').forEach(btn => btn.classList.remove('active-track'));
+        // Remove old highlights via stored references (faster than querySelectorAll)
+        if (activeFolderEl) activeFolderEl.classList.remove('active-folder');
+        if (activeTrackEl) activeTrackEl.classList.remove('active-track');
+        activeFolderEl = null;
+        activeTrackEl = null;
 
-        // Highlight active folder if any
+        // Highlight active folder
         if (globalPlayingFolder) {
             const folderBtn = document.querySelector(`.folder-btn[data-folder="${globalPlayingFolder}"]`);
-            if (folderBtn) folderBtn.classList.add('active-folder');
+            if (folderBtn) { folderBtn.classList.add('active-folder'); activeFolderEl = folderBtn; }
         }
 
         let isTrackActiveInCurrentView = false;
@@ -154,6 +158,7 @@ document.addEventListener("DOMContentLoaded", () => {
             trackBtns.forEach(btn => {
                 if (btn.dataset.path === globalPlayingPath) {
                     btn.classList.add('active-track');
+                    activeTrackEl = btn;
                     isTrackActiveInCurrentView = true;
                 }
             });
@@ -183,9 +188,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const joinBtn = document.getElementById("joinBtn");
 
+    let isPolling = false;
+
     const loadLibrary = () => {
+        if (isPolling) return;
+        isPolling = true;
+
+        const poll = () => {
         fetchSongsLibrary().then(data => {
-            if (!data) return;
+            if (!data) { isPolling = false; return; }
 
             if (data.is_scanning !== undefined && data.is_scanning === true) {
                 loadingIndicator.style.display = "block";
@@ -199,10 +210,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 joinBtn.innerText = "SCANNING...";
                 joinBtn.style.opacity = "0.5";
                 joinBtn.style.cursor = "not-allowed";
-                setTimeout(loadLibrary, 1000);
+                setTimeout(poll, 1000);
                 return;
             }
 
+            isPolling = false;
             joinBtn.disabled = false;
             joinBtn.innerText = "JOIN SESSION 🎧";
             joinBtn.style.opacity = "1";
@@ -347,8 +359,11 @@ document.addEventListener("DOMContentLoaded", () => {
             };
         }).catch(err => {
             console.error("Failed to fetch library, retrying in 2s...", err);
+            isPolling = false;
             setTimeout(loadLibrary, 2000);
         });
+        }; // end poll
+        poll();
     }; // end of loadLibrary
 
     // Start initial load

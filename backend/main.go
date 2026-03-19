@@ -107,6 +107,14 @@ var certHashStr string
 
 // initDB() from db.go will handle setup
 
+// -- Cover art in-memory cache --
+type cachedCover struct {
+	data        []byte
+	contentType string
+}
+
+var coverCache sync.Map // map[string]*cachedCover
+
 type SongMeta struct {
 	Path   string `json:"path"`
 	Title  string `json:"title"`
@@ -148,6 +156,16 @@ func handleGetCover(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cleanPath := filepath.Clean(songPath)
+
+	// Serve from in-memory cache if available
+	if cached, ok := coverCache.Load(cleanPath); ok {
+		c := cached.(*cachedCover)
+		w.Header().Set("Content-Type", c.contentType)
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Write(c.data)
+		return
+	}
+
 	fullPath := filepath.Join("./music", cleanPath)
 	f, err := os.Open(fullPath)
 	if err != nil {
@@ -175,7 +193,12 @@ func handleGetCover(w http.ResponseWriter, r *http.Request) {
 	if contentType == "" {
 		contentType = "image/" + pic.Ext
 	}
+
+	// Store in cache for future requests
+	coverCache.Store(cleanPath, &cachedCover{data: pic.Data, contentType: contentType})
+
 	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "public, max-age=86400")
 	w.Write(pic.Data)
 }
 
