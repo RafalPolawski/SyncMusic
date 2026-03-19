@@ -9,6 +9,7 @@ export class SyncWebTransport {
 
         this.onMessageCallback = null;
         this.onReconnect = null;
+        this.onRttUpdate = null;
         this.transport = null;
         this.writer = null;
         this._encoder = new TextEncoder();
@@ -133,6 +134,7 @@ export class SyncWebTransport {
                                 this.rtt = now - parsed.clientTime;
                                 const currentServerTime = parsed.serverTime + (this.rtt / 2);
                                 this.serverTimeOffset = currentServerTime - now;
+                                if (this.onRttUpdate) this.onRttUpdate(this.rtt);
                             } else if (this.onMessageCallback) {
                                 this.onMessageCallback(parsed);
                             }

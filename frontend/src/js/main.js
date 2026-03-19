@@ -31,6 +31,28 @@ document.addEventListener("DOMContentLoaded", () => {
     const socket = new SyncWebTransport();
     const player = initPlayer(socket);
 
+    // RTT latency indicator
+    const rttIndicator = document.getElementById('rttIndicator');
+    const rttDot       = document.getElementById('rttDot');
+    const rttValue     = document.getElementById('rttValue');
+
+    socket.onRttUpdate = (rtt) => {
+        rttIndicator.style.display = 'inline-flex';
+        rttValue.textContent = `${rtt}ms`;
+
+        let color;
+        if (rtt <= 50)       color = '#1DB954'; // green
+        else if (rtt <= 150) color = '#f0c040'; // yellow
+        else if (rtt <= 300) color = '#e07820'; // orange
+        else                 color = '#e03030'; // red
+
+        rttDot.style.background = color;
+        // Brief pulse to show the value just updated
+        rttDot.style.transform = 'scale(1.5)';
+        setTimeout(() => { rttDot.style.transform = 'scale(1)'; }, 200);
+    };
+    rttDot.style.transition = 'background 0.6s ease, transform 0.2s ease';
+
     socket.onMessage((msg) => {
         if (msg.action === "presence") {
             const usersList = document.getElementById("usersList");

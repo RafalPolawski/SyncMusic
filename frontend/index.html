@@ -33,7 +33,13 @@
     <div id="app-wrapper">
         <div class="left-panel">
             <h1>SyncMusic</h1>
-            <p>Status: <span id="status" style="color: yellow;">Connecting...</span></p>
+            <p style="display:flex; align-items:center; gap:10px; margin: 4px 0;">
+                Status: <span id="status" style="color: yellow;">Connecting...</span>
+                <span id="rttIndicator" style="display:none; align-items:center; gap:5px; font-size:12px; opacity:0.85;">
+                    <span id="rttDot" style="width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0;transition:background 0.6s ease;"></span>
+                    <span id="rttValue" style="font-family:monospace; letter-spacing:0.02em;"></span>
+                </span>
+            </p>
 
             <div class="player-container" id="playerContainer">
                 <!-- Mobile pull indicator / collapse button -->
