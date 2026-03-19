@@ -355,8 +355,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
             let savedScrollWindow = 0;
             let savedScrollPanel = 0;
+            let currentView = 'root';
 
-            const showFolders = () => {
+            const showFolders = (fromHistory = false) => {
+                if (!fromHistory && currentView !== 'root') {
+                    history.pushState({ view: 'root' }, "");
+                }
+                currentView = 'root';
+
                 foldersContainer.style.display = "block";
                 songsContainer.style.display = "none";
                 backBtn.style.display = "none";
@@ -440,6 +446,11 @@ document.addEventListener("DOMContentLoaded", () => {
                         savedScrollWindow = window.scrollY || document.documentElement.scrollTop;
                         const rp = document.querySelector('.right-panel');
                         savedScrollPanel = rp ? rp.scrollTop : 0;
+
+                        if (currentView !== 'playlist') {
+                            history.pushState({ view: 'playlist', folder: f }, "");
+                        }
+                        currentView = 'playlist';
 
                         foldersContainer.style.display = "none";
                         songsContainer.style.display = "block";
@@ -585,13 +596,38 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (rp) rp.scrollTo(0, savedScrollPanel);
             };
 
-            showFolders();
-            backBtn.onclick = showFolders;
+            showFolders(true);
+            backBtn.onclick = () => {
+                history.back();
+            };
 
             // Ensure highlights are applied if changing back to folders view
-            backBtn.addEventListener('click', updateHighlights);
+            backBtn.addEventListener('click', () => { setTimeout(updateHighlights, 50); });
             // Force highlight evaluation upon initial load just in case player was already initialized
             updateHighlights();
+
+            // Handle popstate for Android Back button
+            window.addEventListener('popstate', (e) => {
+                const state = e.state;
+                if (!state) return;
+
+                if (state.view === 'exit') {
+                    if (confirm("Czy na pewno chcesz wyjść z aplikacji?")) {
+                        history.back(); // Proceed to exit
+                    } else {
+                        // Cancel exit, push root state back
+                        history.pushState({ view: 'root' }, "");
+                        currentView = 'root';
+                    }
+                } else if (state.view === 'root') {
+                    if (currentView !== 'root') {
+                        showFolders(true);
+                        updateHighlights();
+                    }
+                } else if (state.view === 'playlist') {
+                    currentView = 'playlist';
+                }
+            });
 
             // Handle joining
             document.getElementById("joinBtn").onclick = () => {
@@ -600,6 +636,11 @@ document.addEventListener("DOMContentLoaded", () => {
                     nick = "Anonymous Music Lover";
                 }
                 localStorage.setItem("syncMusicNick", nick);
+
+                // Initialize strict history navigation root when entering app
+                history.replaceState({ view: 'exit' }, "");
+                history.pushState({ view: 'root' }, "");
+                currentView = 'root';
 
                 // Send the join command
                 socket.sendCommand("join", { nickname: nick });
