@@ -312,6 +312,10 @@ export function initPlayer(socket) {
         updatePositionState();
     });
 
+    // Ensure the lock screen scrubber is corrected if the audio seeks (either locally or via remote Server Sync)
+    audio.addEventListener('seeked', updatePositionState);
+    audio.addEventListener('ratechange', updatePositionState);
+
     const togglePlayPause = () => {
         if (navigator.vibrate) navigator.vibrate(50);
         if (audio.paused) {

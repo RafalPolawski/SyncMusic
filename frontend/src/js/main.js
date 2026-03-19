@@ -1,9 +1,12 @@
-import { fetchSongsLibrary } from './api.js';
 import { SyncWebTransport } from './webtransport.js';
+import { initUI, UI } from './ui.js';
 import { initPlayer } from './player.js';
+import { initQueue } from './queue.js';
+import { CacheManager } from './cache.js';
+import { initLibrary } from './library.js';
 
 /**
- * Main Application Entry Point
+ * Main Application Entry Point (Modularized)
  * 
  * Responsible for orchestrating the application's lifecycle on the browser:
  * - Bootstrapping the WebTransport connection.
@@ -11,13 +14,15 @@ import { initPlayer } from './player.js';
  * - Loading media libraries on startup and rendering the folder tree.
  */
 document.addEventListener("DOMContentLoaded", () => {
-    const nicknameInput = document.getElementById("nicknameInput");
+    initUI();
+
     const savedNick = localStorage.getItem("syncMusicNick");
-    if (savedNick) {
-        nicknameInput.value = savedNick;
+    if (savedNick && UI.nicknameInput) {
+        UI.nicknameInput.value = savedNick;
     }
 
-    // Register Service Worker
+    CacheManager.initSWListener();
+
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('/sw.js').then((registration) => {
@@ -31,642 +36,57 @@ document.addEventListener("DOMContentLoaded", () => {
     const socket = new SyncWebTransport();
     const player = initPlayer(socket);
 
-    // RTT latency indicator
-    const rttIndicator = document.getElementById('rttIndicator');
-    const rttDot       = document.getElementById('rttDot');
-    const rttValue     = document.getElementById('rttValue');
-
     socket.onRttUpdate = (rtt) => {
-        rttIndicator.style.display = 'inline-flex';
-        rttValue.textContent = `${rtt}ms`;
+        if (!UI.rttIndicator) return;
+        UI.rttIndicator.style.display = 'inline-flex';
+        UI.rttValue.textContent = `${rtt}ms`;
 
-        let color;
-        if (rtt <= 50)       color = '#1DB954'; // green
-        else if (rtt <= 150) color = '#f0c040'; // yellow
-        else if (rtt <= 300) color = '#e07820'; // orange
-        else                 color = '#e03030'; // red
+        let color = '#1DB954';
+        if (rtt > 50 && rtt <= 150) color = '#f0c040';
+        else if (rtt > 150 && rtt <= 300) color = '#e07820';
+        else if (rtt > 300) color = '#e03030';
 
-        rttDot.style.background = color;
-        // Brief pulse to show the value just updated
-        rttDot.style.transform = 'scale(1.5)';
-        setTimeout(() => { rttDot.style.transform = 'scale(1)'; }, 200);
+        UI.rttDot.style.background = color;
+        UI.rttDot.style.transform = 'scale(1.5)';
+        setTimeout(() => { UI.rttDot.style.transform = 'scale(1)'; }, 200);
     };
-    rttDot.style.transition = 'background 0.6s ease, transform 0.2s ease';
+    if (UI.rttDot) UI.rttDot.style.transition = 'background 0.6s ease, transform 0.2s ease';
 
     socket.onMessage((msg) => {
         if (msg.action === "presence") {
-            const usersList = document.getElementById("usersList");
-            usersList.innerHTML = ""; // Clear existing
+            if (!UI.usersList) return;
+            UI.usersList.innerHTML = ""; // Clear existing
             if (msg.users && msg.users.length > 0) {
                 msg.users.forEach(nick => {
                     const tag = document.createElement("div");
                     tag.className = "user-tag";
                     tag.innerText = nick;
-                    usersList.appendChild(tag);
+                    UI.usersList.appendChild(tag);
                 });
             } else {
-                usersList.innerHTML = "<span style='color: rgba(255,255,255,0.5); font-size: 14px;'>No listeners yet...</span>";
+                UI.usersList.innerHTML = "<span style='color: rgba(255,255,255,0.5); font-size: 14px;'>No listeners yet...</span>";
             }
         } else {
             player.handleSocketMessage(msg);
         }
     });
 
-    // SW → Page: handle cache_progress and cache_done messages
-    // Uses a Map keyed by cacheId to support multiple simultaneous playlist downloads
-    const cacheStateMap = new Map(); // cacheId → { done, songCount, btn, fillEl, labelEl }
-
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.addEventListener('message', (event) => {
-            const data = event.data;
-            if (!data || !data.cacheId) return;
-
-            const state = cacheStateMap.get(data.cacheId);
-            if (!state) return;
-
-            if (data.action === 'cache_progress') {
-                state.done++;
-                // Each song = 2 URLs (audio + cover). Show song count to the user.
-                const songsProcessed = Math.floor(state.done / 2);
-                const pct = Math.round((state.done / data.total) * 100);
-
-                if (state.fillEl) state.fillEl.style.width = pct + '%';
-                if (state.labelEl) state.labelEl.textContent = `${songsProcessed} / ${state.songCount} songs`;
-
-                // Mark badge when the audio URL completes (not cover)
-                if (data.url) {
-                    const u = new URL(data.url, window.location.origin);
-                    if (u.pathname.startsWith('/music/')) {
-                        const songPath = decodeURIComponent(u.pathname.slice('/music/'.length));
-                        const badge = document.querySelector(`.cache-badge[data-path="${CSS.escape(songPath)}"]`);
-                        if (badge) { badge.classList.remove('caching'); badge.classList.add('cached'); badge.textContent = '✓'; }
-                    }
-                }
-            }
-
-            if (data.action === 'cache_done') {
-                if (state.fillEl) state.fillEl.style.width = '100%';
-                if (state.labelEl) state.labelEl.textContent = `${state.songCount} / ${state.songCount} songs`;
-                if (state.btn) {
-                    state.btn.disabled = true;
-                    state.btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Cached (~${formatBytes(state.totalSize)})`;
-                }
-                cacheStateMap.delete(data.cacheId);
-            }
-        });
-    }
-
-    // Global state for highlighting
-    let globalPlayingPath = null;
-    let globalPlayingFolder = null;
-    let activeTrackEl = null;  // direct ref to highlighted track element
-    let activeFolderEl = null; // direct ref to highlighted folder element
-
-    const foldersContainer = document.getElementById("foldersContainer");
-    const songsContainer = document.getElementById("songsContainer");
-    const backBtn = document.getElementById("backBtn");
-    const loadingIndicator = document.getElementById("loadingIndicator");
-    const locateTrackBtn = document.getElementById("locateTrackBtn");
-
-    const tabLibrary = document.getElementById("tabLibrary");
-    const tabQueue = document.getElementById("tabQueue");
-    const libraryView = document.getElementById("libraryView");
-    const queueView = document.getElementById("queueView");
-    const queueContainer = document.getElementById("queueContainer");
-    const queueCountBadge = document.getElementById("queueCountBadge");
-
-    if (tabLibrary && tabQueue) {
-        tabLibrary.onclick = () => {
-            tabLibrary.classList.add("active-tab");
-            tabQueue.classList.remove("active-tab");
-            libraryView.style.display = "block";
-            queueView.style.display = "none";
+    if (UI.tabLibrary && UI.tabQueue) {
+        UI.tabLibrary.onclick = () => {
+            UI.tabLibrary.classList.add("active-tab");
+            UI.tabQueue.classList.remove("active-tab");
+            UI.libraryView.style.display = "block";
+            UI.queueView.style.display = "none";
         };
 
-        tabQueue.onclick = () => {
-            tabQueue.classList.add("active-tab");
-            tabLibrary.classList.remove("active-tab");
-            queueView.style.display = "block";
-            libraryView.style.display = "none";
+        UI.tabQueue.onclick = () => {
+            UI.tabQueue.classList.add("active-tab");
+            UI.tabLibrary.classList.remove("active-tab");
+            UI.queueView.style.display = "block";
+            UI.libraryView.style.display = "none";
         };
     }
 
-    const renderQueue = (queue) => {
-        if (!queueCountBadge || !queueContainer) return;
-        queueCountBadge.innerText = queue.length;
-        queueCountBadge.style.display = queue.length > 0 ? "inline-block" : "none";
-
-        if (queue.length === 0) {
-            queueContainer.innerHTML = '<div class="empty-queue-msg">Queue is empty.</div>';
-            return;
-        }
-
-        queueContainer.innerHTML = "";
-        queue.forEach((item, index) => {
-            const qBtn = document.createElement("div"); // Using div to avoid button nesting issue
-            qBtn.className = "item-btn"; // using item-btn style
-            
-            const safeEncode = encodeURIComponent(item.path).replace(/'/g, "%27").replace(/"/g, "%22");
-            const thumbUrl = `/api/cover?song=${safeEncode}`;
-
-            qBtn.innerHTML = `
-                <img src="${thumbUrl}" class="song-thumb" loading="lazy" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'45\\' height=\\'45\\'><rect width=\\'45\\' height=\\'45\\' fill=\\'%23333\\'/><text x=\\'50%\\' y=\\'50%\\' font-size=\\'20\\' text-anchor=\\'middle\\' dominant-baseline=\\'middle\\' fill=\\'%23555\\'>🎵</text></svg>'">
-                <div class="song-info">
-                    <span class="song-name">${item.title}</span>
-                    <span class="song-artist">${item.artist}</span>
-                </div>
-                <button class="remove-queue-btn" title="Remove from queue">
-                    <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-                </button>
-            `;
-
-            // Double Click / Click to play immediately
-            qBtn.onclick = (e) => {
-                if (e.target.closest('.remove-queue-btn')) {
-                    socket.sendCommand("dequeue", { id: item.id });
-                    return;
-                }
-                socket.sendCommand("load", { song: item.path, folder: "Queue" });
-                socket.sendCommand("dequeue", { id: item.id });
-            };
-
-            queueContainer.appendChild(qBtn);
-        });
-    };
-
-    player.onQueueUpdate(renderQueue);
-
-    const updateHighlights = () => {
-        // Hydrate from player if missing (useful when player syncs before UI is built)
-        if (!globalPlayingPath || !globalPlayingFolder) {
-            const state = player.getCurrentState();
-            if (state.path) globalPlayingPath = state.path;
-            if (state.folder) globalPlayingFolder = state.folder;
-        }
-
-        // Remove old highlights via stored references (faster than querySelectorAll)
-        if (activeFolderEl) activeFolderEl.classList.remove('active-folder');
-        if (activeTrackEl) activeTrackEl.classList.remove('active-track');
-        activeFolderEl = null;
-        activeTrackEl = null;
-
-        // Highlight active folder
-        if (globalPlayingFolder) {
-            const folderBtn = document.querySelector(`.folder-btn[data-folder="${globalPlayingFolder}"]`);
-            if (folderBtn) { folderBtn.classList.add('active-folder'); activeFolderEl = folderBtn; }
-        }
-
-        let isTrackActiveInCurrentView = false;
-
-        // Highlight active track
-        if (globalPlayingPath) {
-            const trackBtns = document.querySelectorAll('#songsContainer .item-btn');
-            trackBtns.forEach(btn => {
-                if (btn.dataset.path === globalPlayingPath) {
-                    btn.classList.add('active-track');
-                    activeTrackEl = btn;
-                    isTrackActiveInCurrentView = true;
-                }
-            });
-        }
-
-        // Show or hide the Locate FAB based on if we are in a track view and the track is playing here
-        if (isTrackActiveInCurrentView && songsContainer.style.display !== "none") {
-            locateTrackBtn.classList.add('visible');
-        } else {
-            locateTrackBtn.classList.remove('visible');
-        }
-    };
-
-    // Handle track changes from player.js to update highlights
-    player.onTrackChanged((currentPath, currentFolder) => {
-        globalPlayingPath = currentPath;
-        globalPlayingFolder = currentFolder;
-        updateHighlights();
-    });
-
-    locateTrackBtn.onclick = () => {
-        const activeTrack = document.querySelector('.active-track');
-        if (activeTrack) {
-            activeTrack.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-    };
-
-    const joinBtn = document.getElementById("joinBtn");
-
-    // Encode path segments for URL construction (same logic as player.js)
-    const encodePath = (path) => path.split('/').map(encodeURIComponent).join('/');
-
-    const formatBytes = (bytes) => {
-        if (!+bytes) return '0 B';
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-    };
-
-    // Check SW cache status for a list of songs. Apply .cached to badges.
-    // If all songs are already cached, update cacheBtn to "✓ Cached" state.
-    const checkCacheStatus = async (songs, cacheBtn, totalSize) => {
-        if (!('caches' in window)) return;
-        try {
-            const cache = await caches.open('syncmusic-cache-v3');
-            const keys = await cache.keys();
-            const cachedPaths = new Set(keys.map(r => {
-                const u = new URL(r.url);
-                if (u.pathname.startsWith('/music/')) {
-                    return decodeURIComponent(u.pathname.slice('/music/'.length));
-                }
-                return null;
-            }).filter(Boolean));
-            let cachedCount = 0;
-            songs.forEach(s => {
-                const isCached = cachedPaths.has(encodePath(s.path)) || cachedPaths.has(s.path);
-                if (isCached) {
-                    cachedCount++;
-                    const badge = document.querySelector(`.cache-badge[data-path="${CSS.escape(s.path)}"]`);
-                    if (badge) { badge.classList.add('cached'); badge.textContent = '✓'; }
-                }
-            });
-            // If every song is already cached, reflect that on the button
-            if (cacheBtn && cachedCount === songs.length && songs.length > 0) {
-                cacheBtn.disabled = true;
-                cacheBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Cached (~${formatBytes(totalSize)})`;
-            }
-        } catch (e) { /* caches API unavailable */ }
-    };
-
-
-    let isPolling = false;
-
-    const loadLibrary = () => {
-        if (isPolling) return;
-        isPolling = true;
-
-        const poll = () => {
-        fetchSongsLibrary().then(data => {
-            if (!data) { isPolling = false; return; }
-
-            if (data.is_scanning !== undefined && data.is_scanning === true) {
-                loadingIndicator.style.display = "block";
-                loadingIndicator.innerHTML = `
-                    <div style="margin-bottom: 5px; font-weight: 500;">Scanning library...</div>
-                    <div style="font-size: 16px; color: #1DB954; font-weight: bold;">
-                        ${data.scan_current} / ${data.scan_total || '?'} tracks
-                    </div>
-                `;
-                joinBtn.disabled = true;
-                joinBtn.innerText = "SCANNING...";
-                joinBtn.style.opacity = "0.5";
-                joinBtn.style.cursor = "not-allowed";
-                setTimeout(poll, 1000);
-                return;
-            }
-
-            isPolling = false;
-            joinBtn.disabled = false;
-            joinBtn.innerText = "JOIN SESSION 🎧";
-            joinBtn.style.opacity = "1";
-            joinBtn.style.cursor = "pointer";
-
-            const songs = data;
-            loadingIndicator.style.display = "none";
-            if (!songs || songs.length === 0) return;
-            const groups = {};
-            let libraryTotalTracks = 0;
-            let libraryTotalSize = 0;
-
-            songs.forEach(song => {
-                const path = song.path;
-                const parts = path.split('/');
-                const folder = parts.length > 1 ? parts[0] : "Loose Tracks";
-                if (!groups[folder]) groups[folder] = [];
-                libraryTotalTracks++;
-                libraryTotalSize += song.size || 0;
-                groups[folder].push({
-                    path: path,
-                    artist: song.artist,
-                    title: song.title,
-                    size: song.size || 0
-                });
-            });
-
-            player.setCacheGroups(groups);
-
-            let savedScrollWindow = 0;
-            let savedScrollPanel = 0;
-            let currentView = 'root';
-
-            const showFolders = (fromHistory = false) => {
-                if (!fromHistory && currentView !== 'root') {
-                    history.pushState({ view: 'root' }, "");
-                }
-                currentView = 'root';
-
-                foldersContainer.style.display = "block";
-                songsContainer.style.display = "none";
-                backBtn.style.display = "none";
-                locateTrackBtn.classList.remove('visible');
-                foldersContainer.innerHTML = "";
-
-                // -- Cache All Library Button --
-                const cacheAllBtn = document.createElement("button");
-                cacheAllBtn.className = "cache-playlist-btn";
-                cacheAllBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> Cache Library (${libraryTotalTracks} tracks, ~${formatBytes(libraryTotalSize)})`;
-                foldersContainer.appendChild(cacheAllBtn);
-
-                const progressAllWrap = document.createElement('div');
-                progressAllWrap.className = 'cache-progress-wrap';
-                progressAllWrap.innerHTML = `
-                    <div class="cache-progress-track"><div class="cache-progress-fill"></div></div>
-                    <div class="cache-progress-label">0 / ${libraryTotalTracks * 2}</div>
-                `;
-                foldersContainer.appendChild(progressAllWrap);
-
-                const cacheId = 'library';
-                const existingState = cacheStateMap.get(cacheId);
-
-                if (existingState) {
-                    // Rebind DOM elements for an ongoing cache operation
-                    existingState.btn = cacheAllBtn;
-                    existingState.fillEl = progressAllWrap.querySelector('.cache-progress-fill');
-                    existingState.labelEl = progressAllWrap.querySelector('.cache-progress-label');
-
-                    progressAllWrap.classList.add('visible');
-                    cacheAllBtn.disabled = true;
-
-                    const songsProcessed = Math.floor(existingState.done / 2);
-                    const pct = Math.round((existingState.done / (libraryTotalTracks * 2)) * 100) || 0;
-                    existingState.fillEl.style.width = pct + '%';
-                    existingState.labelEl.textContent = `${songsProcessed} / ${libraryTotalTracks} songs`;
-                } else {
-                    cacheAllBtn.onclick = async () => {
-                        if (!confirm(`Cache entire library (${libraryTotalTracks} tracks, ~${formatBytes(libraryTotalSize)}) for offline playback?`)) return;
-
-                        let swReg;
-                        try { 
-                            swReg = await navigator.serviceWorker.getRegistration(); 
-                            if (!swReg) swReg = await navigator.serviceWorker.register('/sw.js');
-                        } 
-                        catch (e) { alert('Service Worker unavailable: ' + e.message); return; }
-                        
-                        const sw = (swReg && (swReg.active || swReg.waiting || swReg.installing)) || navigator.serviceWorker.controller;
-                        if (!sw) { alert('Service Worker not active yet — please try again in a moment or disable "Bypass for network" in DevTools.'); return; }
-
-                        const urls = [];
-                        songs.forEach(s => {
-                            urls.push('/music/' + encodePath(s.path));
-                            urls.push('/api/cover?song=' + encodeURIComponent(s.path));
-                        });
-
-                        progressAllWrap.classList.add('visible');
-                        const fillEl = progressAllWrap.querySelector('.cache-progress-fill');
-                        const labelEl = progressAllWrap.querySelector('.cache-progress-label');
-                        if (fillEl) fillEl.style.width = '0%';
-                        if (labelEl) labelEl.textContent = `0 / ${libraryTotalTracks} songs`;
-
-                        cacheStateMap.set(cacheId, { done: 0, songCount: libraryTotalTracks, totalSize: libraryTotalSize, btn: cacheAllBtn, fillEl, labelEl });
-                        cacheAllBtn.disabled = true;
-
-                        sw.postMessage({ action: 'cache_playlist', urls, cacheId });
-                    };
-                }
-
-                // Check cache status for entire library to auto-disable the button
-                checkCacheStatus(songs, cacheAllBtn, libraryTotalSize);
-
-                for (const f in groups) {
-                    const b = document.createElement("button");
-                    b.className = "item-btn folder-btn";
-                    // Optionally highlight folder on first render if it matches something playing (optional, handled after anyway if event fires)
-                    b.dataset.folder = f;
-                    b.innerText = `📁 ${f} (${groups[f].length})`;
-                    b.onclick = () => {
-                        // Save scroll position before hiding folders
-                        savedScrollWindow = window.scrollY || document.documentElement.scrollTop;
-                        const rp = document.querySelector('.right-panel');
-                        savedScrollPanel = rp ? rp.scrollTop : 0;
-
-                        if (currentView !== 'playlist') {
-                            history.pushState({ view: 'playlist', folder: f }, "");
-                        }
-                        currentView = 'playlist';
-
-                        foldersContainer.style.display = "none";
-                        songsContainer.style.display = "block";
-                        backBtn.style.display = "block";
-                        songsContainer.innerHTML = "";
-                        locateTrackBtn.classList.remove('visible'); // Will be re-added inside updateHighlights if needed
-
-                        player.setCurrentPlaylistFolder(f);
-
-                        let playlistSize = 0;
-                        groups[f].forEach(s => playlistSize += s.size || 0);
-
-                        // -- Cache playlist button + progress bar --
-                        const cacheBtn = document.createElement('button');
-                        cacheBtn.className = 'cache-playlist-btn';
-                        cacheBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> Cache ${groups[f].length} tracks (~${formatBytes(playlistSize)})`;
-                        songsContainer.appendChild(cacheBtn);
-
-                        const progressWrap = document.createElement('div');
-                        progressWrap.className = 'cache-progress-wrap';
-                        progressWrap.innerHTML = `
-                            <div class="cache-progress-track"><div class="cache-progress-fill"></div></div>
-                            <div class="cache-progress-label">0 / ${groups[f].length * 2}</div>
-                        `;
-                        songsContainer.appendChild(progressWrap);
-
-                        const cacheId = 'folder-' + encodeURIComponent(f);
-                        const existingState = cacheStateMap.get(cacheId);
-
-                        if (existingState) {
-                            // Rebind DOM elements for ongoing playlist cache
-                            existingState.btn = cacheBtn;
-                            existingState.fillEl = progressWrap.querySelector('.cache-progress-fill');
-                            existingState.labelEl = progressWrap.querySelector('.cache-progress-label');
-
-                            progressWrap.classList.add('visible');
-                            cacheBtn.disabled = true;
-
-                            const songsProcessed = Math.floor(existingState.done / 2);
-                            const pct = Math.round((existingState.done / (groups[f].length * 2)) * 100) || 0;
-                            existingState.fillEl.style.width = pct + '%';
-                            existingState.labelEl.textContent = `${songsProcessed} / ${groups[f].length} songs`;
-                        } else {
-                            cacheBtn.onclick = async () => {
-                                if (!confirm(`Cache ${groups[f].length} tracks for offline playback?`)) return;
-
-                                let swReg;
-                                try {
-                                    swReg = await navigator.serviceWorker.getRegistration();
-                                    if (!swReg) swReg = await navigator.serviceWorker.register('/sw.js');
-                                } catch (e) {
-                                    alert('Service Worker unavailable: ' + e.message);
-                                    return;
-                                }
-                                
-                                const sw = (swReg && (swReg.active || swReg.waiting || swReg.installing)) || navigator.serviceWorker.controller;
-                                if (!sw) {
-                                    alert('Service Worker not active yet — please try again in a moment or disable "Bypass for network" in DevTools.');
-                                    return;
-                                }
-
-                                const urls = [];
-                                groups[f].forEach(s => {
-                                    urls.push('/music/' + encodePath(s.path));
-                                    urls.push('/api/cover?song=' + encodeURIComponent(s.path));
-                                    const badge = document.querySelector(`.cache-badge[data-path="${CSS.escape(s.path)}"]`);
-                                    if (badge && !badge.classList.contains('cached')) {
-                                        badge.classList.add('caching');
-                                        badge.textContent = '';
-                                    }
-                                });
-
-                                progressWrap.classList.add('visible');
-                                const fillEl = progressWrap.querySelector('.cache-progress-fill');
-                                const labelEl = progressWrap.querySelector('.cache-progress-label');
-                                if (fillEl) fillEl.style.width = '0%';
-                                if (labelEl) labelEl.textContent = `0 / ${groups[f].length} songs`;
-
-                                cacheStateMap.set(cacheId, { done: 0, songCount: groups[f].length, totalSize: playlistSize, btn: cacheBtn, fillEl, labelEl });
-                                cacheBtn.disabled = true;
-
-                                sw.postMessage({ action: 'cache_playlist', urls, cacheId });
-                            };
-                        }
-
-                        // -- Render songs with cache badge --
-                        groups[f].forEach(s => {
-                            const sb = document.createElement("div");
-                            sb.className = "item-btn";
-                            sb.dataset.path = s.path;
-
-                            const safeEncode = encodeURIComponent(s.path).replace(/'/g, "%27").replace(/"/g, "%22");
-                            const thumbUrl = `/api/cover?song=${safeEncode}`;
-                            const fallbackSvg = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='45' height='45'><rect width='45' height='45' fill='%23333'/><text x='50%' y='50%' font-size='20' text-anchor='middle' dominant-baseline='middle' fill='%23555'>🎵</text></svg>`;
-
-                            sb.innerHTML = `
-                            <div class="song-thumb-wrap">
-                                <img src="${thumbUrl}" class="song-thumb" loading="lazy" onerror="this.src='${fallbackSvg}'">
-                                <span class="cache-badge" data-path="${s.path.replace(/"/g,'&quot;')}"></span>
-                            </div>
-                            <div class="song-info">
-                                <span class="song-name">${s.title}</span>
-                                <span class="song-artist">${s.artist}</span>
-                            </div>
-                            <button class="add-queue-btn" title="Add to Queue">
-                                <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
-                            </button>
-                        `;
-
-                            sb.onclick = (e) => {
-                                const addBtn = e.target.closest('.add-queue-btn');
-                                if (addBtn) {
-                                    socket.sendCommand("enqueue", { item: { path: s.path, title: s.title, artist: s.artist } });
-                                    const icon = addBtn.innerHTML;
-                                    addBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
-                                    addBtn.style.color = "#1DB954";
-                                    setTimeout(() => {
-                                        addBtn.innerHTML = icon;
-                                        addBtn.style.color = "";
-                                    }, 1000);
-                                    return;
-                                }
-                                socket.sendCommand("load", { song: s.path, folder: f });
-                            };
-                            songsContainer.appendChild(sb);
-                        });
-
-                        // Reapply highlights and check cache status
-                        updateHighlights();
-                        checkCacheStatus(groups[f], cacheBtn, playlistSize);
-
-                        // Reset scroll to top for the new playlist view
-                        window.scrollTo(0, 0);
-                        if (rp) rp.scrollTo(0, 0);
-
-                    };
-                    foldersContainer.appendChild(b);
-                }
-
-                // Restore scroll position after rendering folders
-                window.scrollTo(0, savedScrollWindow);
-                const rp = document.querySelector('.right-panel');
-                if (rp) rp.scrollTo(0, savedScrollPanel);
-            };
-
-            showFolders(true);
-            backBtn.onclick = () => {
-                history.back();
-            };
-
-            // Ensure highlights are applied if changing back to folders view
-            backBtn.addEventListener('click', () => { setTimeout(updateHighlights, 50); });
-            // Force highlight evaluation upon initial load just in case player was already initialized
-            updateHighlights();
-
-            // Handle popstate for Android Back button
-            window.addEventListener('popstate', (e) => {
-                const state = e.state;
-                if (!state) return;
-
-                if (state.view === 'exit') {
-                    if (confirm("Czy na pewno chcesz wyjść z aplikacji?")) {
-                        history.back(); // Proceed to exit
-                    } else {
-                        // Cancel exit, push root state back
-                        history.pushState({ view: 'root' }, "");
-                        currentView = 'root';
-                    }
-                } else if (state.view === 'root') {
-                    if (currentView !== 'root') {
-                        showFolders(true);
-                        updateHighlights();
-                    }
-                } else if (state.view === 'playlist') {
-                    currentView = 'playlist';
-                }
-            });
-
-            // Handle joining
-            document.getElementById("joinBtn").onclick = () => {
-                let nick = nicknameInput.value.trim();
-                if (!nick) {
-                    nick = "Anonymous Music Lover";
-                }
-                localStorage.setItem("syncMusicNick", nick);
-
-                // Initialize strict history navigation root when entering app
-                history.replaceState({ view: 'exit' }, "");
-                history.pushState({ view: 'root' }, "");
-                currentView = 'root';
-
-                // Send the join command
-                socket.sendCommand("join", { nickname: nick });
-
-                // Re-bind to start playing right away if time was synced
-                const overlay = document.getElementById("overlay");
-                overlay.style.display = "none";
-                player.handleJoinUserInit();
-            };
-
-            // If the server dropped and reconnected, resend the join command
-            socket.onReconnect = () => {
-                const nick = localStorage.getItem("syncMusicNick");
-                if (nick) {
-                    socket.sendCommand("join", { nickname: nick });
-                }
-            };
-        }).catch(err => {
-            console.error("Failed to fetch library, retrying in 2s...", err);
-            isPolling = false;
-            setTimeout(loadLibrary, 2000);
-        });
-        }; // end poll
-        poll();
-    }; // end of loadLibrary
-
-    // Start initial load
-    loadLibrary();
+    initQueue(socket, player);
+    initLibrary(socket, player);
 });
