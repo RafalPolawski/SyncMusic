@@ -34,10 +34,23 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
-    // Audio files /music/ logic - Network First with Fallback to Cache
-    // If we're offiline, look in the cache. 
-    // We want the browser to natively stream it or use Range requests, so caching huge files via Service Worker
-    // needs to act like a proxy.
+    // Cover art — Cache First (small files, rarely change)
+    if (url.pathname.startsWith('/api/cover')) {
+        event.respondWith(
+            caches.match(event.request).then((cached) => {
+                if (cached) return cached;
+                return fetch(event.request).then((res) => {
+                    if (res && res.status === 200) {
+                        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, res.clone()));
+                    }
+                    return res;
+                }).catch(() => new Response('', { status: 404 }));
+            })
+        );
+        return;
+    }
+
+    // Audio files — Cache First with network fallback
     if (url.pathname.startsWith('/music/')) {
         event.respondWith(
             caches.match(event.request).then((cachedResponse) => {
@@ -46,10 +59,7 @@ self.addEventListener('fetch', (event) => {
                     return cachedResponse;
                 }
 
-                // If not in cache, fetch and put in cache.
                 return fetch(event.request).then((networkResponse) => {
-                    // Only cache successful, complete responses (don't cache 206 partial content by default via basic block cache)
-                    // Note: Caching whole audio files handles offline better than 206. 
                     if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
                         return networkResponse;
                     }
@@ -70,10 +80,8 @@ self.addEventListener('fetch', (event) => {
     }
 
     // Default strategy: Network First -> Fallback to Cache
-    // This is required for Vite dev server (HMR and dynamic HTML injection) to work on refresh.
     event.respondWith(
         fetch(event.request).then((netRes) => {
-            // Don't cache API or Vite dev files to keep them fresh and avoid wrapper issues
             if (url.pathname.startsWith('/api/') ||
                 url.pathname.startsWith('/src/') ||
                 url.pathname.startsWith('/@vite/') ||
@@ -81,7 +89,6 @@ self.addEventListener('fetch', (event) => {
                 return netRes;
             }
 
-            // Cache valid responses for offline use
             if (netRes && netRes.status === 200 && netRes.type === 'basic') {
                 const responseToCache = netRes.clone();
                 caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
@@ -89,7 +96,6 @@ self.addEventListener('fetch', (event) => {
 
             return netRes;
         }).catch(() => {
-            // If network fails (user is offline), return from cache
             console.log('[SW] Network failed, falling back to cache for:', url.pathname);
             return caches.match(event.request);
         })
@@ -97,8 +103,10 @@ self.addEventListener('fetch', (event) => {
 });
 
 
-// Listen for messages from the client (e.g., to pre-cache next songs)
+// Listen for messages from the client
 self.addEventListener('message', (event) => {
+
+    // Pre-cache next N tracks (existing feature, used by player.js)
     if (event.data && event.data.action === 'precache') {
         const urlsToCache = event.data.urls || [];
 
@@ -109,7 +117,6 @@ self.addEventListener('message', (event) => {
                     return cache.match(req).then(res => {
                         if (!res) {
                             console.log('[SW] Pre-caching in background:', urlStr);
-                            // Fetch whole file without CORS mode restrictions causing issues for same-origin
                             return fetch(req).then(netRes => {
                                 if (netRes && netRes.status === 200) {
                                     cache.put(req, netRes);
@@ -120,5 +127,63 @@ self.addEventListener('message', (event) => {
                 }));
             })
         );
+        return;
+    }
+
+    // Bulk playlist cache with progress reporting back to the requesting client
+    if (event.data && event.data.action === 'cache_playlist') {
+        const urls = event.data.urls || [];
+        const total = urls.length;
+        if (total === 0) return;
+
+        const source = event.source; // The client Window that sent this message
+
+        const notifyProgress = (url, alreadyCached) => {
+            if (source) {
+                source.postMessage({
+                    action: 'cache_progress',
+                    url,
+                    alreadyCached,
+                    total
+                });
+            }
+        };
+
+        const notifyDone = () => {
+            if (source) {
+                source.postMessage({ action: 'cache_done', total });
+            }
+        };
+
+        const BATCH = 3; // concurrent downloads
+
+        const process = async () => {
+            const cache = await caches.open(CACHE_NAME);
+            for (let i = 0; i < urls.length; i += BATCH) {
+                const batch = urls.slice(i, i + BATCH);
+                await Promise.all(batch.map(async (urlStr) => {
+                    const req = new Request(urlStr);
+                    const existing = await cache.match(req);
+                    if (existing) {
+                        notifyProgress(urlStr, true);
+                        return;
+                    }
+                    try {
+                        const res = await fetch(req);
+                        if (res && res.status === 200) {
+                            await cache.put(req, res.clone());
+                        }
+                        notifyProgress(urlStr, false);
+                    } catch (e) {
+                        console.log('[SW] cache_playlist fetch failed:', urlStr, e);
+                        notifyProgress(urlStr, false);
+                    }
+                }));
+            }
+            notifyDone();
+        };
+
+        event.waitUntil(process());
+        return;
     }
 });

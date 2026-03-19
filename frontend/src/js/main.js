@@ -72,11 +72,53 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    // SW → Page: handle cache_progress and cache_done messages
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('message', (event) => {
+            const data = event.data;
+            if (!data) return;
+
+            if (data.action === 'cache_progress' && activeCacheState) {
+                activeCacheState.done++;
+                const pct = Math.round((activeCacheState.done / data.total) * 100);
+
+                if (activeCacheState.fillEl) activeCacheState.fillEl.style.width = pct + '%';
+                if (activeCacheState.labelEl) activeCacheState.labelEl.textContent = `${activeCacheState.done} / ${data.total}`;
+
+                // Mark the individual song badge as cached
+                // URL is either /music/... or /api/cover?song=...
+                if (data.url) {
+                    const url = new URL(data.url, window.location.origin);
+                    let songPath = null;
+                    if (url.pathname.startsWith('/music/')) {
+                        songPath = decodeURIComponent(url.pathname.replace('/music/', ''));
+                    }
+                    if (songPath) {
+                        const badge = document.querySelector(`.cache-badge[data-path="${CSS.escape(songPath)}"]`);
+                        if (badge) { badge.classList.remove('caching'); badge.classList.add('cached'); badge.textContent = '✓'; }
+                    }
+                }
+            }
+
+            if (data.action === 'cache_done' && activeCacheState) {
+                if (activeCacheState.fillEl) activeCacheState.fillEl.style.width = '100%';
+                if (activeCacheState.labelEl) activeCacheState.labelEl.textContent = 'Done!';
+                if (activeCacheState.btn) {
+                    activeCacheState.btn.disabled = false;
+                    activeCacheState.btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg> Cached`;
+                    activeCacheState.btn.style.color = '#1DB954';
+                }
+                activeCacheState = null;
+            }
+        });
+    }
+
     // Global state for highlighting
     let globalPlayingPath = null;
     let globalPlayingFolder = null;
     let activeTrackEl = null;  // direct ref to highlighted track element
     let activeFolderEl = null; // direct ref to highlighted folder element
+    let activeCacheState = null; // tracks active playlist cache operation
 
     const foldersContainer = document.getElementById("foldersContainer");
     const songsContainer = document.getElementById("songsContainer");
@@ -210,6 +252,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const joinBtn = document.getElementById("joinBtn");
 
+    // Encode path segments for URL construction (same logic as player.js)
+    const encodePath = (path) => path.split('/').map(encodeURIComponent).join('/');
+
+    // Check SW cache status for a list of songs and apply .cached to their badges
+    const checkCacheStatus = async (songs) => {
+        if (!('caches' in window)) return;
+        try {
+            const cache = await caches.open('syncmusic-cache-v3');
+            const keys = await cache.keys();
+            const cachedPaths = new Set(keys.map(r => {
+                const u = new URL(r.url);
+                if (u.pathname.startsWith('/music/')) {
+                    return decodeURIComponent(u.pathname.slice('/music/'.length));
+                }
+                return null;
+            }).filter(Boolean));
+            songs.forEach(s => {
+                if (cachedPaths.has(encodePath(s.path)) || cachedPaths.has(s.path)) {
+                    const badge = document.querySelector(`.cache-badge[data-path="${CSS.escape(s.path)}"]`);
+                    if (badge) { badge.classList.add('cached'); badge.textContent = '✓'; }
+                }
+            });
+        } catch (e) { /* caches API unavailable */ }
+    };
+
     let isPolling = false;
 
     const loadLibrary = () => {
@@ -290,17 +357,64 @@ document.addEventListener("DOMContentLoaded", () => {
 
                         player.setCurrentPlaylistFolder(f);
 
+                        // -- Cache playlist button + progress bar --
+                        const cacheBtn = document.createElement('button');
+                        cacheBtn.className = 'cache-playlist-btn';
+                        cacheBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> Cache ${groups[f].length} tracks for offline`;
+                        songsContainer.appendChild(cacheBtn);
+
+                        const progressWrap = document.createElement('div');
+                        progressWrap.className = 'cache-progress-wrap';
+                        progressWrap.innerHTML = `
+                            <div class="cache-progress-track"><div class="cache-progress-fill" id="cacheProgressFill"></div></div>
+                            <div class="cache-progress-label" id="cacheProgressLabel">0 / ${groups[f].length * 2}</div>
+                        `;
+                        songsContainer.appendChild(progressWrap);
+
+                        cacheBtn.onclick = () => {
+                            if (!confirm(`Cache ${groups[f].length} tracks for offline playback?`)) return;
+                            if (!navigator.serviceWorker.controller) { alert('Service Worker not ready, try again in a moment.'); return; }
+
+                            // Build URL list: audio + covers
+                            const urls = [];
+                            groups[f].forEach(s => {
+                                urls.push('/music/' + encodePath(s.path));
+                                urls.push('/api/cover?song=' + encodeURIComponent(s.path));
+                                // Mark badge as "in progress"
+                                const badge = document.querySelector(`.cache-badge[data-path="${CSS.escape(s.path)}"]`);
+                                if (badge && !badge.classList.contains('cached')) {
+                                    badge.classList.add('caching');
+                                    badge.textContent = '';
+                                }
+                            });
+
+                            progressWrap.classList.add('visible');
+                            const fillEl = document.getElementById('cacheProgressFill');
+                            const labelEl = document.getElementById('cacheProgressLabel');
+                            if (fillEl) fillEl.style.width = '0%';
+                            if (labelEl) labelEl.textContent = `0 / ${urls.length}`;
+
+                            activeCacheState = { done: 0, btn: cacheBtn, fillEl, labelEl };
+                            cacheBtn.disabled = true;
+
+                            navigator.serviceWorker.controller.postMessage({ action: 'cache_playlist', urls });
+                        };
+
+                        // -- Render songs with cache badge --
                         groups[f].forEach(s => {
-                            // Use div for item to avoid nesting buttons incorrectly
                             const sb = document.createElement("div");
                             sb.className = "item-btn";
                             sb.dataset.path = s.path;
 
                             const safeEncode = encodeURIComponent(s.path).replace(/'/g, "%27").replace(/"/g, "%22");
                             const thumbUrl = `/api/cover?song=${safeEncode}`;
+                            const fallbackSvg = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='45' height='45'><rect width='45' height='45' fill='%23333'/><text x='50%' y='50%' font-size='20' text-anchor='middle' dominant-baseline='middle' fill='%23555'>🎵</text></svg>`;
 
                             sb.innerHTML = `
-                            <img src="${thumbUrl}" class="song-thumb" loading="lazy" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'45\\' height=\\'45\\'><rect width=\\'45\\' height=\\'45\\' fill=\\'%23333\\'/><text x=\\'50%\\' y=\\'50%\\' font-size=\\'20\\' text-anchor=\\'middle\\' dominant-baseline=\\'middle\\' fill=\\'%23555\\'>🎵</text></svg>'">
+                            <div class="song-thumb-wrap">
+                                <img src="${thumbUrl}" class="song-thumb" loading="lazy" onerror="this.src='${fallbackSvg}'">
+                                <span class="cache-badge" data-path="${s.path.replace(/"/g,'&quot;')}"></span>
+                            </div>
                             <div class="song-info">
                                 <span class="song-name">${s.title}</span>
                                 <span class="song-artist">${s.artist}</span>
@@ -314,8 +428,6 @@ document.addEventListener("DOMContentLoaded", () => {
                                 const addBtn = e.target.closest('.add-queue-btn');
                                 if (addBtn) {
                                     socket.sendCommand("enqueue", { item: { path: s.path, title: s.title, artist: s.artist } });
-                                    
-                                    // Show visual feedback
                                     const icon = addBtn.innerHTML;
                                     addBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
                                     addBtn.style.color = "#1DB954";
@@ -325,18 +437,19 @@ document.addEventListener("DOMContentLoaded", () => {
                                     }, 1000);
                                     return;
                                 }
-                                
                                 socket.sendCommand("load", { song: s.path, folder: f });
                             };
                             songsContainer.appendChild(sb);
                         });
 
-                        // Reapply highlights since DOM elements were just recreated for the songs view
+                        // Reapply highlights and check cache status
                         updateHighlights();
+                        checkCacheStatus(groups[f]);
 
                         // Reset scroll to top for the new playlist view
                         window.scrollTo(0, 0);
                         if (rp) rp.scrollTo(0, 0);
+
                     };
                     foldersContainer.appendChild(b);
                 }
