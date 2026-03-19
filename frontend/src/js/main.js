@@ -398,8 +398,11 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (!confirm(`Cache entire library (${libraryTotalTracks} tracks, ~${formatBytes(libraryTotalSize)}) for offline playback?`)) return;
 
                         let swReg;
-                        try { swReg = await navigator.serviceWorker.getRegistration(); } 
-                        catch (e) { alert('Service Worker unavailable on this origin. Caching requires HTTPS or localhost.'); return; }
+                        try { 
+                            swReg = await navigator.serviceWorker.getRegistration(); 
+                            if (!swReg) swReg = await navigator.serviceWorker.register('/sw.js');
+                        } 
+                        catch (e) { alert('Service Worker unavailable: ' + e.message); return; }
                         
                         const sw = (swReg && (swReg.active || swReg.waiting || swReg.installing)) || navigator.serviceWorker.controller;
                         if (!sw) { alert('Service Worker not active yet — please try again in a moment or disable "Bypass for network" in DevTools.'); return; }
@@ -486,8 +489,9 @@ document.addEventListener("DOMContentLoaded", () => {
                                 let swReg;
                                 try {
                                     swReg = await navigator.serviceWorker.getRegistration();
+                                    if (!swReg) swReg = await navigator.serviceWorker.register('/sw.js');
                                 } catch (e) {
-                                    alert('Service Worker unavailable on this origin. Caching requires HTTPS or localhost.');
+                                    alert('Service Worker unavailable: ' + e.message);
                                     return;
                                 }
                                 
