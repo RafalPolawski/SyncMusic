@@ -377,32 +377,51 @@ document.addEventListener("DOMContentLoaded", () => {
                 `;
                 foldersContainer.appendChild(progressAllWrap);
 
-                cacheAllBtn.onclick = async () => {
-                    if (!confirm(`Cache entire library (${libraryTotalTracks} tracks, ~${formatBytes(libraryTotalSize)}) for offline playback?`)) return;
+                const cacheId = 'library';
+                const existingState = cacheStateMap.get(cacheId);
 
-                    let swReg;
-                    try { swReg = await navigator.serviceWorker.ready; } 
-                    catch (e) { alert('Service Worker unavailable on this origin. Caching requires HTTPS or localhost.'); return; }
-                    if (!swReg || !swReg.active) { alert('Service Worker not active yet — please try again in a moment.'); return; }
-
-                    const cacheId = `library-${Date.now()}`;
-                    const urls = [];
-                    songs.forEach(s => {
-                        urls.push('/music/' + encodePath(s.path));
-                        urls.push('/api/cover?song=' + encodeURIComponent(s.path));
-                    });
+                if (existingState) {
+                    // Rebind DOM elements for an ongoing cache operation
+                    existingState.btn = cacheAllBtn;
+                    existingState.fillEl = progressAllWrap.querySelector('.cache-progress-fill');
+                    existingState.labelEl = progressAllWrap.querySelector('.cache-progress-label');
 
                     progressAllWrap.classList.add('visible');
-                    const fillEl = progressAllWrap.querySelector('.cache-progress-fill');
-                    const labelEl = progressAllWrap.querySelector('.cache-progress-label');
-                    if (fillEl) fillEl.style.width = '0%';
-                    if (labelEl) labelEl.textContent = `0 / ${libraryTotalTracks} songs`;
-
-                    cacheStateMap.set(cacheId, { done: 0, songCount: libraryTotalTracks, totalSize: libraryTotalSize, btn: cacheAllBtn, fillEl, labelEl });
                     cacheAllBtn.disabled = true;
 
-                    swReg.active.postMessage({ action: 'cache_playlist', urls, cacheId });
-                };
+                    const songsProcessed = Math.floor(existingState.done / 2);
+                    const pct = Math.round((existingState.done / (libraryTotalTracks * 2)) * 100) || 0;
+                    existingState.fillEl.style.width = pct + '%';
+                    existingState.labelEl.textContent = `${songsProcessed} / ${libraryTotalTracks} songs`;
+                } else {
+                    cacheAllBtn.onclick = async () => {
+                        if (!confirm(`Cache entire library (${libraryTotalTracks} tracks, ~${formatBytes(libraryTotalSize)}) for offline playback?`)) return;
+
+                        let swReg;
+                        try { swReg = await navigator.serviceWorker.getRegistration(); } 
+                        catch (e) { alert('Service Worker unavailable on this origin. Caching requires HTTPS or localhost.'); return; }
+                        
+                        const sw = (swReg && (swReg.active || swReg.waiting || swReg.installing)) || navigator.serviceWorker.controller;
+                        if (!sw) { alert('Service Worker not active yet — please try again in a moment or disable "Bypass for network" in DevTools.'); return; }
+
+                        const urls = [];
+                        songs.forEach(s => {
+                            urls.push('/music/' + encodePath(s.path));
+                            urls.push('/api/cover?song=' + encodeURIComponent(s.path));
+                        });
+
+                        progressAllWrap.classList.add('visible');
+                        const fillEl = progressAllWrap.querySelector('.cache-progress-fill');
+                        const labelEl = progressAllWrap.querySelector('.cache-progress-label');
+                        if (fillEl) fillEl.style.width = '0%';
+                        if (labelEl) labelEl.textContent = `0 / ${libraryTotalTracks} songs`;
+
+                        cacheStateMap.set(cacheId, { done: 0, songCount: libraryTotalTracks, totalSize: libraryTotalSize, btn: cacheAllBtn, fillEl, labelEl });
+                        cacheAllBtn.disabled = true;
+
+                        sw.postMessage({ action: 'cache_playlist', urls, cacheId });
+                    };
+                }
 
                 // Check cache status for entire library to auto-disable the button
                 checkCacheStatus(songs, cacheAllBtn, libraryTotalSize);
@@ -444,48 +463,63 @@ document.addEventListener("DOMContentLoaded", () => {
                         `;
                         songsContainer.appendChild(progressWrap);
 
-                        cacheBtn.onclick = async () => {
-                            if (!confirm(`Cache ${groups[f].length} tracks for offline playback?`)) return;
+                        const cacheId = 'folder-' + encodeURIComponent(f);
+                        const existingState = cacheStateMap.get(cacheId);
 
-                            // Wait for SW registration — works on localhost AND Tailscale HTTPS
-                            let swReg;
-                            try {
-                                swReg = await navigator.serviceWorker.ready;
-                            } catch (e) {
-                                alert('Service Worker unavailable on this origin. Caching requires HTTPS or localhost.');
-                                return;
-                            }
-                            if (!swReg || !swReg.active) {
-                                alert('Service Worker not active yet — please try again in a moment.');
-                                return;
-                            }
-
-                            const cacheId = `${f}-${Date.now()}`; // unique per operation
-
-                            // Build URL list: audio + covers
-                            const urls = [];
-                            groups[f].forEach(s => {
-                                urls.push('/music/' + encodePath(s.path));
-                                urls.push('/api/cover?song=' + encodeURIComponent(s.path));
-                                // Mark badge as "in progress" unless already cached
-                                const badge = document.querySelector(`.cache-badge[data-path="${CSS.escape(s.path)}"]`);
-                                if (badge && !badge.classList.contains('cached')) {
-                                    badge.classList.add('caching');
-                                    badge.textContent = '';
-                                }
-                            });
+                        if (existingState) {
+                            // Rebind DOM elements for ongoing playlist cache
+                            existingState.btn = cacheBtn;
+                            existingState.fillEl = progressWrap.querySelector('.cache-progress-fill');
+                            existingState.labelEl = progressWrap.querySelector('.cache-progress-label');
 
                             progressWrap.classList.add('visible');
-                            const fillEl = progressWrap.querySelector('.cache-progress-fill');
-                            const labelEl = progressWrap.querySelector('.cache-progress-label');
-                            if (fillEl) fillEl.style.width = '0%';
-                            if (labelEl) labelEl.textContent = `0 / ${groups[f].length} songs`;
-
-                            cacheStateMap.set(cacheId, { done: 0, songCount: groups[f].length, totalSize: playlistSize, btn: cacheBtn, fillEl, labelEl });
                             cacheBtn.disabled = true;
 
-                            swReg.active.postMessage({ action: 'cache_playlist', urls, cacheId });
-                        };
+                            const songsProcessed = Math.floor(existingState.done / 2);
+                            const pct = Math.round((existingState.done / (groups[f].length * 2)) * 100) || 0;
+                            existingState.fillEl.style.width = pct + '%';
+                            existingState.labelEl.textContent = `${songsProcessed} / ${groups[f].length} songs`;
+                        } else {
+                            cacheBtn.onclick = async () => {
+                                if (!confirm(`Cache ${groups[f].length} tracks for offline playback?`)) return;
+
+                                let swReg;
+                                try {
+                                    swReg = await navigator.serviceWorker.getRegistration();
+                                } catch (e) {
+                                    alert('Service Worker unavailable on this origin. Caching requires HTTPS or localhost.');
+                                    return;
+                                }
+                                
+                                const sw = (swReg && (swReg.active || swReg.waiting || swReg.installing)) || navigator.serviceWorker.controller;
+                                if (!sw) {
+                                    alert('Service Worker not active yet — please try again in a moment or disable "Bypass for network" in DevTools.');
+                                    return;
+                                }
+
+                                const urls = [];
+                                groups[f].forEach(s => {
+                                    urls.push('/music/' + encodePath(s.path));
+                                    urls.push('/api/cover?song=' + encodeURIComponent(s.path));
+                                    const badge = document.querySelector(`.cache-badge[data-path="${CSS.escape(s.path)}"]`);
+                                    if (badge && !badge.classList.contains('cached')) {
+                                        badge.classList.add('caching');
+                                        badge.textContent = '';
+                                    }
+                                });
+
+                                progressWrap.classList.add('visible');
+                                const fillEl = progressWrap.querySelector('.cache-progress-fill');
+                                const labelEl = progressWrap.querySelector('.cache-progress-label');
+                                if (fillEl) fillEl.style.width = '0%';
+                                if (labelEl) labelEl.textContent = `0 / ${groups[f].length} songs`;
+
+                                cacheStateMap.set(cacheId, { done: 0, songCount: groups[f].length, totalSize: playlistSize, btn: cacheBtn, fillEl, labelEl });
+                                cacheBtn.disabled = true;
+
+                                sw.postMessage({ action: 'cache_playlist', urls, cacheId });
+                            };
+                        }
 
                         // -- Render songs with cache badge --
                         groups[f].forEach(s => {
