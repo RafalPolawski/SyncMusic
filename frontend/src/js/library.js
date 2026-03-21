@@ -131,11 +131,12 @@ export function initLibrary(socket, player) {
                 UI.backBtn.style.display = "none";
                 UI.locateTrackBtn.classList.remove('visible');
                 UI.foldersContainer.innerHTML = "";
+                UI.settingsActionContainer.innerHTML = "";
 
                 const cacheAllBtn = document.createElement("button");
                 cacheAllBtn.className = "cache-playlist-btn";
                 cacheAllBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> Cache Library (${libraryTotalTracks} tracks, ~${Utils.formatBytes(libraryTotalSize)})`;
-                UI.foldersContainer.appendChild(cacheAllBtn);
+                UI.settingsActionContainer.appendChild(cacheAllBtn);
 
                 const rescanBtn = document.createElement("button");
                 rescanBtn.className = "cache-playlist-btn";
@@ -147,10 +148,11 @@ export function initLibrary(socket, player) {
                     if (!confirm("Are you sure you want to rescan the music directory? This may take a moment.")) return;
                     fetch("/api/rescan").then(() => {
                         isPolling = false;
+                        UI.settingsOverlay.style.display = "none";
                         loadLibrary();
                     }).catch(console.error);
                 };
-                UI.foldersContainer.appendChild(rescanBtn);
+                UI.settingsActionContainer.appendChild(rescanBtn);
 
                 const progressAllWrap = document.createElement('div');
                 progressAllWrap.className = 'cache-progress-wrap';
@@ -158,7 +160,7 @@ export function initLibrary(socket, player) {
                     <div class="cache-progress-track"><div class="cache-progress-fill"></div></div>
                     <div class="cache-progress-label">0 / ${libraryTotalTracks * 2}</div>
                 `;
-                UI.foldersContainer.appendChild(progressAllWrap);
+                UI.settingsActionContainer.appendChild(progressAllWrap);
 
                 const cacheId = 'library';
                 const existingState = CacheManager.stateMap.get(cacheId);

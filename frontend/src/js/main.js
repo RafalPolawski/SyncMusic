@@ -1,6 +1,6 @@
 import { SyncWebTransport } from './webtransport.js';
 import { initUI, UI } from './ui.js';
-import { initPlayer } from './player.js';
+import { initPlayer, softSyncThreshold, setSyncThreshold } from './player.js';
 import { initQueue } from './queue.js';
 import { CacheManager } from './cache.js';
 import { initLibrary } from './library.js';
@@ -85,6 +85,15 @@ document.addEventListener("DOMContentLoaded", () => {
             UI.queueView.style.display = "block";
             UI.libraryView.style.display = "none";
         };
+    }
+
+    if (UI.openSettingsBtn) {
+        UI.syncThresholdInput.value = softSyncThreshold;
+        UI.syncThresholdInput.addEventListener('change', (e) => {
+            setSyncThreshold(e.target.value);
+        });
+        UI.openSettingsBtn.onclick = () => { UI.settingsOverlay.style.display = "flex"; };
+        UI.closeSettingsBtn.onclick = () => { UI.settingsOverlay.style.display = "none"; };
     }
 
     initQueue(socket, player);

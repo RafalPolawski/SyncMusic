@@ -11,8 +11,15 @@
 
 import { Icons } from './ui.js';
 
-// If the audio drifts more than this many seconds from the server, force a re-sync
-const SOFT_SYNC_THRESHOLD = 1.5;
+export let softSyncThreshold = parseFloat(localStorage.getItem('syncMusicThreshold')) || 3.0;
+export function setSyncThreshold(val) {
+    let parsed = parseFloat(val);
+    if (!isNaN(parsed)) {
+        softSyncThreshold = parsed;
+        localStorage.setItem('syncMusicThreshold', softSyncThreshold);
+    }
+}
+
 export function initPlayer(socket) {
     const audio = document.getElementById("audioPlayer");
     const trackTitle = document.getElementById("trackTitle");
@@ -605,9 +612,8 @@ export function initPlayer(socket) {
                     updateNowPlaying(currentSongPath);
                 }
                 
-                // Soft-sync check
                 const drift = Math.abs(audio.currentTime - offsetTime);
-                if (songChanged || drift > SOFT_SYNC_THRESHOLD) {
+                if (songChanged || drift > softSyncThreshold) {
                     audio.currentTime = offsetTime;
                 }
                 
@@ -648,7 +654,7 @@ export function initPlayer(socket) {
 
             } else if (msg.action === "play") {
                 const drift = Math.abs(audio.currentTime - offsetTime);
-                if (hasJoined && drift > SOFT_SYNC_THRESHOLD) {
+                if (hasJoined && drift > softSyncThreshold) {
                     audio.currentTime = offsetTime;
                 }
                 shouldBePlaying = true;
