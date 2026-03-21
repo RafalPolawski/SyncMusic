@@ -9,6 +9,8 @@
  * @returns {Object} A set of closure functions hooked by the WebTransport listener to pipe state downstream.
  */
 
+import { Icons } from './ui.js';
+
 // If the audio drifts more than this many seconds from the server, force a re-sync
 const SOFT_SYNC_THRESHOLD = 1.5;
 export function initPlayer(socket) {
@@ -63,9 +65,6 @@ export function initPlayer(socket) {
     audio.volume = savedVolume;
     volumeSlider.value = savedVolume;
 
-    const svgPlay = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
-    const svgPause = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
-
     const formatTime = (seconds) => {
         if (isNaN(seconds) || seconds < 0) return "0:00";
         const m = Math.floor(seconds / 60);
@@ -78,10 +77,12 @@ export function initPlayer(socket) {
     const updatePositionState = () => {
         if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
             try {
+                const duration = isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+                const position = Math.max(0, Math.min(audio.currentTime || 0, duration));
                 navigator.mediaSession.setPositionState({
-                    duration: audio.duration || 0,
+                    duration: duration,
                     playbackRate: audio.playbackRate || 1,
-                    position: audio.currentTime || 0
+                    position: position
                 });
             } catch (e) {}
         }
@@ -105,7 +106,7 @@ export function initPlayer(socket) {
         }
 
         trackTitle.textContent = displayTitle;
-        document.getElementById("trackArtist").innerText = displayArtist;
+        document.getElementById("trackArtist").textContent = displayArtist;
 
         const coverUrl = `/api/cover?song=${encodeURIComponent(path)}`;
         const safeCssUrl = coverUrl.replace(/'/g, "%27").replace(/"/g, "%22").replace(/\(/g, "%28").replace(/\)/g, "%29");
@@ -344,8 +345,8 @@ export function initPlayer(socket) {
     });
 
     audio.onplay = () => {
-        playPauseBtn.innerHTML = svgPause;
-        miniPlayPauseBtn.innerHTML = svgPause;
+        playPauseBtn.innerHTML = Icons.pause;
+        miniPlayPauseBtn.innerHTML = Icons.pause;
         coverArt.classList.add("playing");
         if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
         updatePositionState();
@@ -353,8 +354,8 @@ export function initPlayer(socket) {
 
     audio.onpause = () => {
         if (!shouldBePlaying) {
-            playPauseBtn.innerHTML = svgPlay;
-            miniPlayPauseBtn.innerHTML = svgPlay;
+            playPauseBtn.innerHTML = Icons.play;
+            miniPlayPauseBtn.innerHTML = Icons.play;
             coverArt.classList.remove("playing");
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
             updatePositionState();

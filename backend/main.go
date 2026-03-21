@@ -34,6 +34,14 @@ type WTClient struct {
 	Nickname string
 }
 
+func (c *WTClient) SendNonBlocking(msg []byte) {
+	select {
+	case c.SendChan <- msg:
+	default:
+		log.Printf("[WARN] WTClient SendChan full, dropping message\n")
+	}
+}
+
 type Room struct {
 	Clients         map[*WTClient]bool
 	ClientsMutex    sync.Mutex
@@ -63,11 +71,7 @@ func (r *Room) Broadcast(msg []byte) {
 	r.ClientsMutex.Lock()
 	defer r.ClientsMutex.Unlock()
 	for c := range r.Clients {
-		select {
-		case c.SendChan <- msg:
-		default:
-			log.Printf("[WARN] Client SendChan full, dropping message\n")
-		}
+		c.SendNonBlocking(msg)
 	}
 }
 
@@ -308,14 +312,14 @@ func handleWTSession(session *webtransport.Session) {
 			"queue":     globalRoom.Queue,
 		}
 		b, _ := json.Marshal(syncMsg)
-		client.SendChan <- append(b, '\n')
+		client.SendNonBlocking(append(b, '\n'))
 	} else {
 		m1, _ := json.Marshal(map[string]interface{}{"action": "shuffle", "state": globalRoom.IsShuffleGlobal})
 		m2, _ := json.Marshal(map[string]interface{}{"action": "repeat", "state": globalRoom.IsRepeatGlobal})
 		m3, _ := json.Marshal(map[string]interface{}{"action": "queue_update", "queue": globalRoom.Queue})
-		client.SendChan <- append(m1, '\n')
-		client.SendChan <- append(m2, '\n')
-		client.SendChan <- append(m3, '\n')
+		client.SendNonBlocking(append(m1, '\n'))
+		client.SendNonBlocking(append(m2, '\n'))
+		client.SendNonBlocking(append(m3, '\n'))
 	}
 	globalRoom.StateMutex.Unlock()
 
@@ -347,7 +351,7 @@ func handleWTSession(session *webtransport.Session) {
 						"serverTime": time.Now().UnixMilli(),
 					}
 					b, _ := json.Marshal(pongMsg)
-					client.SendChan <- append(b, '\n')
+					client.SendNonBlocking(append(b, '\n'))
 				}
 				globalRoom.StateMutex.Unlock()
 				continue // Do not broadcast ping
@@ -436,7 +440,9 @@ func handleWTSession(session *webtransport.Session) {
 						}
 					}
 					if foundIdx != -1 {
-						globalRoom.Queue = append(globalRoom.Queue[:foundIdx], globalRoom.Queue[foundIdx+1:]...)
+						copy(globalRoom.Queue[foundIdx:], globalRoom.Queue[foundIdx+1:])
+						globalRoom.Queue[len(globalRoom.Queue)-1] = nil // drop object ref for GC
+						globalRoom.Queue = globalRoom.Queue[:len(globalRoom.Queue)-1]
 						queueMsg := map[string]interface{}{"action": "queue_update", "queue": globalRoom.Queue}
 						b, _ := json.Marshal(queueMsg)
 						globalRoom.Broadcast(append(b, '\n'))
@@ -445,7 +451,9 @@ func handleWTSession(session *webtransport.Session) {
 				} else if idx, ok := msg["index"].(float64); ok {
 					i := int(idx)
 					if i >= 0 && i < len(globalRoom.Queue) {
-						globalRoom.Queue = append(globalRoom.Queue[:i], globalRoom.Queue[i+1:]...)
+						copy(globalRoom.Queue[i:], globalRoom.Queue[i+1:])
+						globalRoom.Queue[len(globalRoom.Queue)-1] = nil
+						globalRoom.Queue = globalRoom.Queue[:len(globalRoom.Queue)-1]
 						queueMsg := map[string]interface{}{"action": "queue_update", "queue": globalRoom.Queue}
 						b, _ := json.Marshal(queueMsg)
 						globalRoom.Broadcast(append(b, '\n'))
@@ -461,7 +469,10 @@ func handleWTSession(session *webtransport.Session) {
 						t := int(toIdx)
 						if f >= 0 && f < len(globalRoom.Queue) && t >= 0 && t <= len(globalRoom.Queue) {
 							item := globalRoom.Queue[f]
-							globalRoom.Queue = append(globalRoom.Queue[:f], globalRoom.Queue[f+1:]...)
+							// Remove old
+							copy(globalRoom.Queue[f:], globalRoom.Queue[f+1:])
+							globalRoom.Queue[len(globalRoom.Queue)-1] = nil
+							globalRoom.Queue = globalRoom.Queue[:len(globalRoom.Queue)-1]
 							
 							var newQueue []map[string]interface{}
 							if t == 0 {

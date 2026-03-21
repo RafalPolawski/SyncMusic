@@ -1,5 +1,5 @@
 import { fetchSongsLibrary } from './api.js';
-import { UI, Utils } from './ui.js';
+import { UI, Utils, Icons } from './ui.js';
 import { CacheManager } from './cache.js';
 
 export function initLibrary(socket, player) {
@@ -65,7 +65,10 @@ export function initLibrary(socket, player) {
 
         const poll = () => {
         fetchSongsLibrary().then(data => {
-            if (!data) { isPolling = false; return; }
+            if (!data) { 
+                setTimeout(poll, 2000);
+                return; 
+            }
 
             if (data.is_scanning !== undefined && data.is_scanning === true) {
                 UI.loadingIndicator.style.display = "block";
@@ -133,6 +136,21 @@ export function initLibrary(socket, player) {
                 cacheAllBtn.className = "cache-playlist-btn";
                 cacheAllBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg> Cache Library (${libraryTotalTracks} tracks, ~${Utils.formatBytes(libraryTotalSize)})`;
                 UI.foldersContainer.appendChild(cacheAllBtn);
+
+                const rescanBtn = document.createElement("button");
+                rescanBtn.className = "cache-playlist-btn";
+                rescanBtn.style.background = "rgba(255, 100, 100, 0.12)";
+                rescanBtn.style.color = "#ff6b6b";
+                rescanBtn.style.borderColor = "rgba(255, 100, 100, 0.35)";
+                rescanBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg> Rescan Library`;
+                rescanBtn.onclick = () => {
+                    if (!confirm("Are you sure you want to rescan the music directory? This may take a moment.")) return;
+                    fetch("/api/rescan").then(() => {
+                        isPolling = false;
+                        loadLibrary();
+                    }).catch(console.error);
+                };
+                UI.foldersContainer.appendChild(rescanBtn);
 
                 const progressAllWrap = document.createElement('div');
                 progressAllWrap.className = 'cache-progress-wrap';
@@ -295,11 +313,11 @@ export function initLibrary(socket, player) {
 
                             const safeEncode = encodeURIComponent(s.path).replace(/'/g, "%27").replace(/"/g, "%22");
                             const thumbUrl = `/api/cover?song=${safeEncode}`;
-                            const fallbackSvg = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='45' height='45'><rect width='45' height='45' fill='%23333'/><text x='50%' y='50%' font-size='20' text-anchor='middle' dominant-baseline='middle' fill='%23555'>🎵</text></svg>`;
+                            const fallbackSvgEscaped = Icons.fallbackCover.replace(/'/g, "\\'");
 
                             sb.innerHTML = `
                             <div class="song-thumb-wrap">
-                                <img src="${thumbUrl}" class="song-thumb" loading="lazy" onerror="this.src='${fallbackSvg}'">
+                                <img src="${thumbUrl}" class="song-thumb" loading="lazy" onerror="this.src='${fallbackSvgEscaped}'">
                                 <span class="cache-badge" data-path="${s.path.replace(/"/g,'&quot;')}"></span>
                             </div>
                             <div class="song-info">

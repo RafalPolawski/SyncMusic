@@ -1,4 +1,9 @@
 /* MAIN THEME */
+:root {
+    --primary: #1DB954;
+    --primary-hover: #1ed760;
+    --primary-active: #179643;
+}
 body {
     font-family: 'Inter', sans-serif;
     text-align: center;
@@ -43,7 +48,7 @@ input, textarea {
 
 h1 {
     margin-bottom: 5px;
-    color: #1DB954;
+    color: var(--primary);
     font-size: 32px;
     font-weight: 700;
     letter-spacing: -0.5px;
@@ -221,7 +226,7 @@ input[type="range"]::-webkit-slider-thumb {
     /* INCREASED touch-target for the progress bar thumb */
     height: 24px;
     border-radius: 50%;
-    background: #1DB954;
+    background: var(--primary);
     cursor: pointer;
     transition: transform 0.1s;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
@@ -313,7 +318,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 /* Large Play/Pause button */
 .play-pause-btn {
-    background: linear-gradient(135deg, #1DB954 0%, #179643 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-active) 100%);
     color: #fff;
     width: 60px;
     height: 60px;
@@ -340,7 +345,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 
 .active-green {
-    color: #1DB954 !important;
+    color: var(--primary) !important;
 }
 
 audio {
@@ -385,7 +390,7 @@ audio {
     width: 40px;
     height: 40px;
     border: 4px solid rgba(255, 255, 255, 0.1);
-    border-top: 4px solid #1DB954;
+    border-top: 4px solid var(--primary);
     border-radius: 50%;
     animation: spin-loader 1s linear infinite;
 }
@@ -445,11 +450,11 @@ audio {
 }
 
 .queue-item.drag-over-top {
-    border-top: 2px solid #1DB954;
+    border-top: 2px solid var(--primary);
 }
 
 .queue-item.drag-over-bottom {
-    border-bottom: 2px solid #1DB954;
+    border-bottom: 2px solid var(--primary);
 }
 
 .drag-handle {
@@ -471,18 +476,18 @@ audio {
 }
 
 .active-folder {
-    border-left: 4px solid #1DB954 !important;
+    border-left: 4px solid var(--primary) !important;
     background: rgba(29, 185, 84, 0.15) !important;
-    color: #1DB954 !important;
+    color: var(--primary) !important;
 }
 
 .active-track {
-    border-left: 4px solid #1DB954 !important;
+    border-left: 4px solid var(--primary) !important;
     background: rgba(29, 185, 84, 0.1) !important;
 }
 
 .active-track .song-name {
-    color: #1DB954;
+    color: var(--primary);
     font-weight: 700;
 }
 
@@ -492,7 +497,7 @@ audio {
     bottom: 110px;
     /* Above mobile mini-player */
     right: 20px;
-    background: #1DB954;
+    background: var(--primary);
     color: white;
     width: 50px;
     height: 50px;
@@ -518,7 +523,7 @@ audio {
 
 .locate-fab:hover {
     transform: scale(1.1);
-    background: #1ed760;
+    background: var(--primary-hover);
 }
 
 .locate-fab:active {
@@ -591,14 +596,14 @@ audio {
 
 .cache-badge.cached {
     display: flex;
-    background: #1DB954;
+    background: var(--primary);
     color: #fff;
 }
 
 .cache-badge.caching {
     display: flex;
     background: rgba(29,185,84,0.25);
-    border-color: #1DB954;
+    border-color: var(--primary);
 }
 
 .cache-badge.caching::after {
@@ -606,7 +611,7 @@ audio {
     width: 8px;
     height: 8px;
     border: 1.5px solid transparent;
-    border-top-color: #1DB954;
+    border-top-color: var(--primary);
     border-radius: 50%;
     animation: spin-loader 0.7s linear infinite;
 }
@@ -618,7 +623,7 @@ audio {
     gap: 8px;
     background: rgba(29, 185, 84, 0.12);
     border: 1px solid rgba(29, 185, 84, 0.35);
-    color: #1DB954;
+    color: var(--primary);
     border-radius: 10px;
     padding: 10px 16px;
     font-size: 13px;
@@ -675,7 +680,7 @@ audio {
 .cache-progress-fill {
     height: 100%;
     width: 0%;
-    background: linear-gradient(90deg, #1DB954, #1ed760);
+    background: linear-gradient(90deg, var(--primary), var(--primary-hover));
     border-radius: 4px;
     transition: width 0.3s ease;
 }
@@ -688,7 +693,7 @@ audio {
 
 
 .folder-btn {
-    border-left: 4px solid #1DB954;
+    border-left: 4px solid var(--primary);
     font-weight: bold;
     font-size: 16px;
     padding: 18px 15px !important;
@@ -736,7 +741,7 @@ audio {
 }
 
 #joinBtn {
-    background: linear-gradient(135deg, #1DB954 0%, #179643 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-active) 100%);
     box-shadow: 0 10px 20px rgba(29, 185, 84, 0.4);
     color: white;
     font-size: 18px;
@@ -774,7 +779,7 @@ audio {
 }
 
 .nickname-input:focus {
-    border-color: #1DB954;
+    border-color: var(--primary);
     background: rgba(255, 255, 255, 0.2);
     box-shadow: 0 0 15px rgba(29, 185, 84, 0.5);
 }
@@ -807,7 +812,7 @@ audio {
 .user-tag {
     background: rgba(29, 185, 84, 0.15);
     border: 1px solid rgba(29, 185, 84, 0.3);
-    color: #1DB954;
+    color: var(--primary);
     padding: 6px 14px;
     border-radius: 20px;
     font-size: 13px;
@@ -1164,12 +1169,12 @@ audio {
 }
 
 .tab-btn.active-tab {
-    color: #1DB954;
-    border-bottom: 2px solid #1DB954;
+    color: var(--primary);
+    border-bottom: 2px solid var(--primary);
 }
 
 #queueCountBadge {
-    background: #1DB954;
+    background: var(--primary);
     color: #000;
     font-size: 11px;
     font-weight: 800;
@@ -1200,7 +1205,7 @@ audio {
 }
 
 .add-queue-btn:hover {
-    background: #1DB954;
+    background: var(--primary);
     color: #000;
     transform: scale(1.1);
 }

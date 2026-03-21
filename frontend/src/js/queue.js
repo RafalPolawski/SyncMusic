@@ -1,3 +1,5 @@
+import { Icons } from './ui.js';
+
 export function initQueue(socket, player) {
     const queueContainer = document.getElementById("queueContainer");
     const queueCountBadge = document.getElementById("queueCountBadge");
@@ -24,10 +26,11 @@ export function initQueue(socket, player) {
             
             const safeEncode = encodeURIComponent(item.path).replace(/'/g, "%27").replace(/"/g, "%22");
             const thumbUrl = `/api/cover?song=${safeEncode}`;
+            const fallbackSvgEscaped = Icons.fallbackCover.replace(/'/g, "\\'");
 
             qBtn.innerHTML = `
                 <div class="drag-handle" title="Drag to reorder">≡</div>
-                <img src="${thumbUrl}" class="song-thumb" loading="lazy" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'45\\' height=\\'45\\'><rect width=\\'45\\' height=\\'45\\' fill=\\'%23333\\'/><text x=\\'50%\\' y=\\'50%\\' font-size=\\'20\\' text-anchor=\\'middle\\' dominant-baseline=\\'middle\\' fill=\\'%23555\\'>🎵</text></svg>'">
+                <img src="${thumbUrl}" class="song-thumb" loading="lazy" onerror="this.src='${fallbackSvgEscaped}'">
                 <div class="song-info">
                     <span class="song-name">${item.title}</span>
                     <span class="song-artist">${item.artist}</span>
