@@ -137,18 +137,20 @@ self.addEventListener('message', (event) => {
         const total = urls.length;
         if (total === 0) return;
 
-        const source = event.source;
-
         const notifyProgress = (url) => {
-            if (source) {
-                source.postMessage({ action: 'cache_progress', url, total, cacheId });
-            }
+            self.clients.matchAll().then(clients => {
+                clients.forEach(client => {
+                    client.postMessage({ action: 'cache_progress', url, total, cacheId });
+                });
+            });
         };
 
         const notifyDone = () => {
-            if (source) {
-                source.postMessage({ action: 'cache_done', total, cacheId });
-            }
+            self.clients.matchAll().then(clients => {
+                clients.forEach(client => {
+                    client.postMessage({ action: 'cache_done', total, cacheId });
+                });
+            });
         };
 
         const BATCH = 3;
