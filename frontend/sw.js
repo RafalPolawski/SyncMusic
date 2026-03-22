@@ -50,34 +50,7 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Audio files — Cache First with network fallback
-    if (url.pathname.startsWith('/music/')) {
-        event.respondWith(
-            caches.match(event.request).then((cachedResponse) => {
-                if (cachedResponse) {
-                    console.log('[SW] Serving audio from cache:', url.pathname);
-                    return cachedResponse;
-                }
 
-                return fetch(event.request).then((networkResponse) => {
-                    if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-                        return networkResponse;
-                    }
-
-                    const responseToCache = networkResponse.clone();
-                    caches.open(CACHE_NAME).then((cache) => {
-                        console.log('[SW] Dynamically caching audio:', url.pathname);
-                        cache.put(event.request, responseToCache);
-                    });
-
-                    return networkResponse;
-                }).catch(() => {
-                    console.log("[SW] Network failed, no cache available for:", url.pathname);
-                });
-            })
-        );
-        return;
-    }
 
     // Default strategy: Network First -> Fallback to Cache
     event.respondWith(
@@ -85,7 +58,8 @@ self.addEventListener('fetch', (event) => {
             if (url.pathname.startsWith('/api/') ||
                 url.pathname.startsWith('/src/') ||
                 url.pathname.startsWith('/@vite/') ||
-                url.pathname.startsWith('/node_modules/')) {
+                url.pathname.startsWith('/node_modules/') ||
+                url.pathname.startsWith('/music/')) {
                 return netRes;
             }
 
@@ -106,29 +80,7 @@ self.addEventListener('fetch', (event) => {
 // Listen for messages from the client
 self.addEventListener('message', (event) => {
 
-    // Pre-cache next N tracks (existing feature, used by player.js)
-    if (event.data && event.data.action === 'precache') {
-        const urlsToCache = event.data.urls || [];
 
-        event.waitUntil(
-            caches.open(CACHE_NAME).then((cache) => {
-                return Promise.all(urlsToCache.map(urlStr => {
-                    const req = new Request(urlStr);
-                    return cache.match(req).then(res => {
-                        if (!res) {
-                            console.log('[SW] Pre-caching in background:', urlStr);
-                            return fetch(req).then(netRes => {
-                                if (netRes && netRes.status === 200) {
-                                    cache.put(req, netRes);
-                                }
-                            }).catch(err => console.log('[SW] Precache failed for', urlStr, err));
-                        }
-                    });
-                }));
-            })
-        );
-        return;
-    }
 
     // Bulk playlist cache with progress reporting back to the requesting client
     if (event.data && event.data.action === 'cache_playlist') {
