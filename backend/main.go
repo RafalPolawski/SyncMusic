@@ -358,6 +358,15 @@ func handleWTSession(session *webtransport.Session) {
 
 			case "load":
 				if s, ok := msg["song"].(string); ok {
+					// Check for race condition: expected previous track
+					if expectedPrev, hasPrev := msg["expected_previous"].(string); hasPrev {
+						if expectedPrev != "" && globalRoom.CurrentSong != "" && expectedPrev != globalRoom.CurrentSong {
+							log.Printf("[ACTION] Rejected load %s from %s due to expected_prev mismatch (room has %s, expected %s)\n", s, clientIP, globalRoom.CurrentSong, expectedPrev)
+							globalRoom.StateMutex.Unlock()
+							continue
+						}
+					}
+
 					globalRoom.CurrentSong = s
 					globalRoom.CurrentPosition = 0
 					globalRoom.IsPlaying = true

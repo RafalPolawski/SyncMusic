@@ -87,7 +87,7 @@ Messages are newline-delimited JSON:
 
 | Direction | Action | Payload |
 |---|---|---|
-| Client → Server | `load` | `{ song, folder }` |
+| Client → Server | `load` | `{ song, folder, expected_previous }` |
 | Client → Server | `play` | `{ time }` |
 | Client → Server | `pause` | `{ time }` |
 | Client → Server | `seek` | `{ time, isPlaying }` |

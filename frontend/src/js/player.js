@@ -419,12 +419,12 @@ export function initPlayer(socket) {
     const playNext = (isNaturalEnd = false) => {
         if (navigator.vibrate) navigator.vibrate(30);
 
-        // Guard against race: both natural end AND manual skip firing at the same time.
-        // Manual skip uses a short 300ms window (enough to absorb a simultaneous onended).
-        // Natural end keeps 2000ms to handle network/latency-delayed duplicates.
+        // Guard against manual skips firing at exactly the same time as rapid queue taps.
+        // With server-side track transition gating (expected_previous), a 2000ms block is no longer
+        // needed to prevent race conditions. Reduce to 300ms to keep UI responsive.
         if (isHandlingEnd) return;
         isHandlingEnd = true;
-        setTimeout(() => { isHandlingEnd = false; }, isNaturalEnd ? 2000 : 300);
+        setTimeout(() => { isHandlingEnd = false; }, 300);
 
         if (isNaturalEnd && isRepeat === 2) {
             socket.sendCommand("seek", { time: 0, isPlaying: true });
@@ -445,7 +445,7 @@ export function initPlayer(socket) {
 
         if (globalQueue.length > 0) {
             const nextItem = globalQueue[0];
-            socket.sendCommand("load", { song: nextItem.path, folder: "Queue" });
+            socket.sendCommand("load", { song: nextItem.path, folder: "Queue", expected_previous: currentSongPath });
             socket.sendCommand("dequeue", { id: nextItem.id });
             handleEagerLoadAndPlay(nextItem.path);
             return;
@@ -486,7 +486,7 @@ export function initPlayer(socket) {
             }
             nextSongPath = currentPlaylist[nextIndex].path;
         }
-        socket.sendCommand("load", { song: nextSongPath, folder: currentFolderName });
+        socket.sendCommand("load", { song: nextSongPath, folder: currentFolderName, expected_previous: currentSongPath });
         handleEagerLoadAndPlay(nextSongPath);
     };
 
@@ -508,7 +508,7 @@ export function initPlayer(socket) {
                 if (forwardHistory.length > MAX_HISTORY) forwardHistory.shift();
             }
             const prevSongPath = playedHistory.pop();
-            socket.sendCommand("load", { song: prevSongPath, isPrev: true, folder: currentFolderName });
+            socket.sendCommand("load", { song: prevSongPath, isPrev: true, folder: currentFolderName, expected_previous: currentSongPath });
             handleEagerLoadAndPlay(prevSongPath);
             return;
         }
@@ -516,7 +516,7 @@ export function initPlayer(socket) {
         const currentIndex = currentPlaylist.findIndex(s => s.path === currentSongPath);
         let prevIndex = currentIndex - 1 < 0 ? currentPlaylist.length - 1 : currentIndex - 1;
         const prevSongPath = currentPlaylist[prevIndex].path;
-        socket.sendCommand("load", { song: prevSongPath, isPrev: true, folder: currentFolderName });
+        socket.sendCommand("load", { song: prevSongPath, isPrev: true, folder: currentFolderName, expected_previous: currentSongPath });
         handleEagerLoadAndPlay(prevSongPath);
     };
 
