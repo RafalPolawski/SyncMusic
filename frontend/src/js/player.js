@@ -60,6 +60,7 @@ export function initPlayer(socket) {
     let forwardHistory = []; // Tracks skipped-over songs so back→forward is deterministic
     let shuffleQueue = [];
     let isHandlingEnd = false; // Anti-race condition
+    let pendingEagerPaths = []; // Tracks eager loads to prevent delayed server echoes from dragging UI backwards
 
     let allGroupsCache = {};
     let globalQueue = [];
@@ -406,6 +407,7 @@ export function initPlayer(socket) {
     });
 
     const handleEagerLoadAndPlay = (targetPath) => {
+        pendingEagerPaths.push(targetPath);
         if (currentSongPath !== targetPath || !currentSongPath) {
             audio.src = "/music/" + encodePath(targetPath);
             currentSongPath = targetPath;
@@ -637,6 +639,24 @@ export function initPlayer(socket) {
                     currentFolderName = msg.folder;
                     currentPlaylist = allGroupsCache[msg.folder];
                 }
+
+                // Prevent delayed server echoes from reverting rapid eager loads (e.g. fast double-clicking Next)
+                if (pendingEagerPaths.length > 0) {
+                    const idx = pendingEagerPaths.lastIndexOf(msg.song);
+                    if (idx !== -1) {
+                        if (idx < pendingEagerPaths.length - 1) {
+                            // This is an echo of an OLD eager request, but we've eagerly loaded newer tracks since.
+                            // Ignore it so the UI doesn't get dragged backwards.
+                            return;
+                        }
+                        // This echo matches our latest eager request! We are fully in sync. 
+                        pendingEagerPaths = [];
+                    } else {
+                        // This broadcast doesn't match our eager loads - it's an authoritative override from another client.
+                        pendingEagerPaths = [];
+                    }
+                }
+
                 if (!msg.isPrev && currentSongPath && currentSongPath !== msg.song) {
                     playedHistory.push(currentSongPath);
                     forwardHistory = []; // Manual forward jump clears the redo stack
