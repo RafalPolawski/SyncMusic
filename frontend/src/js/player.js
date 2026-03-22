@@ -51,6 +51,7 @@ export function initPlayer(socket) {
 
     let currentPlaylist = [];
     let currentSongPath = null;
+    let backgroundPlaylistPath = null; // Remembers original playlist pointer when playing from Queue
     let currentFolderName = null;
     let isShuffle = false;
     let isRepeat = 0; // 0 = off, 1 = playlist, 2 = track
@@ -477,7 +478,8 @@ export function initPlayer(socket) {
                 nextSongPath = currentPlaylist[shuffleQueue.pop()].path;
             }
         } else {
-            const currentIndex = currentPlaylist.findIndex(s => s.path === currentSongPath);
+            let searchPath = backgroundPlaylistPath || currentSongPath;
+            const currentIndex = currentPlaylist.findIndex(s => s.path === searchPath);
             let nextIndex = currentIndex + 1;
             if (nextIndex >= currentPlaylist.length) {
                 if (isRepeat === 0 && isNaturalEnd) {
@@ -515,7 +517,8 @@ export function initPlayer(socket) {
             return;
         }
 
-        const currentIndex = currentPlaylist.findIndex(s => s.path === currentSongPath);
+        let searchPath = backgroundPlaylistPath || currentSongPath;
+        const currentIndex = currentPlaylist.findIndex(s => s.path === searchPath);
         let prevIndex = currentIndex - 1 < 0 ? currentPlaylist.length - 1 : currentIndex - 1;
         const prevSongPath = currentPlaylist[prevIndex].path;
         socket.sendCommand("load", { song: prevSongPath, isPrev: true, folder: currentFolderName, expected_previous: currentSongPath });
@@ -638,6 +641,9 @@ export function initPlayer(socket) {
                     if (currentFolderName !== msg.folder) { shuffleQueue = []; forwardHistory = []; }
                     currentFolderName = msg.folder;
                     currentPlaylist = allGroupsCache[msg.folder];
+                    if (msg.folder !== "Queue") {
+                        backgroundPlaylistPath = msg.song;
+                    }
                 }
 
                 // Prevent delayed server echoes from reverting rapid eager loads (e.g. fast double-clicking Next)

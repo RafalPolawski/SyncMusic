@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -111,13 +112,19 @@ var certHashStr string
 
 // initDB() from db.go will handle setup
 
-// -- Cover art in-memory cache --
+// -- Cover art in-memory bounded cache --
 type cachedCover struct {
 	data        []byte
 	contentType string
 }
 
-var coverCache sync.Map // map[string]*cachedCover
+const maxCoverCacheSize = 250 // ~25-50MB max per cover art limits
+
+var (
+	coverCacheMutex sync.RWMutex
+	coverCache      = make(map[string]*cachedCover)
+	coverCacheKeys  []string
+)
 
 type SongMeta struct {
 	Path   string `json:"path"`
@@ -161,15 +168,21 @@ func handleGetCover(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cleanPath := filepath.Clean(songPath)
+	if strings.Contains(cleanPath, "..") || filepath.IsAbs(cleanPath) {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
 
 	// Serve from in-memory cache if available
-	if cached, ok := coverCache.Load(cleanPath); ok {
-		c := cached.(*cachedCover)
+	coverCacheMutex.RLock()
+	if c, ok := coverCache[cleanPath]; ok {
+		coverCacheMutex.RUnlock()
 		w.Header().Set("Content-Type", c.contentType)
 		w.Header().Set("Cache-Control", "public, max-age=86400")
 		w.Write(c.data)
 		return
 	}
+	coverCacheMutex.RUnlock()
 
 	fullPath := filepath.Join("./music", cleanPath)
 	f, err := os.Open(fullPath)
@@ -200,7 +213,17 @@ func handleGetCover(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store in cache for future requests
-	coverCache.Store(cleanPath, &cachedCover{data: pic.Data, contentType: contentType})
+	coverCacheMutex.Lock()
+	if _, exists := coverCache[cleanPath]; !exists {
+		if len(coverCacheKeys) >= maxCoverCacheSize {
+			oldest := coverCacheKeys[0]
+			coverCacheKeys = coverCacheKeys[1:]
+			delete(coverCache, oldest)
+		}
+		coverCacheKeys = append(coverCacheKeys, cleanPath)
+		coverCache[cleanPath] = &cachedCover{data: pic.Data, contentType: contentType}
+	}
+	coverCacheMutex.Unlock()
 
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "public, max-age=86400")
@@ -430,6 +453,11 @@ func handleWTSession(session *webtransport.Session) {
 				}
 			case "enqueue":
 				if item, ok := msg["item"].(map[string]interface{}); ok {
+					if len(globalRoom.Queue) >= 500 {
+						log.Printf("[ACTION] Client %s attempted to enqueue beyond limit of 500\n", clientIP)
+						globalRoom.StateMutex.Unlock()
+						continue
+					}
 					item["id"] = float64(time.Now().UnixNano())
 					globalRoom.Queue = append(globalRoom.Queue, item)
 					queueMsg := map[string]interface{}{"action": "queue_update", "queue": globalRoom.Queue}

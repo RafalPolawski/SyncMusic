@@ -74,10 +74,10 @@ func scanLibraryToDB() {
 	}()
 
 	// Invalidate cover art cache so rescan picks up new/changed artwork
-	coverCache.Range(func(key, _ any) bool {
-		coverCache.Delete(key)
-		return true
-	})
+	coverCacheMutex.Lock()
+	coverCache = make(map[string]*cachedCover)
+	coverCacheKeys = nil
+	coverCacheMutex.Unlock()
 
 	// Clear existing tracks (rebuild is fast enough with SQLite)
 	dbMutex.Lock()
