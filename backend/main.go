@@ -61,6 +61,6 @@ func main() {
 		}
 	}()
 
-	log.Println("[INFO] HTTP API Server listening on TCP :12137")
-	log.Fatal(http.ListenAndServe(":12137", mux))
+	log.Println("[INFO] HTTP API Server listening on TCP :8080")
+	log.Fatal(http.ListenAndServe(":8080", mux))
 }

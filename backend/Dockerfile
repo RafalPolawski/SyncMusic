@@ -1,21 +1,26 @@
-# Build the Go backend for SyncMusic
-FROM golang:1.26-alpine
+# Backend — multi-stage build
+# Stage 1: compile (full Go toolchain)
+FROM golang:1.26-alpine AS builder
+WORKDIR /build
 
-# Install build tools for sqlite 
-RUN apk add --no-cache gcc musl-dev
-
-# Set working directory inside the container
-WORKDIR /app
-
-# Copy the go mod files first to leverage Docker layer caching
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy all source files
 COPY *.go ./
+# CGO_ENABLED=0 — modernc.org/sqlite is pure Go, no C required
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server .
 
-# Compile the binary
-RUN CGO_ENABLED=0 go build -o server .
+# Stage 2: minimal runtime image
+FROM alpine:3.23
+RUN apk add --no-cache ca-certificates tzdata
 
-# Start the server
+WORKDIR /app
+COPY --from=builder /build/server .
+
+# Music is mounted at runtime via volume
+RUN mkdir -p /app/music
+
+EXPOSE 8080
+EXPOSE 4433/udp
+
 CMD ["./server"]

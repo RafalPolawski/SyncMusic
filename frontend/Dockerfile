@@ -1,16 +1,18 @@
-FROM node:24-alpine
+# Frontend — multi-stage production build
+# Stage 1: build the Vite app
+FROM node:25-alpine AS builder
 WORKDIR /app
 
-# Kopiowanie plików definicji pakietów
-COPY package.json package-lock.json* ./
+COPY package.json package-lock.json ./
+RUN npm ci --prefer-offline
 
-# Instalujemy zależności używając wewnętrznego menedżera npm z alpine (Nie wymaga gita z Windowsa klienta)
-RUN npm install
-
-# Kopiowanie reszty źródła frontendu
 COPY . .
+RUN npm run build
 
-EXPOSE 5173
+# Stage 2: serve with nginx
+FROM nginx:1.29-alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Komenda odpalająca serwer dev z obsługa hmr
-CMD ["npm", "run", "dev", "--", "--host"]
+EXPOSE 3000
+CMD ["nginx", "-g", "daemon off;"]

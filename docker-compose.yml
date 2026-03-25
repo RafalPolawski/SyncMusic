@@ -1,45 +1,55 @@
-# SyncMusic — Docker Compose
+# SyncMusic — Production Compose
+# Pulls pre-built images from GHCR. For local development use docker-compose.dev.yml.
+#
+# Usage:
+#   docker compose pull && docker compose up -d
+#
+# First run: update the image tags to the desired release version.
 
 services:
   syncmusic-backend:
+    image: ghcr.io/rafalpolawski/syncmusic-backend:latest
     container_name: syncmusic-backend
-    build:
-      context: ./backend
+    restart: unless-stopped
+    expose:
+      - "8080"    # HTTP API — internal only (Caddy proxies)
     ports:
-      - "12137:12137" # HTTP/1.1 API
-      - "4433:4433/udp" # HTTP/3 WebTransport
+      - "4433:4433/udp"  # WebTransport — must reach clients directly
     volumes:
-      - "/c/Muzyka:/app/music" # Mount the host music library into the container
+      - "${MUSIC_DIR:-/music}:/app/music:ro"
+      - syncmusic_db:/app/syncmusic.db
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/ok"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  syncmusic-frontend:
+    image: ghcr.io/rafalpolawski/syncmusic-frontend:latest
+    container_name: syncmusic-frontend
+    restart: unless-stopped
+    expose:
+      - "3000"    # nginx static — internal only (Caddy proxies)
+    depends_on:
+      - syncmusic-backend
 
   syncmusic-proxy:
+    image: ghcr.io/rafalpolawski/syncmusic-proxy:latest
     container_name: syncmusic-proxy
-    build:
-      context: ./caddy
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
       - "443:443/udp"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
       - syncmusic-backend
       - syncmusic-frontend
 
-  syncmusic-frontend:
-    container_name: syncmusic-frontend
-    build:
-      context: ./frontend
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules # Anonymous volume — prevents the Windows bind mount from overwriting the container's node_modules
-    depends_on:
-      - syncmusic-backend
-
 volumes:
   caddy_data:
   caddy_config:
+  syncmusic_db:
