@@ -1,9 +1,9 @@
 import { SyncWebTransport } from './webtransport.js';
 import { initUI, UI } from './ui.js';
-import { initPlayer, softSyncThreshold, setSyncThreshold } from './player.js';
+import { initPlayer, softSyncThreshold, setSyncThreshold } from './player/index.js';
 import { initQueue } from './queue.js';
 import { CacheManager } from './cache.js';
-import { initLibrary } from './library.js';
+import { initLibrary } from './library/index.js';
 
 /**
  * Main Application Entry Point (Modularized)

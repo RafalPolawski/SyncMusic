@@ -1,8 +1,7 @@
-import { Icons } from './ui.js';
+import { Icons, UI } from './ui.js';
 
 export function initQueue(socket, player) {
-    const queueContainer = document.getElementById("queueContainer");
-    const queueCountBadge = document.getElementById("queueCountBadge");
+    const { queueContainer, queueCountBadge } = UI;
     
     let currentQueue = [];
 

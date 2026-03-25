@@ -60,6 +60,11 @@ func initDB() {
 	log.Println("[INFO] Database initialized successfully.")
 }
 
+var validAudioExts = map[string]bool{
+	".opus": true, ".mp3": true, ".flac": true,
+	".wav": true, ".ogg": true, ".m4a": true, ".aac": true,
+}
+
 func scanLibraryToDB() {
 	log.Println("[INFO] Starting library scan to database...")
 
@@ -95,11 +100,7 @@ func scanLibraryToDB() {
 			return err
 		}
 		ext := strings.ToLower(filepath.Ext(path))
-		validExts := map[string]bool{
-			".opus": true, ".mp3": true, ".flac": true,
-			".wav": true, ".ogg": true, ".m4a": true, ".aac": true,
-		}
-		if !info.IsDir() && validExts[ext] {
+		if !info.IsDir() && validAudioExts[ext] {
 			paths = append(paths, path)
 		}
 		return nil
