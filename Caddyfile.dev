@@ -8,21 +8,43 @@
 }
 
 http://:80 {
-	@api   { path /api/* }
-	@music { path /music/* }
+	@api {
+		path /api/*
+	}
+	@music {
+		path /music/*
+	}
 
-	handle @api   { reverse_proxy syncmusic-backend:8080 }
-	handle @music { reverse_proxy syncmusic-backend:8080 }
-	handle        { reverse_proxy syncmusic-frontend:5173 }
+	handle @api {
+		reverse_proxy syncmusic-backend:8080
+	}
+	handle @music {
+		reverse_proxy syncmusic-backend:8080
+	}
+	handle {
+		reverse_proxy syncmusic-frontend:5173
+	}
 }
 
 :443 {
-	tls internal { on_demand }
+	tls internal {
+		on_demand
+	}
 
-	@api   { path /api/* }
-	@music { path /music/* }
+	@api {
+		path /api/*
+	}
+	@music {
+		path /music/*
+	}
 
-	handle @api   { reverse_proxy syncmusic-backend:8080 }
-	handle @music { reverse_proxy syncmusic-backend:8080 }
-	handle        { reverse_proxy syncmusic-frontend:5173 }
+	handle @api {
+		reverse_proxy syncmusic-backend:8080
+	}
+	handle @music {
+		reverse_proxy syncmusic-backend:8080
+	}
+	handle {
+		reverse_proxy syncmusic-frontend:5173
+	}
 }
