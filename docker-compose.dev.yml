@@ -18,7 +18,7 @@ services:
       - "4433:4433/udp"
     volumes:
       - "${MUSIC_DIR:-/c/Muzyka}:/app/music:ro"
-      - syncmusic_db_dev:/app/syncmusic.db
+      - syncmusic_db_dev:/app/data
 
   syncmusic-frontend:
     container_name: syncmusic-frontend

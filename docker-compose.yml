@@ -17,7 +17,7 @@ services:
       - "4433:4433/udp"  # WebTransport — must reach clients directly
     volumes:
       - "${MUSIC_DIR:-/music}:/app/music:ro"
-      - syncmusic_db:/app/syncmusic.db
+      - syncmusic_db:/app/data
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/ok"]
       interval: 30s

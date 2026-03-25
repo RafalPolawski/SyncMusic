@@ -1,17 +1,12 @@
 name: Release
 
-# Triggered only when a Release is manually published on GitHub.
-# Builds all three images and pushes them to GHCR with:
-#   :latest
-#   :<version>  (e.g. v1.2.0)
-
 on:
   release:
     types: [published]
 
 env:
   REGISTRY: ghcr.io
-  OWNER: ${{ github.repository_owner }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   release:
@@ -23,6 +18,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Lowercase repository owner
+        run: echo "OWNER_LC=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
       - name: Extract version tag
         id: version
@@ -44,8 +42,8 @@ jobs:
           context: ./backend
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.OWNER }}/syncmusic-backend:latest
-            ${{ env.REGISTRY }}/${{ env.OWNER }}/syncmusic-backend:${{ steps.version.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/syncmusic-backend:latest
+            ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/syncmusic-backend:${{ steps.version.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -56,8 +54,8 @@ jobs:
           file: ./frontend/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.OWNER }}/syncmusic-frontend:latest
-            ${{ env.REGISTRY }}/${{ env.OWNER }}/syncmusic-frontend:${{ steps.version.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/syncmusic-frontend:latest
+            ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/syncmusic-frontend:${{ steps.version.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -67,7 +65,7 @@ jobs:
           context: ./caddy
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.OWNER }}/syncmusic-proxy:latest
-            ${{ env.REGISTRY }}/${{ env.OWNER }}/syncmusic-proxy:${{ steps.version.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/syncmusic-proxy:latest
+            ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/syncmusic-proxy:${{ steps.version.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

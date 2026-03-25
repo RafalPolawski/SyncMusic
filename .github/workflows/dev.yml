@@ -1,17 +1,13 @@
 name: Build Dev Images
 
-# Triggered on every push to main.
-# Builds all three images and pushes them to GHCR with the :dev tag.
-# Used to quickly verify that images still build; can be pulled for testing.
-
 on:
   push:
     branches: [main]
-  workflow_dispatch:  # allows triggering manually from the GitHub UI
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
-  OWNER: ${{ github.repository_owner }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-and-push:
@@ -23,6 +19,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Lowercase repository owner
+        run: echo "OWNER_LC=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -39,7 +38,7 @@ jobs:
         with:
           context: ./backend
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.OWNER }}/syncmusic-backend:dev
+          tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/syncmusic-backend:dev
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -49,7 +48,7 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.OWNER }}/syncmusic-frontend:dev
+          tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/syncmusic-frontend:dev
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -58,6 +57,6 @@ jobs:
         with:
           context: ./caddy
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.OWNER }}/syncmusic-proxy:dev
+          tags: ${{ env.REGISTRY }}/${{ env.OWNER_LC }}/syncmusic-proxy:dev
           cache-from: type=gha
           cache-to: type=gha,mode=max

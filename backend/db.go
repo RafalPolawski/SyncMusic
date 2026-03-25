@@ -33,8 +33,12 @@ func GetScanStatus() ScanStatus {
 }
 
 func initDB() {
+	if err := os.MkdirAll("./data", 0755); err != nil {
+		log.Fatalf("[ERROR] Failed to create data directory: %v", err)
+	}
+
 	var err error
-	db, err = sql.Open("sqlite", "syncmusic.db")
+	db, err = sql.Open("sqlite", "./data/syncmusic.db")
 	if err != nil {
 		log.Fatalf("[ERROR] Failed to open database: %v", err)
 	}
