@@ -6,88 +6,69 @@
 
 SyncMusic is a self-hosted, low-latency music synchronization server. Every connected client plays the same song at the same position — simultaneously. Built on cutting-edge web protocols: **HTTP/3**, **WebTransport**, and **QUIC**.
 
+[![Build Dev Images](https://github.com/RafalPolawski/SyncMusic/actions/workflows/dev.yml/badge.svg)](https://github.com/RafalPolawski/SyncMusic/actions/workflows/dev.yml)
+
 ---
 
 ## ✨ Features
 
-### ✅ Implemented
-
 | Feature | Description |
 |---|---|
-| **WebTransport over HTTP/3 (QUIC)** | Real-time bidirectional communication over UDP — lower latency than WebSocket/TCP |
-| **Global playback state** | Play, pause, seek, and track changes are broadcast to all connected clients instantly |
-| **New client sync** | Clients joining mid-session receive the current song, position, shuffle & repeat state immediately |
-| **Shuffle & Repeat modes** | Three repeat modes (off / playlist / track) and shuffle — state shared across all clients |
-| **Music library scan** | Backend walks the mounted music directory and reads tags (title, artist) from supported audio files concurrently |
-| **Broad audio support** | Supports `.opus`, `.mp3`, `.flac`, `.wav`, `.ogg`, `.m4a`, and `.aac` files natively |
-| **Library caching** | Library is scanned once and served from RAM on subsequent requests |
-| **Embedded album art** | `/api/cover` extracts and serves embedded artwork from audio file tags |
-| **Folder-based browsing** | Frontend groups tracks by folder; active folder is highlighted globally |
-| **Self-signed TLS for WebTransport** | Backend auto-generates a short-lived ECDSA certificate; hash exposed via `/api/cert-hash` for browser trust |
-| **Reverse proxy (Caddy)** | HTTP/1.1 + HTTPS (LAN) routing via Caddy, including Caddy's internal CA for self-signed certs |
-| **Tailscale / MagicDNS access** | Accessible via `tailscale serve` — uses `http://:80` block proxied by Tailscale for HTTPS |
-| **Dockerized deployment** | Three-service `docker-compose.yml`: `sync-app` (Go), `sync-frontend` (Vite), `caddy` |
-| **Vite frontend build** | Modular ES module frontend with `api.js`, `player.js`, `webtransport.js`, `main.js` |
-| **Service Worker (PWA)** | Offline functionality via `sw.js` — caches static assets |
-| **Mobile-friendly UI** | Responsive layout, pull-to-dismiss gesture, History API integration, and native media controls (`MediaSession` API) |
-| **Scan progress UI** | Real-time loading screen tracking the backend's initialization and library scan progress |
-| **Global Queue Management** | Add-to-queue and remove functionality with synchronized state superseding default folder playlists |
-
----
-
-### 🚧 Planned / In Progress
-
-| Feature | Status | Notes |
-|---|---|---|
-| **NTP-style precision sync** | 📋 Planned | Client measures RTT on connect, calculates clock offset; server sends scheduled `PLAY_AT` timestamp instead of immediate command |
-| **PWA full install support** | 📋 Planned | `manifest.json`, app icons, `display: standalone` for home-screen install on Android/iOS |
-| **User identity / nicknames** | 📋 Planned | Each client announces a display name; server shows who is currently controlling playback |
-| **Lyrics display** | 📋 Planned | Fetch synchronized lyrics (e.g. LRCLIB API) and display them in sync with playback position |
-| **Persistent state (Redis)** | 📋 Planned | Replace in-memory globals with Redis for crash recovery and multi-instance support |
-| **User accounts (PostgreSQL)** | 📋 Planned | Playlists, listening history, per-user settings |
-| **MinIO / S3 file storage** | 📋 Planned | Move music files out of bind-mount into S3-compatible object storage for scalability |
-| **Multiple rooms** | 📋 Planned | Support isolated "rooms" — each room has its own playback state |
-| **Volume sync** | 📋 Planned | Optional global volume level shared across clients |
-| **Android / iOS native client** | 💡 Idea | Native app using `WebTransport` or fallback WebSocket for background audio playback |
+| **WebTransport / HTTP/3 (QUIC)** | Real-time bidirectional sync over UDP — lower latency than WebSocket/TCP |
+| **Global playback state** | Play, pause, seek, track change — instantly broadcast to all clients |
+| **New client sync** | Clients joining mid-session receive current song, position, shuffle & repeat state |
+| **Shuffle & Repeat** | Three repeat modes (off / playlist / track) + shuffle — state shared across all clients |
+| **Queue management** | Add, remove, reorder (drag-and-drop) — synchronized across all clients |
+| **Music library** | Backend walks the mounted music directory and reads ID3/Vorbis tags concurrently |
+| **Broad audio support** | `.opus`, `.mp3`, `.flac`, `.wav`, `.ogg`, `.m4a`, `.aac` |
+| **SQLite library cache** | Scanned once into SQLite, served instantly on subsequent starts |
+| **Embedded album art** | `/api/cover` extracts and serves embedded artwork from audio tags |
+| **Folder-based browsing** | Tracks grouped by folder; per-folder offline caching via Service Worker |
+| **Offline caching (PWA)** | Cache entire library or per-folder via Service Worker |
+| **Mobile mini-player** | Fixed mini-player that morphs into full-screen expanded view |
+| **Media Session API** | Lock screen / notification bar controls with artwork on Android & iOS |
+| **Settings panel** | Configurable soft-sync threshold, library rescan, cache management |
+| **Presence list** | See who else is listening in real time |
+| **RTT indicator** | Live round-trip time display with colour-coded quality signal |
+| **Self-signed TLS** | Backend auto-generates short-lived ECDSA cert; hash fetched via `/api/cert-hash` |
+| **Caddy reverse proxy** | HTTP/3, internal CA, on-demand TLS for LAN HTTPS |
+| **Tailscale / MagicDNS** | Zero-config remote access via `tailscale serve` |
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                        Clients                           │
-│        Browser / PWA   ←→   WebTransport (QUIC/UDP)      │
-└───────────────────┬──────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                       Clients                           │
+│       Browser / PWA   ←→   WebTransport (QUIC/UDP)      │
+└───────────────────┬─────────────────────────────────────┘
                     │ HTTPS (443) / HTTP (80)
-┌───────────────────▼──────────────────────────────────────┐
-│                   Caddy Reverse Proxy                    │
-│   • HTTP/3 (QUIC) termination                            │
-│   • Internal CA (local_certs) for LAN HTTPS              │
-│   • Tailscale serve proxy for MagicDNS HTTPS             │
-└────────┬─────────────────────────┬───────────────────────┘
-         │ /api/* /music/*         │ /*
-┌────────▼────────┐      ┌─────────▼────────┐
-│   Go Backend    │      │  Vite Frontend   │
-│   :12137 (TCP)  │      │  :5173 (TCP)     │
-│   :4433 (UDP)   │      │                  │
-│                 │      │  • api.js        │
-│  • REST API     │      │  • player.js     │
-│  • Music serve  │      │  • webtrans.js   │
-│  • WebTransport │      │  • main.js       │
-│  • Library scan │      │  • sw.js (PWA)   │
-└─────────────────┘      └──────────────────┘
+┌───────────────────▼─────────────────────────────────────┐
+│                  Caddy Reverse Proxy                    │
+│   • Internal CA (local_certs) for LAN HTTPS             │
+│   • Tailscale serve proxy for MagicDNS HTTPS            │
+└────────┬───────────────────────┬────────────────────────┘
+         │ /api/*  /music/*      │ /*
+┌────────▼──────────┐  ┌─────────▼──────────────────────┐
+│   Go Backend      │  │   nginx (static frontend)       │
+│   :8080 (TCP)     │  │   :3000 (TCP)                   │
+│   :4433 (UDP/WT)  │  │   • Vite-built ES modules       │
+│                   │  │   • Service Worker (PWA)         │
+│  • REST API       │  │   • player/, library/, queue.js │
+│  • WebTransport   │  └────────────────────────────────┘
+│  • SQLite (DB)    │
+└───────────────────┘
 ```
 
-### Communication Protocol
+### WebTransport Message Protocol
 
-All playback control flows through a single **WebTransport stream** over UDP port `4433`.
-
+All playback control flows through a single **WebTransport stream** on UDP `:4433`.
 Messages are newline-delimited JSON:
 
 | Direction | Action | Payload |
 |---|---|---|
-| Client → Server | `load` | `{ song, folder, expected_previous }` |
+| Client → Server | `load` | `{ song, folder }` |
 | Client → Server | `play` | `{ time }` |
 | Client → Server | `pause` | `{ time }` |
 | Client → Server | `seek` | `{ time, isPlaying }` |
@@ -95,9 +76,10 @@ Messages are newline-delimited JSON:
 | Client → Server | `repeat` | `{ state: 0\|1\|2 }` |
 | Client → Server | `enqueue` | `{ item: {path, title, artist} }` |
 | Client → Server | `dequeue` | `{ id: float64 }` |
+| Client → Server | `queue_move` | `{ from, to }` |
 | Server → Client | `sync` | `{ song, time, isPlaying, isShuffle, isRepeat, folder, queue }` *(on connect)* |
 | Server → All | `queue_update` | `{ queue: [...] }` |
-| Server → All | *(echo)* | All playback actions are broadcast verbatim to every connected client |
+| Server → All | *(echo)* | All playback actions broadcast to every connected client |
 
 ---
 
@@ -105,13 +87,13 @@ Messages are newline-delimited JSON:
 
 | Layer | Technology |
 |---|---|
-| **Backend** | Go 1.22+, `quic-go`, `webtransport-go`, `dhowden/tag` |
-| **Frontend** | Vanilla JS (ES modules), Vite, Web Audio API |
+| **Backend** | Go 1.24, `quic-go`, `webtransport-go`, `dhowden/tag`, `modernc.org/sqlite` |
+| **Frontend** | Vanilla JS (ES modules), Vite 5, Web Audio API |
 | **Transport** | WebTransport over HTTP/3 (QUIC / UDP) |
 | **Reverse Proxy** | Caddy 2 (HTTP/3, internal CA, on-demand TLS) |
-| **Containerization** | Docker, Docker Compose |
+| **CI/CD** | GitHub Actions → GHCR (`:dev` on push, `:latest` + version on Release) |
+| **Containerization** | Docker multi-stage, Docker Compose |
 | **Networking** | Tailscale + MagicDNS for zero-config remote access |
-| **PWA** | Service Worker (`sw.js`) |
 
 ---
 
@@ -120,29 +102,27 @@ Messages are newline-delimited JSON:
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) + Docker Compose
-- A folder of `.opus` music files on the host machine
+- A folder of music files on the host machine
 - (Optional) [Tailscale](https://tailscale.com/) for remote access
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/yourname/SyncMusic.git
+git clone https://github.com/RafalPolawski/SyncMusic.git
 cd SyncMusic
 ```
 
-### 2. Configure the music path
+### 2. Set your music path
 
-Edit `docker-compose.yml` and update the music volume mount to point to your library:
-
-```yaml
-volumes:
-  - "/path/to/your/music:/app/music"
+```bash
+echo "MUSIC_DIR=/path/to/your/music" > .env
 ```
 
 ### 3. Start the stack
 
 ```bash
-docker compose up --build
+docker compose pull   # pulls latest images from GHCR
+docker compose up -d
 ```
 
 ### 4. Access the app
@@ -155,18 +135,28 @@ docker compose up --build
 
 ---
 
-## 📡 API Reference
+## 🔧 Development
 
-All endpoints are served by the Go backend on `:12137` (proxied via Caddy).
+Use `docker-compose.dev.yml` to run with hot reload (Vite HMR):
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/songs` | Returns JSON array of all scanned tracks `[{ path, title, artist }]` |
-| `GET` | `/api/cover?song=<path>` | Returns the embedded album art for the given track |
-| `GET` | `/api/cert-hash` | Returns the SHA-256 hash of the WebTransport TLS cert (for browser trust) |
-| `GET` | `/api/ok` | Health check endpoint (used by Caddy's on-demand TLS `ask`) |
-| `GET` | `/music/<path>` | Streams the audio file directly from the music directory |
-| `WS`  | `/wt` (UDP :4433) | WebTransport endpoint for real-time playback sync |
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+Frontend source is bind-mounted — changes are reflected instantly without rebuilding.
+
+### Running services individually
+
+```bash
+# Frontend (Vite HMR)
+cd frontend && npm install && npm run dev
+
+# Backend
+cd backend && go run .
+```
+
+> The backend expects a `./music` directory relative to its working directory,
+> or use the Docker volume mount.
 
 ---
 
@@ -175,57 +165,70 @@ All endpoints are served by the Go backend on `:12137` (proxied via Caddy).
 ```
 SyncMusic/
 ├── backend/
-│   ├── Dockerfile
-│   ├── main.go            # Go server: REST API + WebTransport sync engine
-│   └── db.go              # SQLite session parsing and cache layers
+│   ├── Dockerfile          # Multi-stage: Go builder → Alpine runtime
+│   ├── main.go             # Entry point, HTTP mux, WebTransport init
+│   ├── room.go             # Shared state & broadcast logic
+│   ├── handlers.go         # REST API endpoints
+│   ├── wt.go               # WebTransport session & message routing
+│   ├── tls.go              # Self-signed ECDSA cert generation
+│   └── db.go               # SQLite library scan & cache
 ├── frontend/
-│   ├── Dockerfile
+│   ├── Dockerfile          # Multi-stage: Node builder → nginx:alpine
+│   ├── Dockerfile.dev      # Vite dev server + HMR (dev only)
+│   ├── nginx.conf          # SPA fallback, asset caching
 │   ├── index.html
 │   ├── vite.config.js
-│   ├── sw.js              # Service Worker (PWA / offline cache)
+│   ├── sw.js               # Service Worker (PWA / offline cache)
 │   └── src/
 │       ├── js/
-│       │   ├── api.js         # HTTP API helpers
-│       │   ├── main.js        # App bootstrap & UI orchestration
-│       │   ├── player.js      # Audio playback engine & controls
-│       │   └── webtransport.js # WebTransport connection & message handling
+│       │   ├── main.js         # App bootstrap & orchestration
+│       │   ├── ui.js           # DOM refs & shared utilities
+│       │   ├── webtransport.js # WebTransport connection
+│       │   ├── cache.js        # Service Worker cache manager
+│       │   ├── queue.js        # Queue UI
+│       │   ├── api.js          # HTTP API helpers
+│       │   ├── player/         # Audio engine (8 focused modules)
+│       │   └── library/        # Library browser (3 focused modules)
 │       └── styles/
-│           └── main.css
+│           ├── main.css        # @import hub
+│           ├── base.css        # Variables, reset, layout
+│           ├── player.css      # Player & mini-player
+│           ├── library.css     # Library, folder list, cache badges
+│           ├── queue.css       # Queue & drag-and-drop
+│           └── overlay.css     # Join screen & settings modal
 ├── caddy/
-│   └── Dockerfile
-├── Caddyfile              # Caddy reverse proxy config (HTTP/3, TLS, routing)
-├── docker-compose.yml
-└── LICENSE
+│   └── Dockerfile          # Custom xcaddy build (no Tailscale module)
+├── .github/workflows/
+│   ├── dev.yml             # Push to main → :dev images on GHCR
+│   └── release.yml         # GitHub Release → :latest + :<version> on GHCR
+├── Caddyfile               # Production Caddy config
+├── Caddyfile.dev           # Dev Caddy config (Vite on :5173)
+├── docker-compose.yml      # Production (pulls from GHCR)
+└── docker-compose.dev.yml  # Development (builds locally)
 ```
 
 ---
 
-## 🔧 Development
+## 📡 API Reference
 
-### Running the frontend locally (with hot reload)
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### Running the backend locally
-
-```bash
-cd backend
-go run main.go
-```
-
-> The backend expects a `./music` directory relative to its working directory, or use the Docker volume mount.
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/songs` | JSON array of all scanned tracks `[{ path, title, artist, size }]` |
+| `GET` | `/api/cover?song=<path>` | Embedded album art for the given track |
+| `GET` | `/api/cert-hash` | SHA-256 hash of the WebTransport TLS cert |
+| `GET` | `/api/scan-status` | Current library scan progress `{ is_scanning, scan_current, scan_total }` |
+| `POST` | `/api/rescan` | Trigger a full library rescan |
+| `GET` | `/api/ok` | Health check (used by Caddy's on-demand TLS `ask`) |
+| `GET` | `/music/<path>` | Streams audio file directly from the music directory |
+| `WT` | `/wt` (UDP :4433) | WebTransport endpoint for real-time playback sync |
 
 ---
 
 ## 📝 Notes
 
-- **Audio format**: The application fully supports and scans `.opus`, `.mp3`, `.flac`, `.wav`, `.ogg`, `.m4a`, and `.aac` files.
-- **WebTransport TLS**: The self-signed certificate regenerates on every container restart. The browser fetches the new hash automatically via `/api/cert-hash`.
-- **MagicDNS**: WebTransport connects directly to the host IP (not via MagicDNS hostname) due to browser restrictions on self-signed certificates for arbitrary hostnames.
+- **WebTransport TLS**: The self-signed certificate regenerates on every container restart. The frontend fetches the new hash automatically via `/api/cert-hash`.
+- **MagicDNS**: WebTransport connects directly to the host IP due to browser restrictions on self-signed certs for arbitrary hostnames.
+- **Service Worker caching**: Per-folder caching stores tracks individually; a folder can be cached offline even while others stream live.
 
 ---
 
