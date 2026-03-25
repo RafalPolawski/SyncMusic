@@ -22,7 +22,6 @@ obj/
 # Node modules (if any frontend build tools used locally later)
 node_modules/
 dist/
-package-lock.json
 
 # Env & IDE
 .env
