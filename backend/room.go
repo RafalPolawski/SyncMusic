@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
-	"time"
 
 	"github.com/quic-go/webtransport-go"
 )
@@ -29,34 +28,18 @@ func (c *WTClient) SendNonBlocking(msg []byte) {
 	}
 }
 
-// Room holds all connected clients and the shared playback state.
-type Room struct {
-	Clients         map[*WTClient]bool
-	ClientsMutex    sync.Mutex
-	StateMutex      sync.Mutex
-	CurrentSong     string
-	IsPlaying       bool
-	CurrentPosition float64
-	LastUpdate      time.Time
-	IsShuffleGlobal bool
-	IsRepeatGlobal  int
-	CurrentFolder   string
-	GlobalVolume    float64
-	Queue           []map[string]interface{}
+// LocalClientsTracker holds connected clients on this instance.
+type LocalClientsTracker struct {
+	Clients      map[*WTClient]bool
+	ClientsMutex sync.Mutex
 }
 
-func NewRoom() *Room {
-	return &Room{
-		Clients:      make(map[*WTClient]bool),
-		GlobalVolume: 1.0,
-		Queue:        make([]map[string]interface{}, 0),
-	}
+var globalLocalClients = &LocalClientsTracker{
+	Clients: make(map[*WTClient]bool),
 }
 
-var globalRoom = NewRoom()
-
-// Broadcast sends msg to every connected client.
-func (r *Room) Broadcast(msg []byte) {
+// Broadcast sends msg to every connected client on this instance.
+func (r *LocalClientsTracker) Broadcast(msg []byte) {
 	r.ClientsMutex.Lock()
 	defer r.ClientsMutex.Unlock()
 	for c := range r.Clients {
@@ -65,7 +48,9 @@ func (r *Room) Broadcast(msg []byte) {
 }
 
 // BroadcastPresence sends the current listener list to every client.
-func (r *Room) BroadcastPresence() {
+// TODO: This currently only shows local instance presence. With Redis, we'd need
+// to aggregate presence. For now, we will just send local presence or disable.
+func (r *LocalClientsTracker) BroadcastPresence() {
 	r.ClientsMutex.Lock()
 	var users []string
 	for c := range r.Clients {
@@ -96,4 +81,50 @@ func clientWriter(ctx context.Context, client *WTClient) {
 			client.Stream.Write(msg)
 		}
 	}
+}
+
+// ── Queue mutation helpers ────────────────────────────────────────────────────
+// These apply modifications to a given slice. The caller handles saving to Redis.
+
+func removeQueueByID(q []map[string]interface{}, id float64) ([]map[string]interface{}, bool) {
+	for i, item := range q {
+		if qID, ok := item["id"].(float64); ok && qID == id {
+			return removeQueueByIndex(q, i)
+		}
+	}
+	return q, false
+}
+
+func removeQueueByIndex(q []map[string]interface{}, i int) ([]map[string]interface{}, bool) {
+	if i < 0 || i >= len(q) {
+		return q, false
+	}
+	copy(q[i:], q[i+1:])
+	q[len(q)-1] = nil // allow GC
+	q = q[:len(q)-1]
+	return q, true
+}
+
+func moveQueueItem(q []map[string]interface{}, from, to int) []map[string]interface{} {
+	if from < 0 || from >= len(q) || to < 0 || to > len(q) {
+		return q
+	}
+	item := q[from]
+	// Remove from old position
+	copy(q[from:], q[from+1:])
+	q[len(q)-1] = nil
+	q = q[:len(q)-1]
+
+	// Insert at new position
+	var newQ []map[string]interface{}
+	if to == 0 {
+		newQ = append([]map[string]interface{}{item}, q...)
+	} else if to >= len(q) {
+		newQ = append(q, item)
+	} else {
+		newQ = append(newQ, q[:to]...)
+		newQ = append(newQ, item)
+		newQ = append(newQ, q[to:]...)
+	}
+	return newQ
 }

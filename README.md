@@ -15,7 +15,9 @@ SyncMusic is a self-hosted, low-latency music synchronization server. Every conn
 | Feature | Description |
 |---|---|
 | **WebTransport / HTTP/3 (QUIC)** | Real-time bidirectional sync over UDP — lower latency than WebSocket/TCP |
+| **Redis Pub/Sub** | Horizontally scalable global state management across multiple server instances |
 | **Global playback state** | Play, pause, seek, track change — instantly broadcast to all clients |
+| **Advanced Latency Sync** | Ping jitter smoothed client-side with Exponential Moving Average (EMA) and eager-updates |
 | **New client sync** | Clients joining mid-session receive current song, position, shuffle & repeat state |
 | **Shuffle & Repeat** | Three repeat modes (off / playlist / track) + shuffle — state shared across all clients |
 | **Queue management** | Add, remove, reorder (drag-and-drop) — synchronized across all clients |
@@ -58,6 +60,7 @@ SyncMusic is a self-hosted, low-latency music synchronization server. Every conn
 │  • REST API       │  │   • player/, library/, queue.js │
 │  • WebTransport   │  └────────────────────────────────┘
 │  • SQLite (DB)    │
+│  • Redis Pub/Sub  │  ←→ [Redis 8 In-Memory State]
 └───────────────────┘
 ```
 
@@ -87,7 +90,8 @@ Messages are newline-delimited JSON:
 
 | Layer | Technology |
 |---|---|
-| **Backend** | Go 1.24, `quic-go`, `webtransport-go`, `dhowden/tag`, `modernc.org/sqlite` |
+| **Backend** | Go 1.24, `quic-go`, `webtransport-go`, `dhowden/tag`, `go-redis` |
+| **Database/Cache**| `modernc.org/sqlite` (ID3 tagging), `redis:8-alpine` (Real-time Pub/Sub & State) |
 | **Frontend** | Vanilla JS (ES modules), Vite 5, Web Audio API |
 | **Transport** | WebTransport over HTTP/3 (QUIC / UDP) |
 | **Reverse Proxy** | Caddy 2 (HTTP/3, internal CA, on-demand TLS) |
@@ -167,9 +171,10 @@ SyncMusic/
 ├── backend/
 │   ├── Dockerfile          # Multi-stage: Go builder → Alpine runtime
 │   ├── main.go             # Entry point, HTTP mux, WebTransport init
-│   ├── room.go             # Shared state & broadcast logic
+│   ├── room.go             # Local instance client tracker
 │   ├── handlers.go         # REST API endpoints
-│   ├── wt.go               # WebTransport session & message routing
+│   ├── wt.go               # WebTransport session & Redis state logic
+│   ├── redis.go            # Redis lock, state structs & PubSub listener
 │   ├── tls.go              # Self-signed ECDSA cert generation
 │   └── db.go               # SQLite library scan & cache
 ├── frontend/

@@ -31,6 +31,7 @@ dist/
 # Build logs and temp files
 *.log
 *.tmp
+syncmusic_bin
 
 # Caddy (local CA/certs)
 caddy_data/

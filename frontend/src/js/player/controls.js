@@ -102,7 +102,11 @@ export function initControls(audio, dom, state, socket, { updatePositionState, u
     progressBar.addEventListener('change', () => {
         state.isDraggingProgress = false;
         if (navigator.vibrate) navigator.vibrate(20);
-        socket.sendCommand('seek', { time: parseFloat(progressBar.value), isPlaying: state.shouldBePlaying });
+        const newTime = parseFloat(progressBar.value);
+        audio.currentTime = newTime;
+        state.lastKnownTime = newTime;
+        state.syncAudioTime = newTime;
+        socket.sendCommand('seek', { time: newTime, isPlaying: state.shouldBePlaying });
     });
 
     // ── Volume ────────────────────────────────────────────────────────────────

@@ -68,7 +68,7 @@ export class SyncWebTransport {
             // Start pinging for latency measurement
             this.pingInterval = setInterval(() => {
                 this.sendCommand("ping", { clientTime: Date.now() });
-            }, 5000);
+            }, 3000);
             this.sendCommand("ping", { clientTime: Date.now() });
 
             // Notify app about reconnection
@@ -131,9 +131,18 @@ export class SyncWebTransport {
                             const parsed = JSON.parse(line);
                             if (parsed.action === 'pong') {
                                 const now = Date.now();
-                                this.rtt = now - parsed.clientTime;
-                                const currentServerTime = parsed.serverTime + (this.rtt / 2);
-                                this.serverTimeOffset = currentServerTime - now;
+                                const rtt = now - parsed.clientTime;
+                                const currentServerTime = parsed.serverTime + (rtt / 2);
+                                const newOffset = currentServerTime - now;
+                                
+                                if (this.rtt === 0 || this.rtt === undefined) {
+                                    this.rtt = rtt;
+                                    this.serverTimeOffset = newOffset;
+                                } else {
+                                    this.rtt = (this.rtt * 0.8) + (rtt * 0.2);
+                                    this.serverTimeOffset = (this.serverTimeOffset * 0.8) + (newOffset * 0.2);
+                                }
+                                
                                 if (this.onRttUpdate) this.onRttUpdate(this.rtt);
                             } else if (this.onMessageCallback) {
                                 this.onMessageCallback(parsed);

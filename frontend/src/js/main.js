@@ -39,7 +39,7 @@ document.addEventListener("DOMContentLoaded", () => {
     socket.onRttUpdate = (rtt) => {
         if (!UI.rttIndicator) return;
         UI.rttIndicator.style.display = 'inline-flex';
-        UI.rttValue.textContent = `${rtt}ms`;
+        UI.rttValue.textContent = `${Math.round(rtt)}ms`;
 
         let color = '#1DB954';
         if (rtt > 50 && rtt <= 150) color = '#f0c040';

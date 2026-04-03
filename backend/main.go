@@ -12,6 +12,8 @@ import (
 func main() {
 	initDB()
 	defer db.Close()
+	initRedis()
+	subscribeRedis()
 
 	tlsCert, hash := generateIdentity()
 	certHashStr = hash

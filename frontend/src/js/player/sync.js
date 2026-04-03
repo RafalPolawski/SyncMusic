@@ -16,8 +16,8 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
     const withOffset = (msg) => {
         if (msg.server_ts && socket.getServerTime && msg.action !== 'pause') {
             let elapsed = (socket.getServerTime() - msg.server_ts) / 1000;
-            elapsed = Math.max(-2, Math.min(5, elapsed));
-            return msg.time + Math.max(0, elapsed);
+            // Removed clamping since jitter is smoothed by EMA RTT
+            return msg.time + elapsed;
         }
         return msg.time;
     };

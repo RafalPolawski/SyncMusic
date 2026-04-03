@@ -23,6 +23,17 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    environment:
+      - REDIS_URL=redis://syncmusic-redis:6379/0
+    depends_on:
+      - syncmusic-redis
+
+  syncmusic-redis:
+    image: redis:8-alpine
+    container_name: syncmusic-redis
+    restart: unless-stopped
+    volumes:
+      - syncmusic_redis_data:/data
 
   syncmusic-frontend:
     image: ghcr.io/rafalpolawski/syncmusic-frontend:latest
@@ -53,3 +64,4 @@ volumes:
   caddy_data:
   caddy_config:
   syncmusic_db:
+  syncmusic_redis_data:
