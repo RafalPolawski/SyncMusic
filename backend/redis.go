@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -16,7 +17,11 @@ var ctx = context.Background()
 
 const roomStateKey = "syncmusic:room_state"
 const pubsubChannel = "syncmusic:room_events"
-const lockKey = "syncmusic:room_lock"
+
+// Go mutex for local serialization — zero network overhead vs Redis SETNX.
+// For single-instance deployments this is strictly better (sub-microsecond vs ~1ms).
+// For multi-instance horizontal scaling, promote this back to a distributed lock.
+var stateMu sync.Mutex
 
 func initRedis() {
 	redisUrl := os.Getenv("REDIS_URL")
@@ -31,27 +36,24 @@ func initRedis() {
 
 	rdb = redis.NewClient(opts)
 
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		log.Printf("[WARN] Failed to connect to Redis initially: %v. Retrying...", err)
-		for i := 0; i < 5; i++ {
-			time.Sleep(2 * time.Second)
-			if err := rdb.Ping(ctx).Err(); err == nil {
-				log.Println("[INFO] Successfully connected to Redis after retrying.")
-				break
-			}
+	// Retry connect up to 5 times (container startup race)
+	for i := 0; i < 5; i++ {
+		if err := rdb.Ping(ctx).Err(); err == nil {
+			log.Println("[INFO] Connected to Redis successfully.")
+			break
 		}
-	} else {
-		log.Println("[INFO] Connected to Redis successfully.")
+		log.Printf("[WARN] Redis not ready (attempt %d/5), retrying in 2s...", i+1)
+		time.Sleep(2 * time.Second)
 	}
 
-	// Create default state if empty
+	// Initialise default state if empty
 	if rdb.Exists(ctx, roomStateKey).Val() == 0 {
 		rdb.HSet(ctx, roomStateKey, map[string]interface{}{
 			"CurrentSong":     "",
-			"IsPlaying":       0, // 0 or 1
+			"IsPlaying":       0,
 			"CurrentPosition": 0.0,
 			"LastUpdate":      time.Now().UnixMilli(),
-			"IsShuffleGlobal": 0, // 0 or 1
+			"IsShuffleGlobal": 0,
 			"IsRepeatGlobal":  0,
 			"CurrentFolder":   "",
 			"GlobalVolume":    1.0,
@@ -71,38 +73,73 @@ func subscribeRedis() {
 	log.Println("[INFO] Listening on Redis Pub/Sub channel:", pubsubChannel)
 }
 
-func publishEvent(msg map[string]interface{}) {
-	b, _ := json.Marshal(msg)
-	err := rdb.Publish(ctx, pubsubChannel, string(b)).Err()
-	if err != nil {
-		log.Printf("[ERROR] Redis publish error: %v\n", err)
-	}
-}
-
-// State Mutex using Redis setnx
-func lockState() bool {
-	acquired, _ := rdb.SetNX(ctx, lockKey, "locked", 5*time.Second).Result()
-	return acquired
-}
-
-func unlockState() {
-	rdb.Del(ctx, lockKey)
-}
-
-// Acquire with retries
+// withStateLock serialises state mutations with a local Go mutex.
+// All Redis I/O inside fn() is still atomic from the perspective of this process.
 func withStateLock(fn func()) {
-	for i := 0; i < 20; i++ {
-		if lockState() {
-			defer unlockState()
-			fn()
-			return
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	log.Println("[ERROR] Failed to acquire Redis state lock")
+	stateMu.Lock()
+	defer stateMu.Unlock()
+	fn()
 }
 
-// RoomState defines the parsed state of the room
+// saveAndPublish writes room state and broadcasts the event in a single
+// Redis pipeline — halves the number of round-trips vs two separate calls.
+func saveAndPublish(state RoomState, msg map[string]interface{}) {
+	isPlaying := 0
+	if state.IsPlaying {
+		isPlaying = 1
+	}
+	isShuffle := 0
+	if state.IsShuffleGlobal {
+		isShuffle = 1
+	}
+	qBytes, _ := json.Marshal(state.Queue)
+	msgBytes, _ := json.Marshal(msg)
+
+	pipe := rdb.Pipeline()
+	pipe.HSet(ctx, roomStateKey, map[string]interface{}{
+		"CurrentSong":     state.CurrentSong,
+		"IsPlaying":       isPlaying,
+		"CurrentPosition": state.CurrentPosition,
+		"LastUpdate":      state.LastUpdate.UnixMilli(),
+		"IsShuffleGlobal": isShuffle,
+		"IsRepeatGlobal":  state.IsRepeatGlobal,
+		"CurrentFolder":   state.CurrentFolder,
+		"GlobalVolume":    state.GlobalVolume,
+		"Queue":           string(qBytes),
+	})
+	pipe.Publish(ctx, pubsubChannel, string(msgBytes))
+	if _, err := pipe.Exec(ctx); err != nil {
+		log.Printf("[ERROR] Redis pipeline error: %v\n", err)
+	}
+}
+
+// SaveRoomState persists state only (no broadcast). Use saveAndPublish when
+// a broadcast is also needed.
+func SaveRoomState(state RoomState) {
+	isPlaying := 0
+	if state.IsPlaying {
+		isPlaying = 1
+	}
+	isShuffle := 0
+	if state.IsShuffleGlobal {
+		isShuffle = 1
+	}
+	qBytes, _ := json.Marshal(state.Queue)
+
+	rdb.HSet(ctx, roomStateKey, map[string]interface{}{
+		"CurrentSong":     state.CurrentSong,
+		"IsPlaying":       isPlaying,
+		"CurrentPosition": state.CurrentPosition,
+		"LastUpdate":      state.LastUpdate.UnixMilli(),
+		"IsShuffleGlobal": isShuffle,
+		"IsRepeatGlobal":  state.IsRepeatGlobal,
+		"CurrentFolder":   state.CurrentFolder,
+		"GlobalVolume":    state.GlobalVolume,
+		"Queue":           string(qBytes),
+	})
+}
+
+// RoomState is the parsed in-memory representation of the room.
 type RoomState struct {
 	CurrentSong     string
 	IsPlaying       bool
@@ -146,28 +183,4 @@ func GetRoomState() RoomState {
 		GlobalVolume:    globalVol,
 		Queue:           queue,
 	}
-}
-
-func SaveRoomState(state RoomState) {
-	isPlaying := 0
-	if state.IsPlaying {
-		isPlaying = 1
-	}
-	isShuffle := 0
-	if state.IsShuffleGlobal {
-		isShuffle = 1
-	}
-	qBytes, _ := json.Marshal(state.Queue)
-
-	rdb.HSet(ctx, roomStateKey, map[string]interface{}{
-		"CurrentSong":     state.CurrentSong,
-		"IsPlaying":       isPlaying,
-		"CurrentPosition": state.CurrentPosition,
-		"LastUpdate":      state.LastUpdate.UnixMilli(),
-		"IsShuffleGlobal": isShuffle,
-		"IsRepeatGlobal":  state.IsRepeatGlobal,
-		"CurrentFolder":   state.CurrentFolder,
-		"GlobalVolume":    state.GlobalVolume,
-		"Queue":           string(qBytes),
-	})
 }

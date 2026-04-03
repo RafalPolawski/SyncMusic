@@ -104,6 +104,7 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 				"action":     "pong",
 				"clientTime": clientTime,
 				"serverTime": time.Now().UnixMilli(),
+				"pingKey":    msg["pingKey"], // echo back for accurate RTT tracking
 			}
 			b, _ := json.Marshal(pong)
 			client.SendNonBlocking(append(b, '\n'))
@@ -134,7 +135,7 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 				state.CurrentFolder = f
 			}
 			msg["server_ts"] = time.Now().UnixMilli()
-			SaveRoomState(state)
+			saveAndPublish(state, msg)
 
 		case "play":
 			if t, ok := msg["time"].(float64); ok {
@@ -143,7 +144,7 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 			state.IsPlaying = true
 			state.LastUpdate = time.Now()
 			msg["server_ts"] = time.Now().UnixMilli()
-			SaveRoomState(state)
+			saveAndPublish(state, msg)
 			log.Printf("[ACTION] Client %s PLAY at %.2fs\n", clientIP, state.CurrentPosition)
 
 		case "pause":
@@ -153,7 +154,7 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 			state.IsPlaying = false
 			state.LastUpdate = time.Now()
 			msg["server_ts"] = time.Now().UnixMilli()
-			SaveRoomState(state)
+			saveAndPublish(state, msg)
 			log.Printf("[ACTION] Client %s PAUSE at %.2fs\n", clientIP, state.CurrentPosition)
 
 		case "seek":
@@ -166,26 +167,26 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 				state.IsPlaying = playing
 			}
 			msg["server_ts"] = time.Now().UnixMilli()
-			SaveRoomState(state)
+			saveAndPublish(state, msg)
 
 		case "shuffle":
 			if st, ok := msg["state"].(bool); ok {
 				state.IsShuffleGlobal = st
-				SaveRoomState(state)
+				saveAndPublish(state, msg)
 				log.Printf("[ACTION] Client %s SHUFFLE=%v\n", clientIP, st)
 			}
 
 		case "repeat":
 			if st, ok := msg["state"].(float64); ok {
 				state.IsRepeatGlobal = int(st)
-				SaveRoomState(state)
+				saveAndPublish(state, msg)
 				log.Printf("[ACTION] Client %s REPEAT=%d\n", clientIP, int(st))
 			}
 
 		case "volume":
 			if vol, ok := msg["level"].(float64); ok {
 				state.GlobalVolume = vol
-				SaveRoomState(state)
+				saveAndPublish(state, msg)
 				log.Printf("[ACTION] Client %s VOLUME=%.2f\n", clientIP, vol)
 			}
 
@@ -197,8 +198,8 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 				}
 				item["id"] = float64(time.Now().UnixNano())
 				state.Queue = append(state.Queue, item)
-				SaveRoomState(state)
-				msg = map[string]interface{}{"action": "queue_update", "queue": state.Queue}
+				broadcastMsg := map[string]interface{}{"action": "queue_update", "queue": state.Queue}
+				saveAndPublish(state, broadcastMsg)
 				log.Printf("[ACTION] Client %s enqueued: %v\n", clientIP, item["path"])
 			}
 
@@ -210,8 +211,8 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 				state.Queue, removed = removeQueueByIndex(state.Queue, int(idx))
 			}
 			if removed {
-				SaveRoomState(state)
-				msg = map[string]interface{}{"action": "queue_update", "queue": state.Queue}
+				broadcastMsg := map[string]interface{}{"action": "queue_update", "queue": state.Queue}
+				saveAndPublish(state, broadcastMsg)
 				log.Printf("[ACTION] Client %s dequeued\n", clientIP)
 			}
 
@@ -219,13 +220,11 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 			if fromF, ok1 := msg["from"].(float64); ok1 {
 				if toF, ok2 := msg["to"].(float64); ok2 {
 					state.Queue = moveQueueItem(state.Queue, int(fromF), int(toF))
-					SaveRoomState(state)
-					msg = map[string]interface{}{"action": "queue_update", "queue": state.Queue}
+					broadcastMsg := map[string]interface{}{"action": "queue_update", "queue": state.Queue}
+					saveAndPublish(state, broadcastMsg)
 					log.Printf("[ACTION] Client %s moved queue %d→%d\n", clientIP, int(fromF), int(toF))
 				}
 			}
 		}
-
-		publishEvent(msg)
 	})
 }

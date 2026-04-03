@@ -1,31 +1,74 @@
 /**
  * Server message handler (downstream sync).
- * Applies server-authoritative state to the local audio element.
+ *
+ * Drift correction strategy (adaptive, based on drift magnitude):
+ *   < 0.05s  → ignore (within human perception threshold)
+ *   0.05–0.5s → ±2% playbackRate  (completely inaudible, corrects in ~25s)
+ *   0.5–2.0s  → ±5% playbackRate  (barely perceptible, corrects in ~10s)
+ *   > 2.0s    → hard seek          (necessary, happens rarely)
+ *
+ * The continuous drift loop runs every 500ms independently of server events,
+ * so sync is maintained even between messages.
  */
 
 import { Utils } from '../ui.js';
 import { updateShuffleUI, updateRepeatUI } from './controls.js';
 import { softSyncThreshold, savePlayerState } from './state.js';
 
-export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlaying, updatePositionState }) {
+export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlaying, updatePositionState, precacheNextTracks }) {
     const { volumeSlider } = dom;
 
+    // ── Clock offset helper ──────────────────────────────────────────────────
+
     /**
-     * Adjust a raw server timestamp to account for network latency.
+     * Given a server message, estimate the current correct playback position.
+     * Uses server_ts (when server sent) + elapsed since then.
      */
     const withOffset = (msg) => {
         if (msg.server_ts && socket.getServerTime && msg.action !== 'pause') {
-            let elapsed = (socket.getServerTime() - msg.server_ts) / 1000;
-            // Removed clamping since jitter is smoothed by EMA RTT
-            return msg.time + elapsed;
+            const elapsed = (socket.getServerTime() - msg.server_ts) / 1000;
+            return msg.time + Math.max(0, elapsed); // never go negative
         }
         return msg.time;
     };
+
+    // ── Continuous drift correction loop ─────────────────────────────────────
+
+    setInterval(() => {
+        if (!state.hasJoined || !state.shouldBePlaying || audio.paused) {
+            // Restore rate if paused externally
+            if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0;
+            return;
+        }
+        if (!state.syncReceivedTime || !state.syncAudioTime) return;
+
+        const elapsed = (Date.now() - state.syncReceivedTime) / 1000;
+        const expectedTime = state.syncAudioTime + elapsed;
+        const drift = audio.currentTime - expectedTime; // + = ahead, - = behind
+        const absDrift = Math.abs(drift);
+
+        if (absDrift < 0.05) {
+            if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0; // snap back
+        } else if (absDrift < 0.5) {
+            // ±2% — inaudible
+            audio.playbackRate = drift > 0 ? 0.98 : 1.02;
+        } else if (absDrift < 2.0) {
+            // ±5% — corrects 1s in ~20s (barely perceptible)
+            audio.playbackRate = drift > 0 ? 0.95 : 1.05;
+        } else {
+            // Large drift — hard seek, snap playbackRate
+            audio.currentTime = expectedTime;
+            audio.playbackRate = 1.0;
+        }
+    }, 500);
+
+    // ── Message dispatcher ───────────────────────────────────────────────────
 
     const handleSocketMessage = (msg) => {
         const offsetTime = withOffset(msg);
 
         switch (msg.action) {
+
             case 'sync': {
                 if (msg.queue !== undefined) {
                     state.globalQueue = msg.queue || [];
@@ -44,12 +87,11 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
                     state.currentSongPath = msg.song;
                     updateNowPlaying(state.currentSongPath);
                     savePlayerState(msg.song, msg.folder);
+                    if (precacheNextTracks) precacheNextTracks();
                 }
 
-                const drift = Math.abs(audio.currentTime - offsetTime);
-                if (songChanged || drift > softSyncThreshold) {
-                    audio.currentTime = offsetTime;
-                }
+                // On initial sync — prefer hard seek to exactly the right position
+                audio.currentTime = offsetTime;
 
                 state.syncReceivedTime = Date.now();
                 state.syncAudioTime = offsetTime;
@@ -84,10 +126,10 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
                 if (state.pendingEagerPaths.length > 0) {
                     const idx = state.pendingEagerPaths.lastIndexOf(msg.song);
                     if (idx !== -1) {
-                        if (idx < state.pendingEagerPaths.length - 1) return; // stale echo
+                        if (idx < state.pendingEagerPaths.length - 1) return;
                         state.pendingEagerPaths = [];
                     } else {
-                        state.pendingEagerPaths = []; // authoritative override from another client
+                        state.pendingEagerPaths = [];
                     }
                 }
 
@@ -95,7 +137,8 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
                     state.playedHistory.push(state.currentSongPath);
                     state.forwardHistory = [];
                 } else if (msg.isPrev) {
-                    if (state.playedHistory.length > 0 && state.playedHistory[state.playedHistory.length - 1] === msg.song) {
+                    if (state.playedHistory.length > 0 &&
+                        state.playedHistory[state.playedHistory.length - 1] === msg.song) {
                         state.playedHistory.pop();
                     }
                 }
@@ -106,7 +149,10 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
                     updateNowPlaying(state.currentSongPath);
                     savePlayerState(msg.song, msg.folder);
                 }
+                state.syncReceivedTime = Date.now();
+                state.syncAudioTime = 0;
                 state.shouldBePlaying = true;
+                audio.playbackRate = 1.0; // reset rate on new track
                 if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
                 forcePlay();
                 break;
@@ -114,7 +160,11 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
 
             case 'play': {
                 const drift = Math.abs(audio.currentTime - offsetTime);
-                if (state.hasJoined && drift > softSyncThreshold) audio.currentTime = offsetTime;
+                // Only hard-seek if very large drift at play event — let continuous loop handle small
+                if (state.hasJoined && drift > 2.0) {
+                    audio.currentTime = offsetTime;
+                    audio.playbackRate = 1.0;
+                }
                 state.shouldBePlaying = true;
                 state.syncAudioTime = offsetTime;
                 state.syncReceivedTime = Date.now();
@@ -124,12 +174,14 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
 
             case 'pause':
                 state.shouldBePlaying = false;
+                audio.playbackRate = 1.0; // always restore on pause
                 if (state.hasJoined) { audio.pause(); audio.currentTime = msg.time; }
                 state.syncAudioTime = msg.time;
                 state.syncReceivedTime = Date.now();
                 break;
 
             case 'seek':
+                audio.playbackRate = 1.0;
                 if (state.hasJoined) audio.currentTime = offsetTime;
                 state.shouldBePlaying = msg.isPlaying === undefined ? true : msg.isPlaying;
                 state.lastKnownTime = -1;
@@ -159,6 +211,8 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
         }
     };
 
+    // ── Join handler ─────────────────────────────────────────────────────────
+
     const handleJoinUserInit = () => {
         state.hasJoined = true;
         state.pendingPlay = false;
@@ -166,13 +220,13 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
         let waitSeconds = state.shouldBePlaying ? (Date.now() - state.syncReceivedTime) / 1000 : 0;
         let targetTime = state.syncAudioTime + waitSeconds;
 
-        // Clamp to avoid instantly firing onended due to network lag
         if (audio.duration && targetTime >= audio.duration) {
             targetTime = Math.max(0, audio.duration - 0.5);
         }
 
         audio.currentTime = targetTime;
-        if (state.shouldBePlaying) audio.play().catch(e => console.error('Play error:', e));
+        audio.playbackRate = 1.0;
+        if (state.shouldBePlaying) audio.play().catch((e) => console.error('Play error:', e));
     };
 
     return { handleSocketMessage, handleJoinUserInit };
