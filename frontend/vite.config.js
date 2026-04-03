@@ -1,19 +1,19 @@
 import { defineConfig } from 'vite';
-import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig({
-    plugins: [
+// vite-plugin-pwa is only needed in production builds (generates precache manifest).
+// In dev mode (Vite HMR) we skip it entirely to avoid unnecessary complexity.
+const isProduction = process.env.NODE_ENV === 'production';
+
+const plugins = [];
+
+if (isProduction) {
+    // Dynamically import to avoid crashing dev server if the package isn't installed
+    const { VitePWA } = await import('vite-plugin-pwa');
+    plugins.push(
         VitePWA({
-            // Use our hand-crafted sw.js as the base, but inject the precache manifest into it
             strategies: 'injectManifest',
             srcDir: '.',
             filename: 'sw.js',
-            // In dev (Vite HMR), register the SW but don't activate it automatically
-            // so hot reload still works normally
-            devOptions: {
-                enabled: true,
-                type: 'module',
-            },
             manifest: {
                 name: 'SyncMusic',
                 short_name: 'SyncMusic',
@@ -28,14 +28,16 @@ export default defineConfig({
                 ],
             },
             injectManifest: {
-                // Files to precache — inject Vite-generated asset list into sw.js
                 globDirectory: 'dist',
                 globPatterns: ['**/*.{js,css,html,png,ico,json,woff2}'],
-                // Inject into the placeholder in sw.js
                 injectionPoint: 'self.__WB_MANIFEST',
             },
-        }),
-    ],
+        })
+    );
+}
+
+export default defineConfig({
+    plugins,
     server: {
         host: '0.0.0.0',
         port: 5173,
