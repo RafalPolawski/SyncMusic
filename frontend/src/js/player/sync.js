@@ -5,7 +5,7 @@
 
 import { Utils } from '../ui.js';
 import { updateShuffleUI, updateRepeatUI } from './controls.js';
-import { softSyncThreshold } from './state.js';
+import { softSyncThreshold, savePlayerState } from './state.js';
 
 export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlaying, updatePositionState }) {
     const { volumeSlider } = dom;
@@ -43,6 +43,7 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
                     audio.src = '/music/' + Utils.encodePath(msg.song);
                     state.currentSongPath = msg.song;
                     updateNowPlaying(state.currentSongPath);
+                    savePlayerState(msg.song, msg.folder);
                 }
 
                 const drift = Math.abs(audio.currentTime - offsetTime);
@@ -103,6 +104,7 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
                     audio.src = '/music/' + Utils.encodePath(msg.song);
                     state.currentSongPath = msg.song;
                     updateNowPlaying(state.currentSongPath);
+                    savePlayerState(msg.song, msg.folder);
                 }
                 state.shouldBePlaying = true;
                 if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';

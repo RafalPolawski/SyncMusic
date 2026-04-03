@@ -39,12 +39,16 @@ document.addEventListener("DOMContentLoaded", () => {
     socket.onRttUpdate = (rtt) => {
         if (!UI.rttIndicator) return;
         UI.rttIndicator.style.display = 'inline-flex';
-        UI.rttValue.textContent = `${Math.round(rtt)}ms`;
-
         let color = '#1DB954';
-        if (rtt > 50 && rtt <= 150) color = '#f0c040';
-        else if (rtt > 150 && rtt <= 300) color = '#e07820';
-        else if (rtt > 300) color = '#e03030';
+        if (rtt === "OFFLINE") {
+            UI.rttValue.textContent = "OFFLINE";
+            color = '#888888';
+        } else {
+            UI.rttValue.textContent = `${Math.round(rtt)}ms`;
+            if (rtt > 50 && rtt <= 150) color = '#f0c040';
+            else if (rtt > 150 && rtt <= 300) color = '#e07820';
+            else if (rtt > 300) color = '#e03030';
+        }
 
         UI.rttDot.style.background = color;
         UI.rttDot.style.transform = 'scale(1.5)';

@@ -13,6 +13,19 @@ export function setSyncThreshold(val) {
     }
 }
 
+/** Persist key player state across page reloads */
+export function savePlayerState(path, folder) {
+    if (path) localStorage.setItem('syncMusicLastPath', path);
+    if (folder) localStorage.setItem('syncMusicLastFolder', folder);
+}
+
+export function loadPlayerState() {
+    return {
+        lastPath:   localStorage.getItem('syncMusicLastPath'),
+        lastFolder: localStorage.getItem('syncMusicLastFolder'),
+    };
+}
+
 /**
  * Creates an initial player state bag shared across all sub-modules.
  */

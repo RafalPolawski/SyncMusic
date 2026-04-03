@@ -30,8 +30,10 @@ export class SyncWebTransport {
         }
 
         try {
-            // First fetch the self-signed certificate hash from the Go API
-            const response = await fetch('/api/cert-hash?t=' + Date.now());
+            // Fetch self-signed cert hash — required to open WebTransport
+            // When offline this will fail immediately and trigger reconnect()
+            const response = await fetch('/api/cert-hash?t=' + Date.now(), { signal: AbortSignal.timeout(4000) });
+            if (!response.ok) throw new Error('cert-hash non-OK: ' + response.status);
             const data = await response.json();
             const hexHash = data.hash;
 
@@ -61,12 +63,18 @@ export class SyncWebTransport {
 
             this.serverTimeOffset = 0;
             this.rtt = 0;
+            this.lastPongTime = Date.now();
 
             // Read from the stream
             this.readStream(stream.readable);
 
             // Start pinging for latency measurement
             this.pingInterval = setInterval(() => {
+                if (Date.now() - this.lastPongTime > 6000) {
+                    console.log("Ping timeout, assuming OFFLINE");
+                    this.reconnect();
+                    return;
+                }
                 this.sendCommand("ping", { clientTime: Date.now() });
             }, 3000);
             this.sendCommand("ping", { clientTime: Date.now() });
@@ -94,11 +102,16 @@ export class SyncWebTransport {
     reconnect() {
         if (this.reconnecting) return;
         this.reconnecting = true;
-        
+
+        if (this.onRttUpdate) this.onRttUpdate("OFFLINE");
+        const statusEl = document.getElementById('status');
+        if (statusEl) { statusEl.innerText = 'OFFLINE ❌'; statusEl.style.color = '#888'; }
+
         if (this.transport) {
             try { this.transport.close(); } catch (e) {}
             this.transport = null;
         }
+        this.writer = null;
         if (this.pingInterval) {
             clearInterval(this.pingInterval);
             this.pingInterval = null;
@@ -130,6 +143,7 @@ export class SyncWebTransport {
                         try {
                             const parsed = JSON.parse(line);
                             if (parsed.action === 'pong') {
+                                this.lastPongTime = Date.now();
                                 const now = Date.now();
                                 const rtt = now - parsed.clientTime;
                                 const currentServerTime = parsed.serverTime + (rtt / 2);
@@ -176,7 +190,22 @@ export class SyncWebTransport {
         if (this.writer) {
             const msg = { action, ...payload };
             const encoded = this._encoder.encode(JSON.stringify(msg) + "\n");
-            this.writer.write(encoded);
+            this.writer.write(encoded).catch(e => {
+                console.error("Write failed:", e);
+                this.reconnect();
+            });
+        } else {
+            // OFFLINE MODE: Simulate server echo
+            const allowedOffline = ['load', 'play', 'pause', 'seek', 'shuffle', 'repeat', 'enqueue', 'dequeue', 'queue_move'];
+            if (allowedOffline.includes(action)) {
+                const simulatedMsg = { action, ...payload };
+                if (action === 'load' || action === 'play' || action === 'pause' || action === 'seek') {
+                    simulatedMsg.server_ts = Date.now();
+                }
+                if (this.onMessageCallback) {
+                    setTimeout(() => this.onMessageCallback(simulatedMsg), 50);
+                }
+            }
         }
     }
 }

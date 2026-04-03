@@ -2,7 +2,7 @@
  * Player factory – assembles all sub-modules into the public player API.
  */
 
-import { createState, softSyncThreshold, setSyncThreshold } from './state.js';
+import { createState, softSyncThreshold, setSyncThreshold, loadPlayerState } from './state.js';
 import { initMediaSession } from './media-session.js';
 import { precacheNextTracks } from './preloader.js';
 import { initControls, updateShuffleUI, updateRepeatUI } from './controls.js';
@@ -38,6 +38,16 @@ export function initPlayer(socket) {
 
     // ── Shared state ──────────────────────────────────────────────────────────
     const state = createState();
+
+    // ── Restore last session from localStorage (works offline) ───────────────
+    const restored = loadPlayerState();
+    if (restored.lastPath) {
+        state.currentSongPath = restored.lastPath;
+        audio.src = '/music/' + restored.lastPath;
+    }
+    if (restored.lastFolder) {
+        state.currentFolderName = restored.lastFolder;
+    }
 
     // ── forcePlay helper (used by several modules) ─────────────────────────
     const forcePlay = () => {
