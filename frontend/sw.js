@@ -4,7 +4,7 @@
 // In dev mode this is an empty array.
 const precacheManifest = self.__WB_MANIFEST || [];
 
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = `syncmusic-cache-${CACHE_VERSION}`;
 
 // Bare minimum shell — only guaranteed to be available at install time.
@@ -82,7 +82,7 @@ self.addEventListener('fetch', (event) => {
 
 /** Cache-first: great for immutable assets (audio files, album art) */
 async function cacheFirst(request) {
-    const cached = await caches.match(request, { ignoreSearch: true });
+    const cached = await caches.match(request); // exact match — ignoreSearch would break cover art
     if (cached) return cached;
     try {
         const res = await fetch(request);

@@ -48,7 +48,11 @@ export const CacheManager = {
     checkCacheStatus: async (songs, cacheBtn, totalSize) => {
         if (!('caches' in window)) return;
         try {
-            const cache = await caches.open('syncmusic-cache-v3');
+            // Find the active SW cache (name may change with versions)
+            const cacheNames = await caches.keys();
+            const activeName = cacheNames.find(n => n.startsWith('syncmusic-cache-')) || null;
+            if (!activeName) return;
+            const cache = await caches.open(activeName);
             const keys = await cache.keys();
             const cachedPaths = new Set(keys.map(r => {
                 const u = new URL(r.url);
