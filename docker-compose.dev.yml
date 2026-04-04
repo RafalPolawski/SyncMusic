@@ -61,9 +61,38 @@ services:
       - syncmusic-backend
       - syncmusic-frontend
 
+  syncmusic-postgres:
+    image: postgres:18-alpine
+    container_name: syncmusic-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: keycloak
+    volumes:
+      - syncmusic_postgres_data:/var/lib/postgresql/data
+
+  syncmusic-keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: syncmusic-keycloak
+    restart: unless-stopped
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://syncmusic-postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: password
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    command: start-dev
+    ports:
+      - "8082:8080"
+    depends_on:
+      - syncmusic-postgres
+
 volumes:
   caddy_data_dev:
   caddy_config_dev:
   syncmusic_db_dev:
   syncmusic_redis_dev:
   frontend_node_modules:
+  syncmusic_postgres_data:
