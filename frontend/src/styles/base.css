@@ -83,6 +83,7 @@ input, textarea {
     display: flex;
     flex-direction: column;
     width: 100%;
+    box-sizing: border-box;
 }
 
 .left-panel {

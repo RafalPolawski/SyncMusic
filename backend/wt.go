@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"log"
-	"time"
 
 	"github.com/quic-go/webtransport-go"
 )
@@ -50,7 +49,7 @@ func handleWTSession(session *webtransport.Session) {
 	if state.CurrentSong != "" {
 		pos := state.CurrentPosition
 		if state.IsPlaying {
-			pos += time.Since(state.LastUpdate).Seconds()
+			pos += NowNTP().Sub(state.LastUpdate).Seconds()
 		}
 		syncMsg := map[string]interface{}{
 			"action":    "sync",

@@ -48,14 +48,14 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
         const drift = audio.currentTime - expectedTime; // + = ahead, - = behind
         const absDrift = Math.abs(drift);
 
-        if (absDrift < 0.05) {
-            if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0; // snap back
-        } else if (absDrift < 0.5) {
-            // ±2% — inaudible
-            audio.playbackRate = drift > 0 ? 0.98 : 1.02;
-        } else if (absDrift < 2.0) {
-            // ±5% — corrects 1s in ~20s (barely perceptible)
+        if (absDrift < 0.015) {
+            if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0; // snap back perfectly
+        } else if (absDrift < 0.15) {
+            // ±5% — fast correction without glitching (corrects 100ms in 2s)
             audio.playbackRate = drift > 0 ? 0.95 : 1.05;
+        } else if (absDrift < 1.5) {
+            // ±10% — aggressive correction
+            audio.playbackRate = drift > 0 ? 0.90 : 1.10;
         } else {
             // Large drift — hard seek, snap playbackRate
             audio.currentTime = expectedTime;
