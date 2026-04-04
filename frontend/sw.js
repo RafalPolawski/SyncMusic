@@ -4,7 +4,7 @@
 // In dev mode this is an empty array.
 const precacheManifest = self.__WB_MANIFEST || [];
 
-const CACHE_VERSION = 'v6';
+const CACHE_VERSION = 'v7';
 const CACHE_NAME = `syncmusic-cache-${CACHE_VERSION}`;
 
 // Bare minimum shell — only guaranteed to be available at install time.

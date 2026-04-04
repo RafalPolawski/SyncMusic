@@ -12,6 +12,20 @@ import (
 	"github.com/dhowden/tag"
 )
 
+// noCoverPlaceholder is served when a song has no embedded album art.
+// Returning 200 + SVG (instead of 404) lets the Service Worker cache it
+// normally and avoids stale 404 responses accumulating in browser caches.
+var noCoverPlaceholder = []byte(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2a2a2a"/>
+      <stop offset="1" stop-color="#1a1a1a"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)" rx="0"/>
+  <text x="256" y="310" font-family="sans-serif" font-size="220" text-anchor="middle" fill="#444">&#9835;</text>
+</svg>`)
+
 // ── Cover art in-memory bounded LRU cache ─────────────────────────────────────
 
 type cachedCover struct {
@@ -99,15 +113,19 @@ func handleGetCover(w http.ResponseWriter, r *http.Request) {
 
 	m, err := tag.ReadFrom(f)
 	if err != nil || m == nil {
-		log.Printf("[WARN] No tags found in: %s (%v)\n", fullPath, err)
-		http.Error(w, "Metadata not found", http.StatusNotFound)
+		log.Printf("[WARN] No tags found in: %s, serving placeholder\n", fullPath)
+		w.Header().Set("Content-Type", "image/svg+xml")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		w.Write(noCoverPlaceholder)
 		return
 	}
 
 	pic := m.Picture()
 	if pic == nil {
-		log.Printf("[INFO] No cover art in: %s\n", fullPath)
-		http.Error(w, "Cover not found", http.StatusNotFound)
+		log.Printf("[INFO] No cover art in: %s, serving placeholder\n", fullPath)
+		w.Header().Set("Content-Type", "image/svg+xml")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		w.Write(noCoverPlaceholder)
 		return
 	}
 

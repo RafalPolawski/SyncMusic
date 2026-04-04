@@ -162,8 +162,19 @@ export function initLibrary(socket, player) {
                         const b = document.createElement('button');
                         b.className  = 'item-btn folder-btn';
                         b.dataset.folder = f;
-                        b.innerHTML  = `📁 ${f} <span style="font-size:12px;opacity:0.6;margin-left:auto;">${groups[f].length}</span>`;
-                        b.onclick    = () => showSongs(f);
+
+                        const icon = document.createTextNode('📁 ');
+                        const name = document.createElement('span');
+                        name.textContent = f; // safe — no XSS
+
+                        const count = document.createElement('span');
+                        count.className = 'folder-count';
+                        count.textContent = groups[f].length;
+
+                        b.appendChild(icon);
+                        b.appendChild(name);
+                        b.appendChild(count);
+                        b.onclick = () => showSongs(f);
                         UI.foldersContainer.appendChild(b);
                     }
 
