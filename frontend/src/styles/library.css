@@ -86,3 +86,68 @@
 .locate-fab:hover { transform: scale(1.1); background: var(--primary-hover); }
 .locate-fab:active { transform: scale(0.9); }
 .locate-fab svg { width: 24px; height: 24px; fill: currentColor; }
+
+/* ── Search ──────────────────────────────────────────────────────────────── */
+.search-container { padding: 0 10px 12px; }
+.search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 10px 14px;
+    transition: border-color 0.2s, background 0.2s;
+}
+.search-wrap:focus-within {
+    border-color: rgba(29,185,84,0.5);
+    background: rgba(255,255,255,0.09);
+    box-shadow: 0 0 0 3px rgba(29,185,84,0.12);
+}
+.search-icon { width: 18px; height: 18px; fill: rgba(255,255,255,0.4); flex-shrink: 0; }
+.search-input {
+    background: transparent;
+    border: none;
+    color: #fff;
+    font-size: 15px;
+    font-family: inherit;
+    outline: none;
+    width: 100%;
+}
+.search-input::placeholder { color: rgba(255,255,255,0.35); }
+.search-empty { color: rgba(255,255,255,0.4); font-size: 14px; padding: 30px 10px; text-align: center; }
+
+/* ── Folder count badge ──────────────────────────────────────────────────── */
+.folder-count { font-size: 12px; opacity: 0.55; margin-left: auto; padding-left: 8px; flex-shrink: 0; }
+
+/* ── Skeleton loading ────────────────────────────────────────────────────── */
+.skeleton-list { display: flex; flex-direction: column; gap: 10px; padding: 10px; }
+.skeleton-item { display: flex; align-items: center; gap: 14px; padding: 10px 12px; border-radius: 12px; background: rgba(255,255,255,0.03); }
+.skeleton-thumb {
+    width: 50px;
+    height: 50px;
+    border-radius: 8px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.06) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.4s infinite;
+    flex-shrink: 0;
+}
+.skeleton-info { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.skeleton-line {
+    height: 12px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.06) 25%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.06) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.4s infinite;
+}
+.skeleton-line.short { height: 10px; }
+@keyframes skeleton-shimmer {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* ── Scan progress ───────────────────────────────────────────────────────── */
+.scan-progress { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 30px 0; color: rgba(255,255,255,0.8); }
+.scan-icon { font-size: 32px; animation: scan-pulse 1.2s ease-in-out infinite; }
+@keyframes scan-pulse { 0%, 100% { opacity: 0.6; transform: scale(1); } 50% { opacity: 1; transform: scale(1.15); } }
+.scan-count { font-size: 20px; font-weight: 700; color: var(--primary); }

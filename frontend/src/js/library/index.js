@@ -1,5 +1,6 @@
 /**
- * library/index.js – orchestrates library loading, folder/song views, history, and join flow.
+ * library/index.js – orchestrates library loading, folder/song views,
+ * history, search, and join flow.
  */
 
 import { fetchSongsLibrary } from '../api.js';
@@ -29,7 +30,7 @@ export function initLibrary(socket, player) {
         activeTrackEl  = null;
 
         if (globalPlayingFolder) {
-            const btn = document.querySelector(`.folder-btn[data-folder="${globalPlayingFolder}"]`);
+            const btn = document.querySelector(`.folder-btn[data-folder="${CSS.escape(globalPlayingFolder)}"]`);
             if (btn) { btn.classList.add('active-folder'); activeFolderEl = btn; }
         }
 
@@ -44,11 +45,9 @@ export function initLibrary(socket, player) {
             });
         }
 
-        if (isTrackVisible && UI.songsContainer.style.display !== 'none') {
-            UI.locateTrackBtn.classList.add('visible');
-        } else {
-            UI.locateTrackBtn.classList.remove('visible');
-        }
+        UI.locateTrackBtn.classList.toggle('visible',
+            isTrackVisible && UI.songsContainer.style.display !== 'none'
+        );
     };
 
     player.onTrackChanged((path, folder) => {
@@ -61,38 +60,59 @@ export function initLibrary(socket, player) {
         document.querySelector('.active-track')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
 
-    // ── Library polling ───────────────────────────────────────────────────────
+    // ── Skeleton loader ───────────────────────────────────────────────────────
+
+    const showSkeleton = () => {
+        UI.loadingIndicator.style.display = 'block';
+        UI.loadingIndicator.innerHTML = `
+            <div class="skeleton-list">
+                ${Array(6).fill(null).map(() => `
+                    <div class="skeleton-item">
+                        <div class="skeleton-thumb"></div>
+                        <div class="skeleton-info">
+                            <div class="skeleton-line" style="width:${45 + Math.random() * 40}%"></div>
+                            <div class="skeleton-line short" style="width:${20 + Math.random() * 25}%"></div>
+                        </div>
+                    </div>`).join('')}
+            </div>`;
+    };
+
+    // ── Library polling w/ exponential back-off ───────────────────────────────
 
     let isPolling = false;
 
     const loadLibrary = () => {
         if (isPolling) return;
         isPolling = true;
+        showSkeleton();
 
-        const poll = () => {
+        const poll = (retryDelay = 1000) => {
             fetchSongsLibrary().then(data => {
-                if (!data) { setTimeout(poll, 2000); return; }
+                if (!data) {
+                    setTimeout(() => poll(Math.min(retryDelay * 2, 8000)), retryDelay);
+                    return;
+                }
 
-                // Still scanning
+                // Still scanning — show progress and retry at 1s
                 if (data.is_scanning === true) {
                     UI.loadingIndicator.style.display = 'block';
                     UI.loadingIndicator.innerHTML = `
-                        <div style="margin-bottom:5px;font-weight:500;">Scanning library...</div>
-                        <div style="font-size:16px;color:#1DB954;font-weight:bold;">
-                            ${data.scan_current} / ${data.scan_total || '?'} tracks
-                        </div>
-                    `;
+                        <div class="scan-progress">
+                            <div class="scan-icon">🔍</div>
+                            <div style="font-weight:600; margin-bottom:4px;">Scanning library…</div>
+                            <div class="scan-count">${data.scan_current} / ${data.scan_total || '?'} tracks</div>
+                        </div>`;
                     UI.joinBtn.disabled   = true;
-                    UI.joinBtn.innerText  = 'SCANNING...';
+                    UI.joinBtn.innerText  = 'SCANNING…';
                     UI.joinBtn.style.opacity = '0.5';
                     UI.joinBtn.style.cursor  = 'not-allowed';
-                    setTimeout(poll, 1000);
+                    setTimeout(() => poll(1000), 1000);
                     return;
                 }
 
                 isPolling = false;
-                UI.joinBtn.disabled   = false;
-                UI.joinBtn.innerText  = 'JOIN SESSION 🎧';
+                UI.joinBtn.disabled      = false;
+                UI.joinBtn.innerText     = 'JOIN SESSION 🎧';
                 UI.joinBtn.style.opacity = '1';
                 UI.joinBtn.style.cursor  = 'pointer';
 
@@ -116,6 +136,10 @@ export function initLibrary(socket, player) {
 
                 player.setCacheGroups(groups);
 
+                // Show search bar and wire it up
+                UI.searchContainer.style.display = 'block';
+                initSearch(songs, groups);
+
                 let savedScrollWindow = 0;
                 let savedScrollPanel  = 0;
                 let currentView       = 'root';
@@ -133,7 +157,7 @@ export function initLibrary(socket, player) {
                     UI.foldersContainer.innerHTML     = '';
                     UI.settingsActionContainer.innerHTML = '';
 
-                    // Cache library button (whole library)
+                    // Cache library button
                     createCacheWidget({
                         container: UI.settingsActionContainer,
                         cacheId:   'library',
@@ -148,7 +172,7 @@ export function initLibrary(socket, player) {
                     rescanBtn.style.cssText = 'background:rgba(255,100,100,0.12);color:#ff6b6b;border-color:rgba(255,100,100,0.35);';
                     rescanBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg> Rescan Library`;
                     rescanBtn.onclick = () => {
-                        if (!confirm('Are you sure you want to rescan the music directory? This may take a moment.')) return;
+                        if (!confirm('Are you sure you want to rescan the music directory?')) return;
                         fetch('/api/rescan').then(() => {
                             isPolling = false;
                             UI.settingsOverlay.style.display = 'none';
@@ -163,17 +187,17 @@ export function initLibrary(socket, player) {
                         b.className  = 'item-btn folder-btn';
                         b.dataset.folder = f;
 
-                        const icon = document.createTextNode('📁 ');
-                        const name = document.createElement('span');
-                        name.textContent = f; // safe — no XSS
+                        b.appendChild(document.createTextNode('📁 '));
 
-                        const count = document.createElement('span');
-                        count.className = 'folder-count';
-                        count.textContent = groups[f].length;
+                        const nameSpan = document.createElement('span');
+                        nameSpan.textContent = f;
+                        b.appendChild(nameSpan);
 
-                        b.appendChild(icon);
-                        b.appendChild(name);
-                        b.appendChild(count);
+                        const countSpan = document.createElement('span');
+                        countSpan.className = 'folder-count';
+                        countSpan.textContent = groups[f].length;
+                        b.appendChild(countSpan);
+
                         b.onclick = () => showSongs(f);
                         UI.foldersContainer.appendChild(b);
                     }
@@ -200,7 +224,6 @@ export function initLibrary(socket, player) {
 
                     const playlistSize = groups[f].reduce((acc, s) => acc + s.size, 0);
 
-                    // Cache button for this folder (prepended before the track list)
                     const cacheContainer = document.createElement('div');
                     UI.songsContainer.innerHTML = '';
                     UI.songsContainer.appendChild(cacheContainer);
@@ -213,7 +236,6 @@ export function initLibrary(socket, player) {
                         label:     `Cache for offline (~${Utils.formatBytes(playlistSize)})`,
                     });
 
-                    // Track rows
                     renderSongsView(
                         f,
                         groups[f],
@@ -228,6 +250,7 @@ export function initLibrary(socket, player) {
                     );
 
                     updateHighlights();
+                    CacheManager.checkCacheStatus(groups[f], null, playlistSize);
 
                     window.scrollTo(0, 0);
                     if (rp) rp.scrollTo(0, 0);
@@ -236,7 +259,6 @@ export function initLibrary(socket, player) {
                 // ── History / back button ─────────────────────────────────────
 
                 showFolders(true);
-
                 UI.backBtn.onclick = () => history.back();
                 UI.backBtn.addEventListener('click', () => setTimeout(updateHighlights, 50));
                 updateHighlights();
@@ -263,11 +285,9 @@ export function initLibrary(socket, player) {
                 UI.joinBtn.onclick = () => {
                     let nick = UI.nicknameInput.value.trim() || 'Anonymous Music Lover';
                     localStorage.setItem('syncMusicNick', nick);
-
                     history.replaceState({ view: 'exit' }, '');
                     history.pushState({ view: 'root' }, '');
                     currentView = 'root';
-
                     socket.sendCommand('join', { nickname: nick });
                     UI.overlay.style.display = 'none';
                     player.handleJoinUserInit();
@@ -279,13 +299,121 @@ export function initLibrary(socket, player) {
                 };
 
             }).catch(err => {
-                console.error('Failed to fetch library, retrying in 2s...', err);
+                console.error('Failed to fetch library, retrying…', err);
                 isPolling = false;
-                setTimeout(poll, 2000);
+                setTimeout(() => poll(Math.min(retryDelay * 2, 8000)), retryDelay);
             });
         };
 
         poll();
+    };
+
+    // ── Search ────────────────────────────────────────────────────────────────
+
+    const initSearch = (songs, groups) => {
+        if (!UI.searchInput) return;
+        let searchDebounce = null;
+
+        UI.searchInput.addEventListener('input', () => {
+            clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(() => runSearch(songs, groups), 200);
+        });
+
+        // Clear search when navigating away
+        UI.searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                UI.searchInput.value = '';
+                clearSearch();
+            }
+        });
+    };
+
+    const runSearch = (songs, groups) => {
+        const q = UI.searchInput.value.trim().toLowerCase();
+
+        if (!q) { clearSearch(); return; }
+
+        const matched = songs.filter(s =>
+            s.title.toLowerCase().includes(q) ||
+            s.artist.toLowerCase().includes(q) ||
+            s.path.toLowerCase().includes(q)
+        );
+
+        UI.foldersContainer.style.display = 'none';
+        UI.songsContainer.style.display   = 'none';
+        UI.backBtn.style.display          = 'none';
+        UI.searchResults.style.display    = 'block';
+        UI.locateTrackBtn.classList.remove('visible');
+
+        UI.searchResults.innerHTML = '';
+
+        if (matched.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'search-empty';
+            empty.textContent = 'No tracks found.';
+            UI.searchResults.appendChild(empty);
+            return;
+        }
+
+        matched.forEach(s => {
+            const parts  = s.path.split('/');
+            const folder = parts.length > 1 ? parts[0] : 'Loose Tracks';
+
+            const row = document.createElement('div');
+            row.className = 'item-btn';
+            row.dataset.path = s.path;
+
+            const img = document.createElement('img');
+            img.className = 'song-thumb';
+            img.loading = 'lazy';
+            img.width = 50;
+            img.height = 50;
+            img.alt = '';
+            img.src = `/api/cover?song=${encodeURIComponent(s.path)}`;
+
+            const info = document.createElement('div');
+            info.className = 'song-info';
+
+            const nameEl = document.createElement('span');
+            nameEl.className = 'song-name';
+            nameEl.textContent = s.title;
+
+            const artistEl = document.createElement('span');
+            artistEl.className = 'song-artist';
+            artistEl.textContent = `${s.artist} · ${folder}`;
+
+            info.appendChild(nameEl);
+            info.appendChild(artistEl);
+
+            const addBtn = document.createElement('button');
+            addBtn.className = 'add-queue-btn';
+            addBtn.title = 'Add to Queue';
+            addBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>';
+
+            row.appendChild(img);
+            row.appendChild(info);
+            row.appendChild(addBtn);
+
+            row.onclick = (e) => {
+                if (e.target.closest('.add-queue-btn')) {
+                    socket.sendCommand('enqueue', { item: { path: s.path, title: s.title, artist: s.artist } });
+                    const original = addBtn.innerHTML;
+                    addBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>';
+                    addBtn.style.color = '#1DB954';
+                    setTimeout(() => { addBtn.innerHTML = original; addBtn.style.color = ''; }, 1000);
+                    return;
+                }
+                socket.sendCommand('load', { song: s.path, folder });
+            };
+
+            UI.searchResults.appendChild(row);
+        });
+    };
+
+    const clearSearch = () => {
+        UI.searchResults.style.display = 'none';
+        UI.searchResults.innerHTML = '';
+        UI.foldersContainer.style.display = 'block';
     };
 
     loadLibrary();

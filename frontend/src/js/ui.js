@@ -25,7 +25,10 @@ export const initUI = () => {
         rttIndicator: document.getElementById('rttIndicator'),
         rttDot: document.getElementById('rttDot'),
         rttValue: document.getElementById('rttValue'),
-        usersList: document.getElementById("usersList")
+        usersList: document.getElementById("usersList"),
+        searchContainer: document.getElementById('searchContainer'),
+        searchInput: document.getElementById('searchInput'),
+        searchResults: document.getElementById('searchResults')
     });
 };
 
