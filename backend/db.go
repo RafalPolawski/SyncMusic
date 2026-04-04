@@ -13,7 +13,7 @@ import (
 )
 
 var db *sql.DB
-var dbMutex sync.Mutex
+var dbMu sync.RWMutex // RWMutex: concurrent reads OK, exclusive for writes
 
 type ScanStatus struct {
 	IsScanning  bool `json:"is_scanning"`
@@ -89,9 +89,9 @@ func scanLibraryToDB() {
 	coverCacheMutex.Unlock()
 
 	// Clear existing tracks (rebuild is fast enough with SQLite)
-	dbMutex.Lock()
+	dbMu.Lock()
 	_, err := db.Exec("DELETE FROM songs")
-	dbMutex.Unlock()
+	dbMu.Unlock()
 
 	if err != nil {
 		log.Printf("[ERROR] Failed to clear DB before rescan: %v\n", err)
@@ -197,9 +197,9 @@ func scanLibraryToDB() {
 
 	wg.Wait()
 
-	// Only hold dbMutex for the transaction itself, not the entire parallel scan
-	dbMutex.Lock()
-	defer dbMutex.Unlock()
+	// Only hold dbMu for the transaction itself, not the entire parallel scan
+	dbMu.Lock()
+	defer dbMu.Unlock()
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -231,8 +231,8 @@ func scanLibraryToDB() {
 }
 
 func getSongsFromDB() ([]SongMeta, error) {
-	dbMutex.Lock()
-	defer dbMutex.Unlock()
+	dbMu.RLock() // shared read lock — safe to run concurrently with other reads
+	defer dbMu.RUnlock()
 
 	rows, err := db.Query("SELECT path, title, artist, size FROM songs ORDER BY folder, title")
 	if err != nil {

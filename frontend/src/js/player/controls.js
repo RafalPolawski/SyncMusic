@@ -65,13 +65,19 @@ export function initControls(audio, dom, state, socket, { updatePositionState, u
 
     audio.onended = () => playNext(true);
 
-    // Keep-alive watchdog: re-triggers play if audio stalls while it should be playing
+    // Keep-alive watchdog: re-triggers play if audio stalls while it should be playing.
+    // A 2-second cooldown prevents rapid forcePlay() calls from causing jitter.
+    let watchdogLastForced = 0;
     setInterval(() => {
         if (!state.hasJoined || !state.shouldBePlaying) return;
-        if (audio.readyState < 3) return;
+        if (audio.readyState < 3) return; // not enough data buffered yet
         const isActuallyMoving = audio.currentTime > state.lastKnownTime;
         state.lastKnownTime = audio.currentTime;
-        if (audio.paused || !isActuallyMoving) forcePlay();
+        const now = Date.now();
+        if ((audio.paused || !isActuallyMoving) && now - watchdogLastForced > 2000) {
+            watchdogLastForced = now;
+            forcePlay();
+        }
     }, 800);
 
     // ── Play / Pause ──────────────────────────────────────────────────────────
@@ -136,12 +142,17 @@ export function initControls(audio, dom, state, socket, { updatePositionState, u
         };
     }
 
+    let volumeThrottle = null;
     volumeSlider.addEventListener('input', () => {
         state.isMuted = false;
         audio.volume = volumeSlider.value;
         localStorage.setItem('syncMusicVolume', volumeSlider.value);
-        socket.sendCommand('volume', { level: parseFloat(volumeSlider.value) });
         updateVolumeIcon();
+        // Debounce: send volume command max once per 150ms (avoids flooding on drag)
+        clearTimeout(volumeThrottle);
+        volumeThrottle = setTimeout(() => {
+            socket.sendCommand('volume', { level: parseFloat(volumeSlider.value) });
+        }, 150);
     });
 
     // ── Shuffle / Repeat ──────────────────────────────────────────────────────
