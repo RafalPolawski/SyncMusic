@@ -41,7 +41,7 @@ export class SyncWebTransport {
     async connect() {
         if (typeof WebTransport === 'undefined') {
             const s = document.getElementById('status');
-            if (s) { s.innerText = 'Error: WebTransport requires HTTPS'; s.style.color = 'red'; }
+            if (s) { s.innerText = 'Error HTTPS'; s.style.color = 'red'; }
             console.error('WebTransport not available — ensure HTTPS.');
             return;
         }
@@ -65,7 +65,7 @@ export class SyncWebTransport {
             await this.transport.ready;
 
             const statusEl = document.getElementById('status');
-            if (statusEl) { statusEl.innerText = 'Connected (UDP HTTP/3) 🟢'; statusEl.style.color = '#1DB954'; }
+            if (statusEl) { statusEl.innerText = 'Connected'; statusEl.style.color = '#1DB954'; }
 
             const stream = await this.transport.createBidirectionalStream();
             this.writer = stream.writable.getWriter();
@@ -97,7 +97,7 @@ export class SyncWebTransport {
 
         if (this.onRttUpdate) this.onRttUpdate('OFFLINE');
         const statusEl = document.getElementById('status');
-        if (statusEl) { statusEl.innerText = 'OFFLINE ❌'; statusEl.style.color = '#888'; }
+        if (statusEl) { statusEl.innerText = 'OFFLINE'; statusEl.style.color = '#888'; }
 
         if (this.transport) { try { this.transport.close(); } catch (e) {} this.transport = null; }
         this.writer = null;
