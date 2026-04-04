@@ -59,15 +59,21 @@ export const CacheManager = {
                 if (u.pathname.startsWith('/music/')) {
                     return decodeURIComponent(u.pathname.slice('/music/'.length));
                 }
+                if (u.pathname.startsWith('/api/cover')) {
+                    // Also track covers so we know they are cached
+                    return u.searchParams.get('song');
+                }
                 return null;
             }).filter(Boolean));
             let cachedCount = 0;
             songs.forEach(s => {
-                const isCached = cachedPaths.has(Utils.encodePath(s.path)) || cachedPaths.has(s.path);
+                // If the path exists in cachedPaths, it means BOTH the song and the cover were requested,
+                // but checking the audio path is the primary indicator.
+                const isCached = cachedPaths.has(s.path) || cachedPaths.has(Utils.encodePath(s.path));
                 if (isCached) {
                     cachedCount++;
                     const badge = document.querySelector(`.cache-badge[data-path="${CSS.escape(s.path)}"]`);
-                    if (badge) { badge.classList.add('cached'); badge.textContent = '✓'; }
+                    if (badge) { badge.classList.remove('caching'); badge.classList.add('cached'); badge.textContent = '✓'; }
                 }
             });
             // If every song is already cached, reflect that on the button

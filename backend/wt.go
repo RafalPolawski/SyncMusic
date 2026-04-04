@@ -56,8 +56,9 @@ func handleWTSession(session *webtransport.Session) {
 			"action":    "sync",
 			"song":      state.CurrentSong,
 			"time":      pos,
-			"server_ts": time.Now().UnixMilli(),
+			"server_ts": NowNTP().UnixMilli(),
 			"isPlaying": state.IsPlaying,
+
 			"isShuffle": state.IsShuffleGlobal,
 			"isRepeat":  state.IsRepeatGlobal,
 			"folder":    state.CurrentFolder,
@@ -103,9 +104,10 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 			pong := map[string]interface{}{
 				"action":     "pong",
 				"clientTime": clientTime,
-				"serverTime": time.Now().UnixMilli(),
+				"serverTime": NowNTP().UnixMilli(),
 				"pingKey":    msg["pingKey"], // echo back for accurate RTT tracking
 			}
+
 			b, _ := json.Marshal(pong)
 			client.SendNonBlocking(append(b, '\n'))
 		}
@@ -128,13 +130,13 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 				state.CurrentSong = s
 				state.CurrentPosition = 0
 				state.IsPlaying = true
-				state.LastUpdate = time.Now()
+				state.LastUpdate = NowNTP()
 				log.Printf("[ACTION] Client %s loaded: %s\n", clientIP, s)
 			}
 			if f, ok := msg["folder"].(string); ok {
 				state.CurrentFolder = f
 			}
-			msg["server_ts"] = time.Now().UnixMilli()
+			msg["server_ts"] = NowNTP().UnixMilli()
 			saveAndPublish(state, msg)
 
 		case "play":
@@ -142,8 +144,8 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 				state.CurrentPosition = t
 			}
 			state.IsPlaying = true
-			state.LastUpdate = time.Now()
-			msg["server_ts"] = time.Now().UnixMilli()
+			state.LastUpdate = NowNTP()
+			msg["server_ts"] = NowNTP().UnixMilli()
 			saveAndPublish(state, msg)
 			log.Printf("[ACTION] Client %s PLAY at %.2fs\n", clientIP, state.CurrentPosition)
 
@@ -152,21 +154,21 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 				state.CurrentPosition = t
 			}
 			state.IsPlaying = false
-			state.LastUpdate = time.Now()
-			msg["server_ts"] = time.Now().UnixMilli()
+			state.LastUpdate = NowNTP()
+			msg["server_ts"] = NowNTP().UnixMilli()
 			saveAndPublish(state, msg)
 			log.Printf("[ACTION] Client %s PAUSE at %.2fs\n", clientIP, state.CurrentPosition)
 
 		case "seek":
 			if t, ok := msg["time"].(float64); ok {
 				state.CurrentPosition = t
-				state.LastUpdate = time.Now()
+				state.LastUpdate = NowNTP()
 				log.Printf("[ACTION] Client %s SEEK to %.2fs\n", clientIP, t)
 			}
 			if playing, ok := msg["isPlaying"].(bool); ok {
 				state.IsPlaying = playing
 			}
-			msg["server_ts"] = time.Now().UnixMilli()
+			msg["server_ts"] = NowNTP().UnixMilli()
 			saveAndPublish(state, msg)
 
 		case "shuffle":
@@ -196,7 +198,7 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 					log.Printf("[ACTION] Client %s enqueue rejected (queue full)\n", clientIP)
 					return
 				}
-				item["id"] = float64(time.Now().UnixNano())
+				item["id"] = float64(NowNTP().UnixNano())
 				state.Queue = append(state.Queue, item)
 				broadcastMsg := map[string]interface{}{"action": "queue_update", "queue": state.Queue}
 				saveAndPublish(state, broadcastMsg)

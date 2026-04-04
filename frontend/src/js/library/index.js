@@ -80,6 +80,7 @@ export function initLibrary(socket, player) {
     // ── Library polling w/ exponential back-off ───────────────────────────────
 
     let isPolling = false;
+    let wasScanning = false; // track if we were just scanning
 
     const loadLibrary = () => {
         if (isPolling) return;
@@ -95,12 +96,22 @@ export function initLibrary(socket, player) {
 
                 // Still scanning — show progress and retry at 1s
                 if (data.is_scanning === true) {
+                    wasScanning = true;
+                    const c = data.scan_current || 0;
+                    const t = data.scan_total || 1;
+                    const pct = Math.min(100, Math.round((c / t) * 100));
+
                     UI.loadingIndicator.style.display = 'block';
                     UI.loadingIndicator.innerHTML = `
-                        <div class="scan-progress">
-                            <div class="scan-icon">🔍</div>
-                            <div style="font-weight:600; margin-bottom:4px;">Scanning library…</div>
-                            <div class="scan-count">${data.scan_current} / ${data.scan_total || '?'} tracks</div>
+                        <div class="scan-progress" style="width: 100%; max-width: 300px; margin: 0 auto; text-align: left;">
+                            <div style="font-weight:600; margin-bottom:10px; display:flex; justify-content:space-between;">
+                                <span><span class="scan-icon">🔍</span> Scanning library…</span>
+                                <span style="color:var(--primary);">${pct}%</span>
+                            </div>
+                            <div style="width:100%; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+                                <div style="width:${pct}%; height:100%; background:var(--primary); transition:width 0.3s ease;"></div>
+                            </div>
+                            <div class="scan-count" style="margin-top:8px; font-size:13px; color:rgba(255,255,255,0.5);">${c} files found</div>
                         </div>`;
                     UI.joinBtn.disabled   = true;
                     UI.joinBtn.innerText  = 'SCANNING…';
@@ -282,7 +293,7 @@ export function initLibrary(socket, player) {
 
                 // ── Join button ───────────────────────────────────────────────
 
-                UI.joinBtn.onclick = () => {
+                const performJoin = () => {
                     let nick = UI.nicknameInput.value.trim() || 'Anonymous Music Lover';
                     localStorage.setItem('syncMusicNick', nick);
                     history.replaceState({ view: 'exit' }, '');
@@ -292,6 +303,13 @@ export function initLibrary(socket, player) {
                     UI.overlay.style.display = 'none';
                     player.handleJoinUserInit();
                 };
+
+                UI.joinBtn.onclick = performJoin;
+
+                if (wasScanning) {
+                    wasScanning = false;
+                    setTimeout(performJoin, 300); // Auto-jump into the app without clicking
+                }
 
                 socket.onReconnect = () => {
                     const nick = localStorage.getItem('syncMusicNick');

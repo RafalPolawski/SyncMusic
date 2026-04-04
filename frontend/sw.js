@@ -161,27 +161,26 @@ self.addEventListener('message', (event) => {
         );
     };
 
-    const BATCH = 3;
-
     const process = async () => {
         const cache = await caches.open(CACHE_NAME);
-        for (let i = 0; i < urls.length; i += BATCH) {
-            await Promise.all(
-                urls.slice(i, i + BATCH).map(async (urlStr) => {
-                    const req = new Request(urlStr);
-                    if (await cache.match(req)) {
-                        notify('cache_progress', { url: urlStr });
-                        return;
-                    }
-                    try {
-                        const res = await fetch(req);
-                        if (res && res.status === 200) await cache.put(req, res.clone());
-                    } catch (e) {
-                        console.warn('[SW] cache_playlist failed:', urlStr, e);
-                    }
-                    notify('cache_progress', { url: urlStr });
-                })
-            );
+        for (let i = 0; i < urls.length; i++) {
+            const urlStr = urls[i];
+            const req = new Request(urlStr);
+            if (await cache.match(req)) {
+                notify('cache_progress', { url: urlStr });
+                continue;
+            }
+            try {
+                // Abort request if it stalls for > 15s to keep the worker alive
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 15000);
+                const res = await fetch(req, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                if (res && res.status === 200) await cache.put(req, res.clone());
+            } catch (e) {
+                console.warn('[SW] cache_playlist failed:', urlStr, e);
+            }
+            notify('cache_progress', { url: urlStr });
         }
         notify('cache_done');
     };

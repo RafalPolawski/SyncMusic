@@ -4,16 +4,35 @@ import (
 	"crypto/tls"
 	"log"
 	"net/http"
+	"time"
+
+	"github.com/beevik/ntp"
 
 	"github.com/quic-go/quic-go/http3"
 	"github.com/quic-go/webtransport-go"
 )
+
+var ntpOffset time.Duration
+
+func NowNTP() time.Time {
+	return time.Now().Add(ntpOffset)
+}
+
 
 func main() {
 	initDB()
 	defer db.Close()
 	initRedis()
 	subscribeRedis()
+
+	resp, err := ntp.Query("time.google.com")
+	if err == nil {
+		ntpOffset = resp.ClockOffset
+		log.Printf("[INFO] NTP Time sync complete. Offset: %v\n", ntpOffset)
+	} else {
+		log.Printf("[WARN] NTP sync failed, using local HTTP server time: %v\n", err)
+	}
+
 
 	tlsCert, hash := generateIdentity()
 	certHashStr = hash
