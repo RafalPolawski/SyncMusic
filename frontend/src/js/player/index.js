@@ -2,7 +2,7 @@
  * Player factory – assembles all sub-modules into the public player API.
  */
 
-import { createState, softSyncThreshold, setSyncThreshold, loadPlayerState } from './state.js';
+import { createState, loadPlayerState } from './state.js';
 import { initMediaSession } from './media-session.js';
 import { precacheNextTracks } from './preloader.js';
 import { initControls, updateShuffleUI, updateRepeatUI } from './controls.js';
@@ -10,7 +10,7 @@ import { initNavigation } from './navigation.js';
 import { initMobileUI } from './mobile-ui.js';
 import { initSync } from './sync.js';
 
-export { softSyncThreshold, setSyncThreshold };
+export { loadPlayerState };
 
 export function initPlayer(socket) {
     // ── DOM references ────────────────────────────────────────────────────────

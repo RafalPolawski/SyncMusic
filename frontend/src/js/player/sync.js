@@ -13,7 +13,7 @@
 
 import { Utils } from '../ui.js';
 import { updateShuffleUI, updateRepeatUI } from './controls.js';
-import { softSyncThreshold, savePlayerState } from './state.js';
+import { savePlayerState } from './state.js';
 
 export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlaying, updatePositionState, precacheNextTracks }) {
     const { volumeSlider } = dom;

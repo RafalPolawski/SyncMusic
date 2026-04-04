@@ -48,14 +48,16 @@
 
     <div id="app-wrapper">
         <div class="left-panel">
-            <h1>SyncMusic</h1>
-            <p style="display:flex; align-items:center; gap:10px; margin: 4px 0;">
-                Status: <span id="status" style="color: yellow;">Connecting...</span>
-                <span id="rttIndicator" style="display:none; align-items:center; gap:5px; font-size:12px; opacity:0.85;">
-                    <span id="rttDot" style="width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0;transition:background 0.6s ease;"></span>
-                    <span id="rttValue" style="font-family:monospace; letter-spacing:0.02em;"></span>
-                </span>
-            </p>
+            <header class="top-app-bar">
+                <div class="app-bar-brand">SyncMusic</div>
+                <div class="app-bar-status">
+                    <span id="status" class="status-text" style="color: yellow;">Connecting...</span>
+                    <span id="rttIndicator" class="rtt-indicator" style="display:none;">
+                        <span id="rttDot" class="rtt-dot"></span>
+                        <span id="rttValue" class="rtt-value"></span>
+                    </span>
+                </div>
+            </header>
 
             <div class="player-container" id="playerContainer">
                 <!-- Mobile pull indicator / collapse button -->
@@ -156,10 +158,6 @@
 
         <div class="right-panel">
             <div class="playlist-section">
-                <div class="tabs-container" style="display:none;">
-                    <!-- Removed in favor of Bottom Navigation -->
-                </div>
-
                 <div id="libraryView">
                     <div id="loadingIndicator" class="loading-indicator">
                         <div class="spinner"></div>
@@ -209,12 +207,6 @@
     <div id="settingsOverlay" style="display: none;" class="modal-overlay">
         <div class="modal-content">
             <h2 style="color: white; margin-bottom: 20px; font-weight: 700;">Settings ⚙️</h2>
-            
-            <div class="setting-row">
-                <label for="syncThresholdInput">Sync Drift Tolerance (sec)</label>
-                <input type="number" id="syncThresholdInput" class="setting-input" min="0.1" max="5.0" step="0.1" value="3.0">
-            </div>
-            <p style="font-size: 11px; color: rgba(255,255,255,0.5); margin-top: -8px; margin-bottom: 25px; text-align: left;">Higher values prevent audio stutters on bad networks, but reduce sync accuracy with other listeners.</p>
             
             <div id="settingsActionContainer" style="display:flex; flex-direction:column; gap:10px;">
                 <!-- Cache / Rescan buttons dynamically relocated here by library.js -->

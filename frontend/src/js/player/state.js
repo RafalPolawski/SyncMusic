@@ -3,15 +3,7 @@
  * All player sub-modules receive this object by reference and mutate it directly.
  */
 
-export let softSyncThreshold = parseFloat(localStorage.getItem('syncMusicThreshold')) || 3.0;
 
-export function setSyncThreshold(val) {
-    const parsed = parseFloat(val);
-    if (!isNaN(parsed)) {
-        softSyncThreshold = parsed;
-        localStorage.setItem('syncMusicThreshold', softSyncThreshold);
-    }
-}
 
 /** Persist key player state across page reloads */
 export function savePlayerState(path, folder) {

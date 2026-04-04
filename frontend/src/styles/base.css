@@ -98,20 +98,40 @@ input, textarea {
     padding-bottom: 160px; /* Space for mini-player + bottom nav */
 }
 
-h1 {
-    margin-bottom: 5px;
-    color: var(--primary);
-    font-size: 32px;
-    font-weight: 700;
-    letter-spacing: -0.5px;
-    text-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+/* ── Top App Bar (Symfonium Style) ───────────────────────────────────────── */
+.top-app-bar {
+    width: 100%;
+    height: 60px;
+    background: rgba(20, 20, 20, 0.65);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    box-sizing: border-box;
+    position: sticky;
+    top: 0;
+    z-index: 100;
 }
 
-p {
-    margin-top: 0;
-    font-size: 14px;
-    color: #b0b0b0;
+.app-bar-brand {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--primary);
+    letter-spacing: -0.5px;
 }
+
+.app-bar-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.status-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+
 
 /* ── DESKTOP LAYOUT ──────────────────────────────────────────────────────── */
 @media (min-width: 1024px) {
@@ -131,15 +151,28 @@ p {
         min-width: 300px;
         max-width: 420px;
         height: 100vh;
-        padding: 2vh 10px;
+        padding: 0 10px;
         box-sizing: border-box;
         overflow-y: auto;
         scrollbar-width: none;
         -ms-overflow-style: none;
-        justify-content: center;
+        justify-content: flex-start;
         align-items: center;
         border-right: 1px solid rgba(255, 255, 255, 0.1);
         background: rgba(0, 0, 0, 0.2);
+    }
+    
+    .top-app-bar {
+        background: transparent;
+        border-bottom: none;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        position: relative;
+        padding: 20px 0;
+        z-index: 10;
+        justify-content: center;
+        flex-direction: column;
+        gap: 5px;
     }
 
     .left-panel::-webkit-scrollbar { display: none; }
@@ -176,8 +209,8 @@ p {
 /* ── MOBILE BASE ─────────────────────────────────────────────────────────── */
 @media (max-width: 1023px) {
     body { padding: 0; }
-    #app-wrapper { padding: 10px; }
-    h1 { font-size: 26px; margin-bottom: 10px; margin-top: 10px; }
-    .playlist-section { margin-top: 10px; padding: 10px; }
+    #app-wrapper { padding: 0; }
+    .top-app-bar { position: sticky; top: 0; z-index: 900; }
+    .playlist-section { margin-top: 10px; padding: 10px; border-radius: 0; border-left: none; border-right: none; }
     .locate-fab { bottom: 170px; }
 }

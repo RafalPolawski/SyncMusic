@@ -88,7 +88,18 @@
 .locate-fab svg { width: 24px; height: 24px; fill: currentColor; }
 
 /* ── Search ──────────────────────────────────────────────────────────────── */
-.search-container { padding: 0 10px 12px; }
+.search-container {
+    padding: 10px 0 15px;
+    position: sticky;
+    top: 60px; /* Right below the mobile app-bar */
+    z-index: 50;
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    margin: 0 -10px; /* Break out of playlist-section padding */
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
 .search-wrap {
     display: flex;
     align-items: center;

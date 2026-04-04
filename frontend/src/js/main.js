@@ -1,6 +1,6 @@
 import { SyncWebTransport } from './webtransport.js';
 import { initUI, UI } from './ui.js';
-import { initPlayer, softSyncThreshold, setSyncThreshold } from './player/index.js';
+import { initPlayer } from './player/index.js';
 import { initQueue } from './queue.js';
 import { CacheManager } from './cache.js';
 import { initLibrary } from './library/index.js';
@@ -92,10 +92,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (UI.openSettingsBtn) {
-        UI.syncThresholdInput.value = softSyncThreshold;
-        UI.syncThresholdInput.addEventListener('change', (e) => {
-            setSyncThreshold(e.target.value);
-        });
         // We might have multiple buttons doing this, so select all if needed, but ui.js binds only one.
         document.querySelectorAll('#openSettingsBtn').forEach(btn => {
             btn.onclick = () => { UI.settingsOverlay.style.display = "flex"; };
