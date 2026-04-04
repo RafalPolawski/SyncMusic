@@ -40,6 +40,7 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
             if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0;
             return;
         }
+        if (audio.readyState < 3) return; // Prevent fake drift accumulation while buffering
         if (!state.syncReceivedTime || !state.syncAudioTime) return;
 
         const elapsed = (Date.now() - state.syncReceivedTime) / 1000;
@@ -84,6 +85,7 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
                 const songChanged = state.currentSongPath !== msg.song;
                 if (songChanged || !state.currentSongPath) {
                     audio.src = '/music/' + Utils.encodePath(msg.song);
+                    audio.currentTime = 0; // force explicit reset
                     state.currentSongPath = msg.song;
                     updateNowPlaying(state.currentSongPath);
                     savePlayerState(msg.song, msg.folder);
@@ -145,6 +147,7 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
 
                 if (state.currentSongPath !== msg.song || !state.currentSongPath) {
                     audio.src = '/music/' + Utils.encodePath(msg.song);
+                    audio.currentTime = 0; // force explicit reset
                     state.currentSongPath = msg.song;
                     updateNowPlaying(state.currentSongPath);
                     savePlayerState(msg.song, msg.folder);

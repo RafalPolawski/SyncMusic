@@ -9,6 +9,7 @@ export function initNavigation(audio, state, socket, { updateNowPlaying, forcePl
         state.pendingEagerPaths.push(targetPath);
         if (state.currentSongPath !== targetPath || !state.currentSongPath) {
             audio.src = '/music/' + Utils.encodePath(targetPath);
+            audio.currentTime = 0; // Fixes random offset start
             state.currentSongPath = targetPath;
             updateNowPlaying(state.currentSongPath);
         }
