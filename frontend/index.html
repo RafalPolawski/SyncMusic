@@ -39,11 +39,22 @@
     </nav>
 
     <div id="overlay">
-        <h2 class="overlay-title">Join synchronization</h2>
-        <input type="text" id="nicknameInput" class="nickname-input" placeholder="Enter your nickname..." maxlength="20"
-            autocomplete="off">
-        <br><br>
-        <button id="joinBtn">JOIN SESSION 🎧</button>
+        <h2 class="overlay-title">SyncMusic</h2>
+        <div style="margin-bottom: 25px; color: rgba(255,255,255,0.6); font-size: 14px;">Choose your playback mode</div>
+        
+        <div style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 20px;">
+            <input type="text" id="nicknameInput" class="nickname-input" placeholder="Your nickname" maxlength="20" autocomplete="off">
+            <input type="text" id="roomIdInput" class="nickname-input" placeholder="Room ID (e.g. dom, silownia)" maxlength="20" autocomplete="off" style="margin-top: 10px;">
+            <button id="joinBtn" style="margin-top: 20px;">JOIN ONLINE ROOM 🎧</button>
+        </div>
+
+        <div style="display: flex; align-items: center; margin: 15px 0; color: rgba(255,255,255,0.4); font-size: 12px;">
+            <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
+            <span style="padding: 0 10px;">OR</span>
+            <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
+        </div>
+
+        <button id="offlineModeBtn" style="background: rgba(255,255,255,0.1); color: #fff; width: 100%;">START LOCAL OFFLINE 📱</button>
     </div>
 
     <div id="app-wrapper">

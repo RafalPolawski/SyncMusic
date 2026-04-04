@@ -15,8 +15,8 @@ import (
 var rdb *redis.Client
 var ctx = context.Background()
 
-const roomStateKey = "syncmusic:room_state"
-const pubsubChannel = "syncmusic:room_events"
+func getRoomStateKey(roomID string) string { return "syncmusic:room_state:" + roomID }
+func getPubsubChannel(roomID string) string { return "syncmusic:room_events:" + roomID }
 
 // Go mutex for local serialization — zero network overhead vs Redis SETNX.
 // For single-instance deployments this is strictly better (sub-microsecond vs ~1ms).
@@ -46,31 +46,19 @@ func initRedis() {
 		time.Sleep(2 * time.Second)
 	}
 
-	// Initialise default state if empty
-	if rdb.Exists(ctx, roomStateKey).Val() == 0 {
-		rdb.HSet(ctx, roomStateKey, map[string]interface{}{
-			"CurrentSong":     "",
-			"IsPlaying":       0,
-			"CurrentPosition": 0.0,
-			"LastUpdate":      time.Now().UnixMilli(),
-			"IsShuffleGlobal": 0,
-			"IsRepeatGlobal":  0,
-			"CurrentFolder":   "",
-			"GlobalVolume":    1.0,
-			"Queue":           "[]",
-		})
-	}
+	// Default state is initialized per-room on demand.
 }
 
 func subscribeRedis() {
-	pubsub := rdb.Subscribe(ctx, pubsubChannel)
+	pubsub := rdb.PSubscribe(ctx, "syncmusic:room_events:*")
 	ch := pubsub.Channel()
 	go func() {
 		for msg := range ch {
-			globalLocalClients.Broadcast([]byte(msg.Payload + "\n"))
+			roomID := msg.Channel[len("syncmusic:room_events:"):]
+			globalLocalClients.BroadcastToRoom(roomID, append([]byte(msg.Payload), '\n'))
 		}
 	}()
-	log.Println("[INFO] Listening on Redis Pub/Sub channel:", pubsubChannel)
+	log.Println("[INFO] Listening on Redis Pub/Sub pattern: syncmusic:room_events:*")
 }
 
 // withStateLock serialises state mutations with a local Go mutex.
@@ -83,7 +71,7 @@ func withStateLock(fn func()) {
 
 // saveAndPublish writes room state and broadcasts the event in a single
 // Redis pipeline — halves the number of round-trips vs two separate calls.
-func saveAndPublish(state RoomState, msg map[string]interface{}) {
+func saveAndPublish(roomID string, state RoomState, msg map[string]interface{}) {
 	isPlaying := 0
 	if state.IsPlaying {
 		isPlaying = 1
@@ -96,7 +84,7 @@ func saveAndPublish(state RoomState, msg map[string]interface{}) {
 	msgBytes, _ := json.Marshal(msg)
 
 	pipe := rdb.Pipeline()
-	pipe.HSet(ctx, roomStateKey, map[string]interface{}{
+	pipe.HSet(ctx, getRoomStateKey(roomID), map[string]interface{}{
 		"CurrentSong":     state.CurrentSong,
 		"IsPlaying":       isPlaying,
 		"CurrentPosition": state.CurrentPosition,
@@ -107,7 +95,7 @@ func saveAndPublish(state RoomState, msg map[string]interface{}) {
 		"GlobalVolume":    state.GlobalVolume,
 		"Queue":           string(qBytes),
 	})
-	pipe.Publish(ctx, pubsubChannel, string(msgBytes))
+	pipe.Publish(ctx, getPubsubChannel(roomID), string(msgBytes))
 	if _, err := pipe.Exec(ctx); err != nil {
 		log.Printf("[ERROR] Redis pipeline error: %v\n", err)
 	}
@@ -115,7 +103,7 @@ func saveAndPublish(state RoomState, msg map[string]interface{}) {
 
 // SaveRoomState persists state only (no broadcast). Use saveAndPublish when
 // a broadcast is also needed.
-func SaveRoomState(state RoomState) {
+func SaveRoomState(roomID string, state RoomState) {
 	isPlaying := 0
 	if state.IsPlaying {
 		isPlaying = 1
@@ -126,7 +114,7 @@ func SaveRoomState(state RoomState) {
 	}
 	qBytes, _ := json.Marshal(state.Queue)
 
-	rdb.HSet(ctx, roomStateKey, map[string]interface{}{
+	rdb.HSet(ctx, getRoomStateKey(roomID), map[string]interface{}{
 		"CurrentSong":     state.CurrentSong,
 		"IsPlaying":       isPlaying,
 		"CurrentPosition": state.CurrentPosition,
@@ -152,12 +140,22 @@ type RoomState struct {
 	Queue           []map[string]interface{}
 }
 
-func GetRoomState() RoomState {
-	res, _ := rdb.HGetAll(ctx, roomStateKey).Result()
+func GetRoomState(roomID string) RoomState {
+	res, _ := rdb.HGetAll(ctx, getRoomStateKey(roomID)).Result()
+
+	if len(res) == 0 {
+		return RoomState{
+			GlobalVolume: 1.0,
+			LastUpdate:   time.Now(),
+		}
+	}
 
 	isPlaying, _ := strconv.Atoi(res["IsPlaying"])
 	currentPos, _ := strconv.ParseFloat(res["CurrentPosition"], 64)
-	lastUpdateUnix, _ := strconv.ParseInt(res["LastUpdate"], 10, 64)
+	lastUpdateUnix, errLU := strconv.ParseInt(res["LastUpdate"], 10, 64)
+	if errLU != nil {
+		lastUpdateUnix = time.Now().UnixMilli()
+	}
 	isShuffle, _ := strconv.Atoi(res["IsShuffleGlobal"])
 	isRepeat, _ := strconv.Atoi(res["IsRepeatGlobal"])
 	globalVol, err := strconv.ParseFloat(res["GlobalVolume"], 64)

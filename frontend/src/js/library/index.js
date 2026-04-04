@@ -77,6 +77,58 @@ export function initLibrary(socket, player) {
             </div>`;
     };
 
+    // ── Core Navigation Variables ─────────────────────────────────────────────
+    let savedScrollWindow = 0;
+    let savedScrollPanel  = 0;
+    let currentView       = 'root';
+
+    // ── Join / Offline Logic (Bound permanently, safe from cache failure) ────
+
+    if (UI.roomIdInput) {
+        const savedRoom = localStorage.getItem('syncMusicRoom');
+        if (savedRoom) UI.roomIdInput.value = savedRoom;
+    }
+
+    const startLocalOffline = () => {
+        // Skips WebTransport entirely
+        player.isOfflineMode = true; // Inform player not to seek dynamically (if needed)
+        history.replaceState({ view: 'exit' }, '');
+        history.pushState({ view: 'root' }, '');
+        currentView = 'root';
+        UI.overlay.style.display = 'none';
+        
+        // Hide top status for offline local mode
+        if (document.querySelector('.app-bar-status')) {
+            document.querySelector('.app-bar-status').style.display = 'none';
+        }
+    };
+
+    const performJoin = () => {
+        let nick = UI.nicknameInput.value.trim() || 'Anonymous';
+        let room = (UI.roomIdInput && UI.roomIdInput.value.trim()) ? UI.roomIdInput.value.trim() : 'global';
+        
+        localStorage.setItem('syncMusicNick', nick);
+        localStorage.setItem('syncMusicRoom', room);
+        
+        history.replaceState({ view: 'exit' }, '');
+        history.pushState({ view: 'root' }, '');
+        currentView = 'root';
+        
+        // Send join with Room ID
+        socket.sendCommand('join', { nickname: nick, room_id: room });
+        UI.overlay.style.display = 'none';
+        player.handleJoinUserInit();
+    };
+
+    if (UI.offlineModeBtn) UI.offlineModeBtn.onclick = startLocalOffline;
+    if (UI.joinBtn) UI.joinBtn.onclick = performJoin;
+
+    socket.onReconnect = () => {
+        const nick = localStorage.getItem('syncMusicNick');
+        const room = localStorage.getItem('syncMusicRoom') || 'global';
+        if (nick && !player.isOfflineMode) socket.sendCommand('join', { nickname: nick, room_id: room });
+    };
+
     // ── Library polling w/ exponential back-off ───────────────────────────────
 
     let isPolling = false;
@@ -150,10 +202,6 @@ export function initLibrary(socket, player) {
                 // Show search bar and wire it up
                 UI.searchContainer.style.display = 'block';
                 initSearch(songs, groups);
-
-                let savedScrollWindow = 0;
-                let savedScrollPanel  = 0;
-                let currentView       = 'root';
 
                 // ── Folder list (root) view ───────────────────────────────────
 
@@ -291,30 +339,10 @@ export function initLibrary(socket, player) {
                     }
                 });
 
-                // ── Join button ───────────────────────────────────────────────
-
-                const performJoin = () => {
-                    let nick = UI.nicknameInput.value.trim() || 'Anonymous Music Lover';
-                    localStorage.setItem('syncMusicNick', nick);
-                    history.replaceState({ view: 'exit' }, '');
-                    history.pushState({ view: 'root' }, '');
-                    currentView = 'root';
-                    socket.sendCommand('join', { nickname: nick });
-                    UI.overlay.style.display = 'none';
-                    player.handleJoinUserInit();
-                };
-
-                UI.joinBtn.onclick = performJoin;
-
-                if (wasScanning) {
+                if (wasScanning && songs && songs.length > 0) {
                     wasScanning = false;
                     setTimeout(performJoin, 300); // Auto-jump into the app without clicking
                 }
-
-                socket.onReconnect = () => {
-                    const nick = localStorage.getItem('syncMusicNick');
-                    if (nick) socket.sendCommand('join', { nickname: nick });
-                };
 
             }).catch(err => {
                 console.error('Failed to fetch library, retrying…', err);

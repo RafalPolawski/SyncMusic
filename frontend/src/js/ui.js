@@ -3,7 +3,9 @@ export const UI = {};
 export const initUI = () => {
     Object.assign(UI, {
         nicknameInput: document.getElementById("nicknameInput"),
+        roomIdInput: document.getElementById("roomIdInput"),
         joinBtn: document.getElementById("joinBtn"),
+        offlineModeBtn: document.getElementById("offlineModeBtn"),
         foldersContainer: document.getElementById("foldersContainer"),
         songsContainer: document.getElementById("songsContainer"),
         backBtn: document.getElementById("backBtn"),

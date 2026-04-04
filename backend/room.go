@@ -16,6 +16,7 @@ type WTClient struct {
 	SendChan chan []byte
 	cancel   context.CancelFunc
 	Nickname string
+	RoomID   string
 }
 
 // SendNonBlocking queues a message without blocking. Drops the message if the
@@ -38,26 +39,33 @@ var globalLocalClients = &LocalClientsTracker{
 	Clients: make(map[*WTClient]bool),
 }
 
-// Broadcast sends msg to every connected client on this instance.
-func (r *LocalClientsTracker) Broadcast(msg []byte) {
+// BroadcastToRoom sends msg to every connected client in the specified room.
+func (r *LocalClientsTracker) BroadcastToRoom(roomID string, msg []byte) {
 	r.ClientsMutex.Lock()
 	defer r.ClientsMutex.Unlock()
 	for c := range r.Clients {
-		c.SendNonBlocking(msg)
+		if c.RoomID == roomID {
+			c.SendNonBlocking(msg)
+		}
 	}
 }
 
-// BroadcastPresence sends the current listener list to every client.
-// TODO: This currently only shows local instance presence. With Redis, we'd need
-// to aggregate presence. For now, we will just send local presence or disable.
-func (r *LocalClientsTracker) BroadcastPresence() {
+// BroadcastPresenceToRoom sends the listener list to every client in the room.
+func (r *LocalClientsTracker) BroadcastPresenceToRoom(roomID string) {
+	if roomID == "" {
+		return
+	}
 	r.ClientsMutex.Lock()
 	var users []string
+	var targets []*WTClient
 	for c := range r.Clients {
-		if c.Nickname != "" {
-			users = append(users, c.Nickname)
-		} else {
-			users = append(users, "Anonymous")
+		if c.RoomID == roomID {
+			targets = append(targets, c)
+			if c.Nickname != "" {
+				users = append(users, c.Nickname)
+			} else {
+				users = append(users, "Anonymous")
+			}
 		}
 	}
 	r.ClientsMutex.Unlock()
@@ -67,7 +75,10 @@ func (r *LocalClientsTracker) BroadcastPresence() {
 		"users":  users,
 	}
 	b, _ := json.Marshal(msg)
-	r.Broadcast(append(b, '\n'))
+	b = append(b, '\n')
+	for _, t := range targets {
+		t.SendNonBlocking(b)
+	}
 }
 
 // clientWriter drains the SendChan and writes messages to the stream.
