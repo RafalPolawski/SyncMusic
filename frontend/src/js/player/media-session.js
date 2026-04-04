@@ -67,20 +67,7 @@ function resetAlbumColor() {
     root.style.removeProperty('--album-l');
 }
 
-// ── Marquee helper ────────────────────────────────────────────────────────────
-
-function updateMarquee(el) {
-    el.classList.remove('marquee-active');
-    el.style.removeProperty('--scroll-distance');
-    // rAF after class removal to re-read layout
-    requestAnimationFrame(() => {
-        const overflow = el.scrollWidth - el.clientWidth;
-        if (overflow > 4) {
-            el.style.setProperty('--scroll-distance', `-${overflow + 16}px`);
-            el.classList.add('marquee-active');
-        }
-    });
-}
+// ── Marquee helper (Removed per user request) ───────────────────────────────
 
 // ── Main module ───────────────────────────────────────────────────────────────
 
@@ -118,7 +105,6 @@ export function initMediaSession(audio, dom, state, socket, navigators) {
 
         trackTitle.textContent = displayTitle;
         document.getElementById('trackArtist').textContent = displayArtist;
-        updateMarquee(trackTitle);
 
         const coverUrl    = `/api/cover?song=${encodeURIComponent(path)}`;
         const safeCssUrl  = coverUrl.replace(/'/g, '%27').replace(/"/g, '%22')

@@ -97,17 +97,8 @@
     text-overflow: ellipsis;
     text-shadow: 0 1px 3px rgba(0,0,0,0.5);
 }
-/* Marquee for long titles — only active when JS detects overflow */
-.track-title.marquee-active {
-    text-overflow: clip;
-    animation: marquee-scroll 14s ease-in-out infinite;
-    animation-delay: 1.5s;
-}
-@keyframes marquee-scroll {
-    0%,  20% { transform: translateX(0); }
-    75%, 100% { transform: translateX(var(--scroll-distance, 0)); }
-}
 .track-artist {
+
     font-size: 15px;
     color: rgba(255,255,255,0.7);
     margin: 0;
