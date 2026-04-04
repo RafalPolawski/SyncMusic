@@ -75,17 +75,17 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    if (UI.tabLibrary && UI.tabQueue) {
-        UI.tabLibrary.onclick = () => {
-            UI.tabLibrary.classList.add("active-tab");
-            UI.tabQueue.classList.remove("active-tab");
+    if (UI.navLibrary && UI.navQueue) {
+        UI.navLibrary.onclick = () => {
+            UI.navLibrary.classList.add("active-nav");
+            UI.navQueue.classList.remove("active-nav");
             UI.libraryView.style.display = "block";
             UI.queueView.style.display = "none";
         };
 
-        UI.tabQueue.onclick = () => {
-            UI.tabQueue.classList.add("active-tab");
-            UI.tabLibrary.classList.remove("active-tab");
+        UI.navQueue.onclick = () => {
+            UI.navQueue.classList.add("active-nav");
+            UI.navLibrary.classList.remove("active-nav");
             UI.queueView.style.display = "block";
             UI.libraryView.style.display = "none";
         };
@@ -96,9 +96,13 @@ document.addEventListener("DOMContentLoaded", () => {
         UI.syncThresholdInput.addEventListener('change', (e) => {
             setSyncThreshold(e.target.value);
         });
-        UI.openSettingsBtn.onclick = () => { UI.settingsOverlay.style.display = "flex"; };
+        // We might have multiple buttons doing this, so select all if needed, but ui.js binds only one.
+        document.querySelectorAll('#openSettingsBtn').forEach(btn => {
+            btn.onclick = () => { UI.settingsOverlay.style.display = "flex"; };
+        });
         UI.closeSettingsBtn.onclick = () => { UI.settingsOverlay.style.display = "none"; };
     }
+
 
     initQueue(socket, player);
     initLibrary(socket, player);

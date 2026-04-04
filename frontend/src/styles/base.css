@@ -6,28 +6,58 @@
     --primary-active: #179643;
 }
 
-/* Settings FAB button (top-right corner) */
-.settings-fab {
-    position: absolute;
-    top: 15px;
-    right: 15px;
-    z-index: 100;
-    background: rgba(255,255,255,0.1);
-    border: none;
-    color: #fff;
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
+/* Bottom Navigation Bar */
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 70px;
+    background: rgba(20, 20, 20, 0.85);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
     display: flex;
-    justify-content: center;
+    justify-content: space-around;
     align-items: center;
+    z-index: 900;
+}
+
+.nav-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
     cursor: pointer;
-    transition: background 0.2s, transform 0.2s;
+    width: 33%;
+    height: 100%;
+    transition: color 0.2s, transform 0.2s;
     touch-action: manipulation;
 }
-.settings-fab svg { width: 22px; height: 22px; fill: currentColor; }
-.settings-fab:hover { background: rgba(255,255,255,0.2); transform: rotate(30deg); }
-.settings-fab:active { transform: scale(0.9); }
+
+.nav-btn svg { width: 24px; height: 24px; fill: currentColor; }
+.nav-btn span { font-size: 11px; font-weight: 600; position: relative; }
+.nav-btn:hover { color: rgba(255,255,255,0.8); }
+.nav-btn:active { transform: scale(0.95); }
+
+.active-nav { color: var(--primary); }
+.active-nav svg { fill: var(--primary); }
+
+.nav-badge {
+    position: absolute;
+    top: -4px;
+    right: -12px;
+    background: var(--primary);
+    color: #fff;
+    font-size: 9px;
+    padding: 2px 5px;
+    border-radius: 10px;
+    font-weight: bold;
+}
 
 
 body {
@@ -64,7 +94,7 @@ input, textarea {
 
 .right-panel {
     width: 100%;
-    padding-bottom: 90px; /* Space for mini-player on mobile */
+    padding-bottom: 160px; /* Space for mini-player + bottom nav */
 }
 
 h1 {
@@ -129,12 +159,24 @@ p {
         right: 40px;
         position: absolute;
     }
+
+    .bottom-nav {
+        width: 35%;
+        min-width: 300px;
+        max-width: 420px;
+        left: 0;
+        bottom: 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(0, 0, 0, 0.4);
+    }
 }
 
 /* ── MOBILE BASE ─────────────────────────────────────────────────────────── */
 @media (max-width: 1023px) {
-    body { padding: 10px; }
-    h1 { font-size: 26px; margin-bottom: 10px; }
-    .playlist-section { margin-top: 10px; padding: 15px; }
-    .locate-fab { bottom: 90px; }
+    body { padding: 0; }
+    #app-wrapper { padding: 10px; }
+    h1 { font-size: 26px; margin-bottom: 10px; margin-top: 10px; }
+    .playlist-section { margin-top: 10px; padding: 10px; }
+    .locate-fab { bottom: 170px; }
 }
