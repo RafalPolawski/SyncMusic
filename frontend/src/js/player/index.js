@@ -85,7 +85,7 @@ export function initPlayer(socket) {
     });
 
     // ── Mobile UI ─────────────────────────────────────────────────────────────
-    initMobileUI(dom);
+    initMobileUI(dom, { playNext: navigation.playNext, playPrev: navigation.playPrev });
 
     // ── Server sync ───────────────────────────────────────────────────────────
     const sync = initSync(audio, dom, state, socket, {

@@ -74,7 +74,10 @@
 }
 .cover-art.playing {
     animation-play-state: running;
-    box-shadow: 0 10px 25px rgba(29,185,84,0.3), inset 0 0 0 8px #111, inset 0 0 0 12px #222;
+    box-shadow:
+        0 12px 35px hsl(var(--album-h, 120), var(--album-s, 60%), 30%),
+        inset 0 0 0 8px #111,
+        inset 0 0 0 12px #222;
 }
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
@@ -95,6 +98,16 @@
     overflow: hidden;
     text-overflow: ellipsis;
     text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+/* Marquee for long titles — only active when JS detects overflow */
+.track-title.marquee-active {
+    text-overflow: clip;
+    animation: marquee-scroll 14s ease-in-out infinite;
+    animation-delay: 1.5s;
+}
+@keyframes marquee-scroll {
+    0%,  20% { transform: translateX(0); }
+    75%, 100% { transform: translateX(var(--scroll-distance, 0)); }
 }
 .track-artist {
     font-size: 15px;
@@ -256,7 +269,7 @@ audio { display: none; }
         100% { opacity: 1; transform: translateY(0); }
     }
 
-    /* Expanded (full-screen) player */
+    /* Expanded (full-screen) player — background adapts to album dominant color */
     .player-container.player-expanded {
         position: fixed;
         bottom: 0; left: 0;
@@ -269,12 +282,18 @@ audio { display: none; }
         box-sizing: border-box;
         flex-direction: column;
         justify-content: flex-start;
-        background: linear-gradient(135deg, rgba(15,12,41,0.98) 0%, rgba(48,43,99,0.98) 50%, rgba(36,36,62,0.98) 100%);
+        background: linear-gradient(
+            160deg,
+            hsl(var(--album-h, 240), var(--album-s, 40%), 12%) 0%,
+            hsl(var(--album-h, 260), calc(var(--album-s, 35%) * 0.7), 18%) 50%,
+            rgba(8, 6, 18, 0.98) 100%
+        );
         cursor: default;
         z-index: 1000;
         overflow-y: hidden;
         touch-action: none;
         overscroll-behavior: none;
+        transition: background 0.8s ease;
     }
 
     .player-expanded .player-toggle-btn { display: flex; margin-bottom: 5px; padding: 15px 20px; z-index: 1005; }

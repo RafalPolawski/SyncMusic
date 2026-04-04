@@ -1,11 +1,12 @@
 /**
  * Mobile player expand/collapse UI.
- * Handles the mini-player click-to-expand, chevron collapse button,
- * pull-down gesture, and browser back-button integration.
+ * Handles: mini-player click-to-expand, chevron collapse, pull-down gesture,
+ * browser back-button integration, and swipe left/right for next/prev.
  */
 
-export function initMobileUI(dom) {
+export function initMobileUI(dom, navigation = {}) {
     const { playerContainer, miniPlayerClickZone, playerToggleBtn, progressBar } = dom;
+    const { playNext, playPrev } = navigation;
     let isExpanded = false;
 
     const collapsePlayer = () => {
@@ -35,17 +36,34 @@ export function initMobileUI(dom) {
 
     window.addEventListener('popstate', () => collapsePlayer());
 
-    // Pull-down-to-close gesture
+    // ── Pull-down-to-close gesture ────────────────────────────────────────────
     let touchStartY = 0;
+    let touchStartX = 0;
+
     playerContainer.addEventListener('touchstart', (e) => {
         touchStartY = e.changedTouches[0].screenY;
+        touchStartX = e.changedTouches[0].screenX;
     }, { passive: true });
 
     playerContainer.addEventListener('touchend', (e) => {
-        if (!isExpanded) return;
-        if (e.target === progressBar) return; // ignore drag on seekbar
-        if (e.changedTouches[0].screenY - touchStartY > 80) {
-            history.back();
+        const dy = e.changedTouches[0].screenY - touchStartY;
+        const dx = e.changedTouches[0].screenX - touchStartX;
+        const absDx = Math.abs(dx);
+        const absDy = Math.abs(dy);
+
+        if (isExpanded) {
+            // Pull-down closes the expanded player
+            if (e.target !== progressBar && dy > 80 && absDy > absDx) {
+                history.back();
+            }
+            return;
+        }
+
+        // Mini-player swipe left = next, swipe right = prev
+        if (absDx > 50 && absDx > absDy * 1.5) {
+            if (navigator.vibrate) navigator.vibrate(25);
+            if (dx < 0 && playNext) playNext(false);
+            else if (dx > 0 && playPrev) playPrev();
         }
     }, { passive: true });
 }
