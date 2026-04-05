@@ -89,9 +89,35 @@ export const initLibrary = (socket, player, tokenResolver) => {
         if (savedRoom) UI.roomIdInput.value = savedRoom;
     }
 
+    if (UI.offlineModeBtn) UI.offlineModeBtn.onclick = startLocalOffline;
+    if (UI.joinBtn) UI.joinBtn.onclick = performJoin;
+
     // Fetch active rooms on mount
-    if (UI.activeRoomsList) UI.activeRoomsList.innerHTML = '<span style="color:rgba(255,255,255,0.4); font-size:12px;">Searching for active rooms...</span>';
+    if (UI.activeRoomsList) {
+        UI.activeRoomsList.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <span style="color:rgba(255,255,255,0.4); font-size:12px;">Discovering active rooms...</span>
+                <div style="width:100%; height:4px; background:rgba(255,255,255,0.1); border-radius:2px; overflow:hidden;">
+                    <div style="width:30%; height:100%; background:var(--primary); border-radius:2px; animation: progress-indefinite 2s infinite ease-in-out;"></div>
+                </div>
+            </div>`;
+        
+        // Add CSS animation if not present (inline injection for zero-config simplicity)
+        if (!document.getElementById('sync-room-anim')) {
+            const style = document.createElement('style');
+            style.id = 'sync-room-anim';
+            style.textContent = `
+                @keyframes progress-indefinite {
+                    0% { transform: translateX(-100%); }
+                    100% { transform: translateX(350%); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+    }
+    
     fetch('/api/rooms').then(res => res.json()).then(rooms => {
+        if (UI.activeRoomsList) UI.activeRoomsList.innerHTML = '';
         if (rooms && rooms.length > 0 && UI.activeRoomsContainer && UI.activeRoomsList) {
             UI.activeRoomsContainer.style.display = 'block';
             UI.activeRoomsList.innerHTML = rooms.map(roomId => 
@@ -108,10 +134,15 @@ export const initLibrary = (socket, player, tokenResolver) => {
                 pill.style.cursor = 'pointer';
                 pill.onclick = () => { if (UI.roomIdInput) UI.roomIdInput.value = pill.innerText; };
             });
+        } else if (UI.activeRoomsList) {
+            UI.activeRoomsList.innerHTML = '<span style="color:rgba(255,255,255,0.3); font-size:12px;">No active rooms found.</span>';
         }
-    }).catch(e => console.warn('Offline or failed to fetch rooms:', e));
+    }).catch(e => {
+        console.warn('Offline or failed to fetch rooms:', e);
+        if (UI.activeRoomsList) UI.activeRoomsList.innerHTML = '<span style="color:rgba(255,255,255,0.3); font-size:12px;">Offline Mode</span>';
+    });
 
-    const startLocalOffline = () => {
+    function startLocalOffline() {
         // Skips WebTransport entirely
         player.setOfflineStatus(true);
         history.replaceState({ view: 'exit' }, '');
@@ -123,9 +154,9 @@ export const initLibrary = (socket, player, tokenResolver) => {
         if (document.querySelector('.app-bar-status')) {
             document.querySelector('.app-bar-status').style.display = 'none';
         }
-    };
+    }
 
-    const performJoin = () => {
+    function performJoin() {
         let nick = UI.nicknameInput.value.trim() || 'Anonymous';
         let room = (UI.roomIdInput && UI.roomIdInput.value.trim()) ? UI.roomIdInput.value.trim() : 'global';
         
@@ -141,10 +172,9 @@ export const initLibrary = (socket, player, tokenResolver) => {
         socket.sendCommand('join', { nickname: nick, room_id: room, token: token });
         UI.overlay.style.display = 'none';
         player.handleJoinUserInit();
-    };
+    }
 
-    if (UI.offlineModeBtn) UI.offlineModeBtn.onclick = startLocalOffline;
-    if (UI.joinBtn) UI.joinBtn.onclick = performJoin;
+    // Button listeners moved to top of initLibrary for immediate responsiveness
 
     socket.onReconnect = () => {
         const nick = localStorage.getItem('syncMusicNick');
@@ -205,7 +235,15 @@ export const initLibrary = (socket, player, tokenResolver) => {
 
                 const songs = data;
                 UI.loadingIndicator.style.display = 'none';
-                if (!songs || songs.length === 0) return;
+                
+                if (!songs || !Array.isArray(songs)) {
+                    // Fallback: if we got an object (like ScanStatus) but is_scanning was false, 
+                    // it means the scan finished but songs aren't ready yet. Poll again.
+                    setTimeout(() => poll(1000), 1000);
+                    return;
+                }
+
+                if (songs.length === 0) return;
 
                 // Group songs by top-level folder
                 const groups = {};

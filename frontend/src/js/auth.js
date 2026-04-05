@@ -20,13 +20,21 @@ export const initAuth = async () => {
     if (initPromise) return initPromise;
 
     initPromise = (async () => {
+        const timeout = new Promise(resolve => 
+            setTimeout(() => resolve({ authenticated: false, keycloak: null, error: 'TIMEOUT' }), 3000)
+        );
+
         try {
-            const authenticated = await keycloak.init({
-                pkceMethod: 'S256',
-                checkLoginIframe: false,
-                enableLogging: true
-            });
-            return { authenticated, keycloak };
+            const initTask = (async () => {
+                const authenticated = await keycloak.init({
+                    pkceMethod: 'S256',
+                    checkLoginIframe: false,
+                    enableLogging: true
+                });
+                return { authenticated, keycloak };
+            })();
+
+            return await Promise.race([initTask, timeout]);
         } catch (error) {
             console.warn("[Auth] Keycloak unreachable or failed to initialize. Falling back to anonymous mode.", error);
             return { authenticated: false, keycloak: null, error };
