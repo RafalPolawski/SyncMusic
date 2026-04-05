@@ -19,16 +19,21 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // ── Authentication (Keycloak) ─────────────────────────────────────────────
     const authResult = await initAuth();
+    const guestContainer = document.getElementById("guestContainer");
+    
     if (authResult.authenticated) {
         const prof = getProfile();
         const username = prof.preferred_username || prof.given_name || prof.name || "SSO User";
+        
+        if (guestContainer) guestContainer.style.display = "none";
+        // Setup hidden nickname input to still feed into WebTransport join event
         if (UI.nicknameInput) {
             UI.nicknameInput.value = username;
-            UI.nicknameInput.readOnly = true;
-            UI.nicknameInput.style.opacity = '0.7';
+            UI.nicknameInput.type = "hidden";
         }
+        
         if (UI.ssoBtn) {
-            UI.ssoBtn.innerHTML = '🔌 LOGOUT';
+            UI.ssoBtn.innerHTML = `Zalogowany jako ${username} – 🔌 WYLOGUJ`;
             UI.ssoBtn.title = 'Logout from Keycloak';
             UI.ssoBtn.onclick = logout;
             UI.ssoBtn.style.background = 'rgba(224, 48, 48, 0.2)';

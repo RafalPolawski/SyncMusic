@@ -154,9 +154,9 @@ SyncMusic introduces isolated rooms and integrates Keycloak for Google SSO & Acc
      - Valid redirect URIs: `http://localhost/*`, `https://*`
      - Web origins: `+`
    - Save.
-5. **Create a User**:
-   - Go to **Users** → **Add user**. Fill in a username.
-   - Go to the user's **Credentials** tab → Set a password (disable "Temporary").
+5. **Create a User (or Enable Registration)**:
+   - To manually add: Go to **Users** → **Add user**. Set a username, then go to the user's **Credentials** tab to set a password (disable "Temporary").
+   - To allow users to create their own accounts: Go to **Realm Settings** → **Login** and toggle **User registration** to ON.
 
 *(Google Identity setup can be done in Keycloak under Identity Providers → Google, requiring a Google Console OAuth Client ID).*
 

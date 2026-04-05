@@ -1,11 +1,11 @@
 import Keycloak from 'keycloak-js';
 
 // Setup Keycloak instance
-// This assumes the user followed the README to create:
-// Realm: SyncMusic
-// Client ID: syncmusic-frontend
+// Dynamic Keycloak URL: allows same-origin mapping (e.g. Tailscale IP mapping)
+const kcUrl = window.location.protocol + '//' + window.location.hostname + ':8082';
+
 const keycloak = new Keycloak({
-    url: 'http://localhost:8082',
+    url: kcUrl,
     realm: 'SyncMusic',
     clientId: 'syncmusic-frontend'
 });
@@ -17,8 +17,7 @@ const keycloak = new Keycloak({
 export const initAuth = async () => {
     try {
         const authenticated = await keycloak.init({
-            onLoad: 'check-sso',
-            checkLoginIframe: false // Prevent issues with local dev ports
+            pkceMethod: 'S256'
         });
         return { authenticated, keycloak };
     } catch (error) {

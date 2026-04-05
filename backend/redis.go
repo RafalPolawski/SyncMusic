@@ -95,6 +95,7 @@ func saveAndPublish(roomID string, state RoomState, msg map[string]interface{}) 
 		"GlobalVolume":    state.GlobalVolume,
 		"Queue":           string(qBytes),
 	})
+	pipe.Expire(ctx, getRoomStateKey(roomID), 1*time.Hour)
 	pipe.Publish(ctx, getPubsubChannel(roomID), string(msgBytes))
 	if _, err := pipe.Exec(ctx); err != nil {
 		log.Printf("[ERROR] Redis pipeline error: %v\n", err)
@@ -125,6 +126,7 @@ func SaveRoomState(roomID string, state RoomState) {
 		"GlobalVolume":    state.GlobalVolume,
 		"Queue":           string(qBytes),
 	})
+	rdb.Expire(ctx, getRoomStateKey(roomID), 1*time.Hour)
 }
 
 // RoomState is the parsed in-memory representation of the room.
