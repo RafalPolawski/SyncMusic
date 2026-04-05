@@ -43,8 +43,12 @@
         <div style="margin-bottom: 25px; color: rgba(255,255,255,0.6); font-size: 14px;">Choose your playback mode</div>
         
         <div style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 20px;">
-            <input type="text" id="nicknameInput" class="nickname-input" placeholder="Your nickname" maxlength="20" autocomplete="off">
-            <input type="text" id="roomIdInput" class="nickname-input" placeholder="Room ID (optional)" maxlength="20" autocomplete="off" style="margin-top: 10px;">
+            <div style="display: flex; gap: 10px; align-items: center; justify-content: center; margin-bottom: 15px;">
+                <input type="text" id="nicknameInput" class="nickname-input" placeholder="Your nickname (or login)" maxlength="20" autocomplete="off" style="margin: 0; flex: 1;">
+                <button id="ssoBtn" style="height: 100%; white-space: nowrap; padding: 12px 18px; border: 1px solid #1DB954; background: rgba(29, 185, 84, 0.2); color: white; border-radius: 12px; font-weight: bold; cursor: pointer;" title="Login with Google/Keycloak">🔐 SSO</button>
+            </div>
+            
+            <input type="text" id="roomIdInput" class="nickname-input" placeholder="Room ID (optional)" maxlength="20" autocomplete="off">
             
             <div id="activeRoomsContainer" style="display:none; margin-top: 15px; text-align: left;">
                 <div style="font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Active Rooms</div>

@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"log"
+	"strings"
 
 	"github.com/quic-go/webtransport-go"
 )
@@ -66,6 +68,30 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 		if nick, ok := msg["nickname"].(string); ok {
 			client.Nickname = nick
 		}
+		
+		// SSO JWT Decoding (Trust on First Use / Identity Mapping)
+		if token, ok := msg["token"].(string); ok && token != "" {
+			parts := strings.Split(token, ".")
+			if len(parts) == 3 {
+				if payload, err := base64.RawURLEncoding.DecodeString(parts[1]); err == nil {
+					var claims struct {
+						PreferredUsername string `json:"preferred_username"`
+						GivenName         string `json:"given_name"`
+						Name              string `json:"name"`
+					}
+					if err := json.Unmarshal(payload, &claims); err == nil {
+						if claims.PreferredUsername != "" {
+							client.Nickname = claims.PreferredUsername + " ✔️"
+						} else if claims.GivenName != "" {
+							client.Nickname = claims.GivenName + " ✔️"
+						} else if claims.Name != "" {
+							client.Nickname = claims.Name + " ✔️"
+						}
+					}
+				}
+			}
+		}
+
 		if room, ok := msg["room_id"].(string); ok && room != "" {
 			client.RoomID = room
 		} else {

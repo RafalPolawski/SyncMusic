@@ -9,7 +9,7 @@ import { CacheManager } from '../cache.js';
 import { createCacheWidget } from './cache-ui.js';
 import { renderSongsView } from './songs-view.js';
 
-export function initLibrary(socket, player) {
+export const initLibrary = (socket, player, tokenResolver) => {
     let globalPlayingPath   = null;
     let globalPlayingFolder = null;
     let activeTrackEl       = null;
@@ -135,8 +135,9 @@ export function initLibrary(socket, player) {
         history.pushState({ view: 'root' }, '');
         currentView = 'root';
         
-        // Send join with Room ID
-        socket.sendCommand('join', { nickname: nick, room_id: room });
+        // Send join with Room ID and Token (if authorized)
+        let token = tokenResolver ? tokenResolver() : null;
+        socket.sendCommand('join', { nickname: nick, room_id: room, token: token });
         UI.overlay.style.display = 'none';
         player.handleJoinUserInit();
     };
@@ -147,7 +148,8 @@ export function initLibrary(socket, player) {
     socket.onReconnect = () => {
         const nick = localStorage.getItem('syncMusicNick');
         const room = localStorage.getItem('syncMusicRoom') || 'global';
-        if (nick && !player.isOfflineMode) socket.sendCommand('join', { nickname: nick, room_id: room });
+        let token = tokenResolver ? tokenResolver() : null;
+        if (nick && !player.isOfflineMode) socket.sendCommand('join', { nickname: nick, room_id: room, token: token });
     };
 
     // ── Library polling w/ exponential back-off ───────────────────────────────

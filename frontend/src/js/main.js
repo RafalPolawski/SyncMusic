@@ -4,6 +4,7 @@ import { initPlayer } from './player/index.js';
 import { initQueue } from './queue.js';
 import { CacheManager } from './cache.js';
 import { initLibrary } from './library/index.js';
+import { initAuth, login, logout, getProfile, getToken } from './auth.js';
 
 /**
  * Main Application Entry Point (Modularized)
@@ -13,12 +14,34 @@ import { initLibrary } from './library/index.js';
  * - Initializing the Music Player instance.
  * - Loading media libraries on startup and rendering the folder tree.
  */
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
     initUI();
 
-    const savedNick = localStorage.getItem("syncMusicNick");
-    if (savedNick && UI.nicknameInput) {
-        UI.nicknameInput.value = savedNick;
+    // ── Authentication (Keycloak) ─────────────────────────────────────────────
+    const authResult = await initAuth();
+    if (authResult.authenticated) {
+        const prof = getProfile();
+        const username = prof.preferred_username || prof.given_name || prof.name || "SSO User";
+        if (UI.nicknameInput) {
+            UI.nicknameInput.value = username;
+            UI.nicknameInput.readOnly = true;
+            UI.nicknameInput.style.opacity = '0.7';
+        }
+        if (UI.ssoBtn) {
+            UI.ssoBtn.innerHTML = '🔌 LOGOUT';
+            UI.ssoBtn.title = 'Logout from Keycloak';
+            UI.ssoBtn.onclick = logout;
+            UI.ssoBtn.style.background = 'rgba(224, 48, 48, 0.2)';
+            UI.ssoBtn.style.border = '1px solid #e03030';
+        }
+    } else {
+        const savedNick = localStorage.getItem("syncMusicNick");
+        if (savedNick && UI.nicknameInput) {
+            UI.nicknameInput.value = savedNick;
+        }
+        if (UI.ssoBtn) {
+            UI.ssoBtn.onclick = login;
+        }
     }
 
     CacheManager.initSWListener();
@@ -101,5 +124,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     initQueue(socket, player);
-    initLibrary(socket, player);
+    
+    // Pass the token resolver if backend wants to verify
+    const tokenResolver = authResult.authenticated ? getToken : null;
+    initLibrary(socket, player, tokenResolver);
 });
