@@ -48,6 +48,7 @@ func main() {
 	mux.HandleFunc("/api/cover",     handleGetCover)
 	mux.HandleFunc("/api/cert-hash", handleCertHash)
 	mux.HandleFunc("/api/rescan",    handleRescan)
+	mux.HandleFunc("/api/rooms",     handleGetRooms)
 	mux.HandleFunc("/api/ok",        handleOK)
 
 	wtServer := &webtransport.Server{

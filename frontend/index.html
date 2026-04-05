@@ -44,7 +44,13 @@
         
         <div style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 20px;">
             <input type="text" id="nicknameInput" class="nickname-input" placeholder="Your nickname" maxlength="20" autocomplete="off">
-            <input type="text" id="roomIdInput" class="nickname-input" placeholder="Room ID (e.g. dom, silownia)" maxlength="20" autocomplete="off" style="margin-top: 10px;">
+            <input type="text" id="roomIdInput" class="nickname-input" placeholder="Room ID (optional)" maxlength="20" autocomplete="off" style="margin-top: 10px;">
+            
+            <div id="activeRoomsContainer" style="display:none; margin-top: 15px; text-align: left;">
+                <div style="font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Active Rooms</div>
+                <div id="activeRoomsList" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+            </div>
+
             <button id="joinBtn" style="margin-top: 20px;">JOIN ONLINE ROOM 🎧</button>
         </div>
 
@@ -54,7 +60,7 @@
             <div style="flex: 1; height: 1px; background: rgba(255,255,255,0.1);"></div>
         </div>
 
-        <button id="offlineModeBtn" style="background: rgba(255,255,255,0.1); color: #fff; width: 100%;">START LOCAL OFFLINE 📱</button>
+        <button id="offlineModeBtn" style="background: rgba(255, 255, 255, 0.08); color: #fff; width: 100%; padding: 16px; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; backdrop-filter: blur(5px); transition: all 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.08)'">START LOCAL OFFLINE 📱</button>
     </div>
 
     <div id="app-wrapper">

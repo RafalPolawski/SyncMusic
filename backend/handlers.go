@@ -172,3 +172,22 @@ func handleCertHash(w http.ResponseWriter, r *http.Request) {
 func handleOK(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
+
+// handleGetRooms returns a JSON list of active rooms from Redis.
+func handleGetRooms(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	var rooms []string
+	iter := rdb.Scan(ctx, 0, "syncmusic:room_state:*", 0).Iterator()
+	for iter.Next(ctx) {
+		key := iter.Val()
+		roomID := strings.TrimPrefix(key, "syncmusic:room_state:")
+		rooms = append(rooms, roomID)
+	}
+	if err := iter.Err(); err != nil {
+		log.Printf("[ERROR] Redis scan for rooms failed: %v\n", err)
+		http.Error(w, "Failed to list rooms", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(rooms)
+}

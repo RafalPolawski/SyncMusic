@@ -89,6 +89,27 @@ export function initLibrary(socket, player) {
         if (savedRoom) UI.roomIdInput.value = savedRoom;
     }
 
+    // Fetch active rooms on mount
+    fetch('/api/rooms').then(res => res.json()).then(rooms => {
+        if (rooms && rooms.length > 0 && UI.activeRoomsContainer && UI.activeRoomsList) {
+            UI.activeRoomsContainer.style.display = 'block';
+            UI.activeRoomsList.innerHTML = rooms.map(roomId => 
+                `<button type="button" class="room-pill">${roomId}</button>`
+            ).join('');
+            
+            document.querySelectorAll('.room-pill').forEach(pill => {
+                pill.style.background = 'rgba(29, 185, 84, 0.2)';
+                pill.style.border = '1px solid #1DB954';
+                pill.style.color = '#fff';
+                pill.style.padding = '4px 10px';
+                pill.style.borderRadius = '16px';
+                pill.style.fontSize = '12px';
+                pill.style.cursor = 'pointer';
+                pill.onclick = () => { if (UI.roomIdInput) UI.roomIdInput.value = pill.innerText; };
+            });
+        }
+    }).catch(e => console.warn('Offline or failed to fetch rooms:', e));
+
     const startLocalOffline = () => {
         // Skips WebTransport entirely
         player.isOfflineMode = true; // Inform player not to seek dynamically (if needed)

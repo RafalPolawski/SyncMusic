@@ -137,6 +137,29 @@ docker compose up -d
 | **LAN (HTTPS)** | `https://192.168.x.x` | Accept the self-signed cert warning once |
 | **Tailscale** | `https://your-machine.tailnet.ts.net` | Run `tailscale serve --bg https / http://localhost:80` first |
 
+### 5. Keycloak Setup (Identity & Rooms)
+
+SyncMusic introduces isolated rooms and integrates Keycloak for Google SSO & Accounts. To set it up manually:
+
+1. Open the Keycloak Admin Console at `http://localhost:8082`.
+2. Log in using `admin` / `admin`.
+3. **Create a Realm**:
+   - Click the top-left dropdown (under the Keycloak logo) → **Create Realm**.
+   - Name it `SyncMusic` and click Create.
+4. **Create a Client**:
+   - Go to **Clients** → **Create client**.
+   - Set **Client ID** to `syncmusic-frontend`.
+   - **Capability config**: Enable *Standard flow* and *Direct access grants*.
+   - **Login settings**: 
+     - Valid redirect URIs: `http://localhost/*`, `https://*`
+     - Web origins: `+`
+   - Save.
+5. **Create a User**:
+   - Go to **Users** → **Add user**. Fill in a username.
+   - Go to the user's **Credentials** tab → Set a password (disable "Temporary").
+
+*(Google Identity setup can be done in Keycloak under Identity Providers → Google, requiring a Google Console OAuth Client ID).*
+
 ---
 
 ## 🔧 Development
