@@ -90,6 +90,7 @@ export const initLibrary = (socket, player, tokenResolver) => {
     }
 
     // Fetch active rooms on mount
+    if (UI.activeRoomsList) UI.activeRoomsList.innerHTML = '<span style="color:rgba(255,255,255,0.4); font-size:12px;">Searching for active rooms...</span>';
     fetch('/api/rooms').then(res => res.json()).then(rooms => {
         if (rooms && rooms.length > 0 && UI.activeRoomsContainer && UI.activeRoomsList) {
             UI.activeRoomsContainer.style.display = 'block';

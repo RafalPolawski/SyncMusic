@@ -6,7 +6,7 @@ const kcUrl = window.location.origin + '/auth';
 
 const keycloak = new Keycloak({
     url: kcUrl,
-    realm: 'SyncMusic',
+    realm: 'syncmusic',
     clientId: 'syncmusic-frontend'
 });
 
@@ -23,6 +23,7 @@ export const initAuth = async () => {
         try {
             const authenticated = await keycloak.init({
                 pkceMethod: 'S256',
+                checkLoginIframe: false,
                 enableLogging: true
             });
             return { authenticated, keycloak };

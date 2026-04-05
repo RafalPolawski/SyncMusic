@@ -51,7 +51,7 @@ export function initPlayer(socket) {
 
     // ── forcePlay helper (used by several modules) ─────────────────────────
     const forcePlay = () => {
-        if (!state.hasJoined) return;
+        if (!state.hasJoined && !state.isOfflineMode) return;
         audio.play().catch((err) => {
             if (err.name === 'NotAllowedError' && !state.pendingPlay) {
                 state.pendingPlay = true;

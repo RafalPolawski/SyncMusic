@@ -145,7 +145,7 @@ SyncMusic introduces isolated rooms and integrates Keycloak for Google SSO & Acc
 2. Log in using `admin` / `admin`.
 3. **Create a Realm**:
    - Click the top-left dropdown (under the Keycloak logo) → **Create Realm**.
-   - Name it `SyncMusic` and click Create.
+   - Name it `syncmusic` and click Create.
 4. **Create a Client**:
    - Go to **Clients** → **Create client**.
    - Set **Client ID** to `syncmusic-frontend`.
