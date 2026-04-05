@@ -112,7 +112,7 @@ export const initLibrary = (socket, player, tokenResolver) => {
 
     const startLocalOffline = () => {
         // Skips WebTransport entirely
-        player.isOfflineMode = true; // Inform player not to seek dynamically (if needed)
+        player.setOfflineStatus(true);
         history.replaceState({ view: 'exit' }, '');
         history.pushState({ view: 'root' }, '');
         currentView = 'root';
@@ -321,7 +321,7 @@ export const initLibrary = (socket, player, tokenResolver) => {
                     renderSongsView(
                         f,
                         groups[f],
-                        (song) => socket.sendCommand('load', { song: song.path, folder: f }),
+                        (song) => player.loadTrack(song.path, f),
                         (song, addBtn) => {
                             socket.sendCommand('enqueue', { item: { path: song.path, title: song.title, artist: song.artist } });
                             const original = addBtn.innerHTML;
@@ -472,7 +472,7 @@ export const initLibrary = (socket, player, tokenResolver) => {
                     setTimeout(() => { addBtn.innerHTML = original; addBtn.style.color = ''; }, 1000);
                     return;
                 }
-                socket.sendCommand('load', { song: s.path, folder });
+                player.loadTrack(s.path, folder);
             };
 
             UI.searchResults.appendChild(row);

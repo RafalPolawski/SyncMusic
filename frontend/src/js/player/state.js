@@ -29,6 +29,7 @@ export function createState() {
         syncAudioTime: 0,
         shouldBePlaying: false,
         hasJoined: false,
+        isOfflineMode: false,
         lastKnownTime: -1,
 
         // Volume

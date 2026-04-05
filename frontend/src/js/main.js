@@ -33,13 +33,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
         
         if (UI.ssoBtn) {
-            UI.ssoBtn.innerHTML = `Zalogowany jako ${username} – 🔌 WYLOGUJ`;
+            UI.ssoBtn.innerHTML = `✅ Signed in as ${username} – 🔌 LOGOUT`;
             UI.ssoBtn.title = 'Logout from Keycloak';
             UI.ssoBtn.onclick = logout;
-            UI.ssoBtn.style.background = 'rgba(224, 48, 48, 0.2)';
-            UI.ssoBtn.style.border = '1px solid #e03030';
+            UI.ssoBtn.style.background = 'rgba(29, 185, 84, 0.1)';
+            UI.ssoBtn.style.borderColor = '#1DB954';
         }
     } else {
+        if (guestContainer) guestContainer.style.display = "block";
         const savedNick = localStorage.getItem("syncMusicNick");
         if (savedNick && UI.nicknameInput) {
             UI.nicknameInput.value = savedNick;

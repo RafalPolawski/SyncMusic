@@ -1,8 +1,8 @@
 import Keycloak from 'keycloak-js';
 
 // Setup Keycloak instance
-// Dynamic Keycloak URL: allows same-origin mapping (e.g. Tailscale IP mapping)
-const kcUrl = window.location.protocol + '//' + window.location.hostname + ':8082';
+// Proxy-based URL: uses the same host/port as the frontend (Caddy handles the routing to /auth)
+const kcUrl = window.location.origin + '/auth';
 
 const keycloak = new Keycloak({
     url: kcUrl,
@@ -10,20 +10,29 @@ const keycloak = new Keycloak({
     clientId: 'syncmusic-frontend'
 });
 
+let initPromise = null;
+
 /**
  * Initializes Keycloak and returns the authenticated status.
  * Fails gracefully if offline or Keycloak is unreachable.
  */
 export const initAuth = async () => {
-    try {
-        const authenticated = await keycloak.init({
-            pkceMethod: 'S256'
-        });
-        return { authenticated, keycloak };
-    } catch (error) {
-        console.warn("[Auth] Keycloak unreachable or failed to initialize. Falling back to anonymous mode.", error);
-        return { authenticated: false, keycloak: null, error };
-    }
+    if (initPromise) return initPromise;
+
+    initPromise = (async () => {
+        try {
+            const authenticated = await keycloak.init({
+                pkceMethod: 'S256',
+                enableLogging: true
+            });
+            return { authenticated, keycloak };
+        } catch (error) {
+            console.warn("[Auth] Keycloak unreachable or failed to initialize. Falling back to anonymous mode.", error);
+            return { authenticated: false, keycloak: null, error };
+        }
+    })();
+
+    return initPromise;
 };
 
 export const login = () => keycloak.login();

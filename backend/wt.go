@@ -80,15 +80,23 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 						Name              string `json:"name"`
 					}
 					if err := json.Unmarshal(payload, &claims); err == nil {
+						authLabel := " (SSO ✔️)"
 						if claims.PreferredUsername != "" {
-							client.Nickname = claims.PreferredUsername + " ✔️"
+							client.Nickname = claims.PreferredUsername + authLabel
 						} else if claims.GivenName != "" {
-							client.Nickname = claims.GivenName + " ✔️"
+							client.Nickname = claims.GivenName + authLabel
 						} else if claims.Name != "" {
-							client.Nickname = claims.Name + " ✔️"
+							client.Nickname = claims.Name + authLabel
 						}
+						log.Printf("[AUTH] Identified SSO User: %s (Claims: pref=%s, given=%s)\n", client.Nickname, claims.PreferredUsername, claims.GivenName)
+					} else {
+						log.Printf("[AUTH] Failed to unmarshal JWT payload: %v\n", err)
 					}
+				} else {
+					log.Printf("[AUTH] Failed to decode JWT base64: %v\n", err)
 				}
+			} else {
+				log.Printf("[AUTH] Invalid JWT parts count: %d\n", len(parts))
 			}
 		}
 

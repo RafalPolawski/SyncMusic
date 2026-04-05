@@ -232,5 +232,24 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
         if (state.shouldBePlaying) audio.play().catch((e) => console.error('Play error:', e));
     };
 
-    return { handleSocketMessage, handleJoinUserInit };
+    /**
+     * Unified load handler:
+     *   - In Online mode: Sends a 'load' command to the server.
+     *   - In Offline mode: Immediately triggers the 'load' logic locally.
+     */
+    const loadTrack = (path, folder) => {
+        if (state.isOfflineMode) {
+            // Directly simulate the server's 'load' message to update local state/UI
+            handleSocketMessage({
+                action: 'load',
+                song: path,
+                folder: folder,
+                isPlaying: true
+            });
+        } else {
+            socket.sendCommand('load', { song: path, folder: folder });
+        }
+    };
+
+    return { handleSocketMessage, handleJoinUserInit, loadTrack };
 }

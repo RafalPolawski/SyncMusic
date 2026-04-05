@@ -99,6 +99,8 @@ export function initPlayer(socket) {
     return {
         handleJoinUserInit: sync.handleJoinUserInit,
         handleSocketMessage: sync.handleSocketMessage,
+        loadTrack:           sync.loadTrack,
+        setOfflineStatus:    (e) => { state.isOfflineMode = e; },
 
         setCacheGroups: (groups) => {
             state.allGroupsCache = groups;

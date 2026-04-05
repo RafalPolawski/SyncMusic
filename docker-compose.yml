@@ -33,7 +33,7 @@ services:
     container_name: syncmusic-redis
     restart: unless-stopped
     volumes:
-      - syncmusic_redis_data:/data
+      - syncmusic_redis:/data
 
   syncmusic-frontend:
     image: ghcr.io/rafalpolawski/syncmusic-frontend:latest
@@ -82,15 +82,23 @@ services:
       KC_DB_PASSWORD: password
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HOSTNAME_STRICT: "false"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY: edge
     command: start
     ports:
       - "8082:8080"
     depends_on:
       - syncmusic-postgres
+      - syncmusic-redis
 
 volumes:
   caddy_data:
   caddy_config:
   syncmusic_db:
-  syncmusic_redis_data:
+  syncmusic_redis:
+  frontend_node_modules:
   syncmusic_postgres_data:

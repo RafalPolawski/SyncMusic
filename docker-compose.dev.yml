@@ -19,16 +19,16 @@ services:
     volumes:
       - "${MUSIC_DIR:-/c/Muzyka}:/app/music:ro"
     environment:
-      - REDIS_URL=redis://syncmusic-redis-dev:6379/0
+      - REDIS_URL=redis://syncmusic-redis:6379/0
     depends_on:
-      - syncmusic-redis-dev
+      - syncmusic-redis
 
-  syncmusic-redis-dev:
+  syncmusic-redis:
     image: redis:8-alpine
-    container_name: syncmusic-redis-dev
+    container_name: syncmusic-redis
     restart: unless-stopped
     volumes:
-      - syncmusic_redis_dev:/data
+      - syncmusic_redis:/data
 
   syncmusic-frontend:
     container_name: syncmusic-frontend
@@ -83,16 +83,23 @@ services:
       KC_DB_PASSWORD: password
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HOSTNAME_STRICT: "false"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY: edge
     command: start-dev
     ports:
       - "8082:8080"
     depends_on:
       - syncmusic-postgres
+      - syncmusic-redis
 
 volumes:
   caddy_data_dev:
   caddy_config_dev:
   syncmusic_db_dev:
-  syncmusic_redis_dev:
+  syncmusic_redis:
   frontend_node_modules:
   syncmusic_postgres_data:

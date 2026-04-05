@@ -18,6 +18,13 @@ http://:80 {
 	@music {
 		path /music/*
 	}
+	@auth {
+		path /auth/* /realms/* /resources/*
+	}
+
+	handle @auth {
+		reverse_proxy syncmusic-keycloak:8080
+	}
 
 	handle @api {
 		reverse_proxy syncmusic-backend:8080
@@ -44,6 +51,13 @@ http://:80 {
 
 	@music {
 		path /music/*
+	}
+	@auth {
+		path /auth/* /realms/* /resources/*
+	}
+
+	handle @auth {
+		reverse_proxy syncmusic-keycloak:8080
 	}
 
 	handle @api {
