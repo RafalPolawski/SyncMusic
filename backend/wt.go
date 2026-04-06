@@ -5,7 +5,21 @@ import (
 	"encoding/json"
 	"log"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/quic-go/webtransport-go"
+)
+
+var (
+	activeClients = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "syncmusic_active_clients",
+		Help: "Current number of connected WebTransport clients",
+	})
+
+	clientActions = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "syncmusic_client_actions_total",
+		Help: "Total number of playback actions received from clients",
+	}, []string{"action", "room_id"})
 )
 
 func handleWTSession(session *webtransport.Session) {
@@ -31,6 +45,7 @@ func handleWTSession(session *webtransport.Session) {
 	globalLocalClients.Clients[client] = true
 	total := len(globalLocalClients.Clients)
 	globalLocalClients.ClientsMutex.Unlock()
+	activeClients.Inc()
 	log.Printf("[INFO] WT Client connected: %s. Local clients: %d\n", clientIP, total)
 
 	defer func() {
@@ -39,6 +54,7 @@ func handleWTSession(session *webtransport.Session) {
 		delete(globalLocalClients.Clients, client)
 		remaining := len(globalLocalClients.Clients)
 		globalLocalClients.ClientsMutex.Unlock()
+		activeClients.Dec()
 		log.Printf("[INFO] WT Client disconnected: %s. Local clients: %d\n", clientIP, remaining)
 		if client.RoomID != "" {
 			globalLocalClients.BroadcastPresenceToRoom(client.RoomID)
@@ -245,5 +261,6 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 				}
 			}
 		}
+		clientActions.WithLabelValues(action, client.RoomID).Inc()
 	})
 }

@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: 'syncmusic-backend'
+    static_configs:
+      - targets: ['syncmusic-backend:8080']

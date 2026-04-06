@@ -10,12 +10,27 @@ import (
 
 	"github.com/go-redsync/redsync/v4"
 	"github.com/go-redsync/redsync/v4/redis/goredis/v9"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/redis/go-redis/v9"
 )
 
 var rdb *redis.Client
 var rs *redsync.Redsync
 var ctx = context.Background()
+
+var (
+	lockDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "syncmusic_redis_lock_acquisition_duration_seconds",
+		Help:    "Time spent waiting for Redis分布式锁",
+		Buckets: prometheus.DefBuckets,
+	}, []string{"room_id"})
+
+	lockErrors = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "syncmusic_redis_lock_errors_total",
+		Help: "Total number of Redis lock acquisition/release errors",
+	}, []string{"room_id", "op"})
+)
 
 func getRoomStateKey(roomID string) string { return "syncmusic:room_state:" + roomID }
 func getPubsubChannel(roomID string) string { return "syncmusic:room_events:" + roomID }
@@ -25,14 +40,18 @@ func getPubsubChannel(roomID string) string { return "syncmusic:room_events:" + 
 func withStateLock(roomID string, fn func()) {
 	mutex := rs.NewMutex("syncmusic:lock:room:" + roomID)
 
+	start := time.Now()
 	if err := mutex.Lock(); err != nil {
 		log.Printf("[ERROR] Failed to acquire Redis lock for room %s: %v\n", roomID, err)
+		lockErrors.WithLabelValues(roomID, "lock").Inc()
 		return
 	}
+	lockDuration.WithLabelValues(roomID).Observe(time.Since(start).Seconds())
 
 	defer func() {
 		if ok, err := mutex.Unlock(); !ok || err != nil {
 			log.Printf("[WARN] Failed to release Redis lock for room %s: %v\n", roomID, err)
+			lockErrors.WithLabelValues(roomID, "unlock").Inc()
 		}
 	}()
 

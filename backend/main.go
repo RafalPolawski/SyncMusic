@@ -12,6 +12,8 @@ import (
 
 	"github.com/quic-go/quic-go/http3"
 	"github.com/quic-go/webtransport-go"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var ntpOffset time.Duration
@@ -49,6 +51,7 @@ func main() {
 	mux.HandleFunc("/api/rescan",    authMiddleware(handleRescan, true))
 	mux.HandleFunc("/api/rooms",     handleGetRooms)
 	mux.HandleFunc("/api/ok",        handleOK)
+	mux.Handle("/metrics",           promhttp.Handler())
 
 	wtServer := &webtransport.Server{
 		H3: &http3.Server{

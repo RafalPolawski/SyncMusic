@@ -2,6 +2,9 @@
 	# Completely disable ALL automatic HTTPS behaviors.
 	auto_https off
 	local_certs
+	on_demand_tls {
+		ask http://syncmusic-backend:8080/api/ok
+	}
 }
 
 # (Snippet) Reusable routing
