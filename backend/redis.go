@@ -22,7 +22,7 @@ var ctx = context.Background()
 var (
 	lockDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "syncmusic_redis_lock_acquisition_duration_seconds",
-		Help:    "Time spent waiting for Redis分布式锁",
+		Help:    "Time spent waiting for Redis distributed lock",
 		Buckets: prometheus.DefBuckets,
 	}, []string{"room_id"})
 
