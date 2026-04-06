@@ -1,15 +1,20 @@
 {
 	# Global options
-	# For Tailscale MagicDNS access without public DNS, we use internal CA.
+	# Disable forced redirection to HTTPS on port 80 (standard HTTP).
+	# This fixes Service Worker registration on http://localhost.
+	auto_https off
+
+	# Enable on-demand TLS for Tailscale/custom domains
+	on_demand_tls {
+		ask http://syncmusic-backend:8080/api/ok
+	}
+
+	# Required for internal CA usage
 	local_certs
 }
 
-# The public domain or localhost (default)
-{$DOMAIN:localhost} {
-	# Use internal CA for LAN/Tailscale access (no browser warning if Tailscale certs added, 
-	# but avoids public Let's Encrypt requirement for internal hostnames).
-	tls internal
-
+# (Snippet) Reusable proxy logic for all protocols
+(syncmusic_proxy) {
 	# API Endpoints
 	@api {
 		path /api/*
@@ -53,9 +58,22 @@
 	}
 }
 
-# WebTransport (Protocol: QUIC/UDP)
+# Catch-all HTTP (Port 80 inside container)
+# Accessible via http://localhost or http://<tailscale-ip>
+:80 {
+	import syncmusic_proxy
+}
+
+# Catch-all HTTPS (Port 443 inside container)
+# Self-signed certificates granted for any domain that hits this.
+:443 {
+	# Use internal CA for Tailscale/LAN, with on-demand cert generation
+	tls internal {
+		on_demand
+	}
+	import syncmusic_proxy
+}
+
+# WebTransport (Handled directly by Backend)
 :4433 {
-	# WebTransport must be handled by the backend directly
-	# Caddy can only proxy HTTP/3, but WebTransport/QUIC is usually direct.
-	# We leave this port for the direct backend access as configured in main.go.
 }
