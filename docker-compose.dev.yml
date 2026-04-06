@@ -20,8 +20,10 @@ services:
       - "${MUSIC_DIR:-/c/Muzyka}:/app/music:ro"
     environment:
       - REDIS_URL=redis://syncmusic-redis:6379/0
+      - DATABASE_URL=postgres://keycloak:password@syncmusic-postgres:5432/keycloak?sslmode=disable
     depends_on:
       - syncmusic-redis
+      - syncmusic-postgres
 
   syncmusic-redis:
     image: redis:8-alpine

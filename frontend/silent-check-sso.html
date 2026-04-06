@@ -1,0 +1,10 @@
+<html>
+<body>
+    <script>
+        parent.postMessage(JSON.stringify({
+            type: 'AUTH_RESPONSE',
+            response: window.location.search
+        }), window.location.origin);
+    </script>
+</body>
+</html>

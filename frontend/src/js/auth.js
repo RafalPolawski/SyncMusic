@@ -27,10 +27,24 @@ export const initAuth = async () => {
         try {
             const initTask = (async () => {
                 const authenticated = await keycloak.init({
+                    onLoad: 'check-sso',
                     pkceMethod: 'S256',
+                    silentCheckSsoRedirectUri: window.location.origin + '/silent-check-sso.html',
                     checkLoginIframe: false,
                     enableLogging: true
                 });
+
+                if (authenticated) {
+                    // Start periodic token refresh
+                    setInterval(() => {
+                        keycloak.updateToken(70).then((refreshed) => {
+                            if (refreshed) console.debug('[Auth] Token refreshed');
+                        }).catch(() => {
+                            console.warn('[Auth] Failed to refresh token');
+                        });
+                    }, 60000); // Check every minute
+                }
+
                 return { authenticated, keycloak };
             })();
 

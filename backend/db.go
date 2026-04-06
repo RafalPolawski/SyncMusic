@@ -7,13 +7,14 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dhowden/tag"
-	_ "modernc.org/sqlite"
+	_ "github.com/lib/pq"
 )
 
 var db *sql.DB
-var dbMu sync.RWMutex // RWMutex: concurrent reads OK, exclusive for writes
+var dbMu sync.RWMutex
 
 type ScanStatus struct {
 	IsScanning  bool `json:"is_scanning"`
@@ -33,24 +34,38 @@ func GetScanStatus() ScanStatus {
 }
 
 func initDB() {
-	if err := os.MkdirAll("./data", 0755); err != nil {
-		log.Fatalf("[ERROR] Failed to create data directory: %v", err)
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		// Fallback for local dev if not in docker
+		dbURL = "postgres://keycloak:password@localhost:5432/keycloak?sslmode=disable"
 	}
 
 	var err error
-	db, err = sql.Open("sqlite", "./data/syncmusic.db")
+	// Retry connection because Postgres might be starting up in Docker
+	for i := 0; i < 10; i++ {
+		db, err = sql.Open("postgres", dbURL)
+		if err == nil {
+			err = db.Ping()
+		}
+		if err == nil {
+			break
+		}
+		log.Printf("[INFO] Waiting for Postgres... (%d/10)", i+1)
+		time.Sleep(2 * time.Second)
+	}
+
 	if err != nil {
-		log.Fatalf("[ERROR] Failed to open database: %v", err)
+		log.Fatalf("[ERROR] Failed to connect to Postgres: %v", err)
 	}
 
 	createTableQuery := `
 	CREATE TABLE IF NOT EXISTS songs (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		id SERIAL PRIMARY KEY,
 		path TEXT UNIQUE,
 		title TEXT,
 		artist TEXT,
 		folder TEXT,
-		size INTEGER DEFAULT 0
+		size BIGINT DEFAULT 0
 	);`
 
 	_, err = db.Exec(createTableQuery)
@@ -58,10 +73,7 @@ func initDB() {
 		log.Fatalf("[ERROR] Failed to create table: %v", err)
 	}
 
-	// Ensure size column exists for older DBs
-	db.Exec("ALTER TABLE songs ADD COLUMN size INTEGER DEFAULT 0")
-
-	log.Println("[INFO] Database initialized successfully.")
+	log.Println("[INFO] Postgres database initialized successfully.")
 }
 
 var validAudioExts = map[string]bool{
@@ -82,13 +94,11 @@ func scanLibraryToDB() {
 		scanProgressMutex.Unlock()
 	}()
 
-	// Invalidate cover art cache so rescan picks up new/changed artwork
 	coverCacheMutex.Lock()
 	coverCache = make(map[string]*cachedCover)
 	coverCacheKeys = nil
 	coverCacheMutex.Unlock()
 
-	// Clear existing tracks (rebuild is fast enough with SQLite)
 	dbMu.Lock()
 	_, err := db.Exec("DELETE FROM songs")
 	dbMu.Unlock()
@@ -162,7 +172,7 @@ func scanLibraryToDB() {
 
 			fileName := filepath.Base(path)
 			ext := filepath.Ext(path)
-			title := fileName // fallback
+			title := fileName
 			artist := "Unknown Artist"
 
 			m, tagErr := tag.ReadFrom(f)
@@ -197,7 +207,6 @@ func scanLibraryToDB() {
 
 	wg.Wait()
 
-	// Only hold dbMu for the transaction itself, not the entire parallel scan
 	dbMu.Lock()
 	defer dbMu.Unlock()
 
@@ -207,7 +216,7 @@ func scanLibraryToDB() {
 		return
 	}
 
-	stmt, err := tx.Prepare("INSERT INTO songs (path, title, artist, folder, size) VALUES (?, ?, ?, ?, ?)")
+	stmt, err := tx.Prepare("INSERT INTO songs (path, title, artist, folder, size) VALUES ($1, $2, $3, $4, $5)")
 	if err != nil {
 		log.Printf("[ERROR] Failed to prepare statement: %v\n", err)
 		tx.Rollback()
@@ -231,7 +240,7 @@ func scanLibraryToDB() {
 }
 
 func getSongsFromDB() ([]SongMeta, error) {
-	dbMu.RLock() // shared read lock — safe to run concurrently with other reads
+	dbMu.RLock()
 	defer dbMu.RUnlock()
 
 	rows, err := db.Query("SELECT path, title, artist, size FROM songs ORDER BY folder, title")
