@@ -7,10 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/dhowden/tag"
-	_ "github.com/lib/pq"
+	_ "modernc.org/sqlite"
 )
 
 var db *sql.DB
@@ -34,46 +33,33 @@ func GetScanStatus() ScanStatus {
 }
 
 func initDB() {
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		// Fallback for local dev if not in docker
-		dbURL = "postgres://keycloak:password@localhost:5432/keycloak?sslmode=disable"
-	}
-
+	dbPath := "music_library.db"
 	var err error
-	// Retry connection because Postgres might be starting up in Docker
-	for i := 0; i < 10; i++ {
-		db, err = sql.Open("postgres", dbURL)
-		if err == nil {
-			err = db.Ping()
-		}
-		if err == nil {
-			break
-		}
-		log.Printf("[INFO] Waiting for Postgres... (%d/10)", i+1)
-		time.Sleep(2 * time.Second)
+	db, err = sql.Open("sqlite", dbPath)
+	if err != nil {
+		log.Fatalf("[ERROR] Failed to open SQLite database: %v", err)
 	}
 
-	if err != nil {
-		log.Fatalf("[ERROR] Failed to connect to Postgres: %v", err)
+	if err = db.Ping(); err != nil {
+		log.Fatalf("[ERROR] Failed to ping SQLite database: %v", err)
 	}
 
 	createTableQuery := `
 	CREATE TABLE IF NOT EXISTS songs (
-		id SERIAL PRIMARY KEY,
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		path TEXT UNIQUE,
 		title TEXT,
 		artist TEXT,
 		folder TEXT,
-		size BIGINT DEFAULT 0
+		size INTEGER DEFAULT 0
 	);`
 
 	_, err = db.Exec(createTableQuery)
 	if err != nil {
-		log.Fatalf("[ERROR] Failed to create table: %v", err)
+		log.Fatalf("[ERROR] Failed to create tables: %v", err)
 	}
 
-	log.Println("[INFO] Postgres database initialized successfully.")
+	log.Printf("[INFO] SQLite database initialized at %s\n", dbPath)
 }
 
 var validAudioExts = map[string]bool{
