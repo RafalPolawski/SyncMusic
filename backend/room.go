@@ -15,8 +15,33 @@ type WTClient struct {
 	Stream   *webtransport.Stream
 	SendChan chan []byte
 	cancel   context.CancelFunc
+	mu       sync.RWMutex
 	Nickname string
 	RoomID   string
+}
+
+func (c *WTClient) GetNickname() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Nickname
+}
+
+func (c *WTClient) SetNickname(nick string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Nickname = nick
+}
+
+func (c *WTClient) GetRoomID() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.RoomID
+}
+
+func (c *WTClient) SetRoomID(roomID string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.RoomID = roomID
 }
 
 // SendNonBlocking queues a message without blocking. Drops the message if the
@@ -42,11 +67,16 @@ var globalLocalClients = &LocalClientsTracker{
 // BroadcastToRoom sends msg to every connected client in the specified room.
 func (r *LocalClientsTracker) BroadcastToRoom(roomID string, msg []byte) {
 	r.ClientsMutex.Lock()
-	defer r.ClientsMutex.Unlock()
+	var targets []*WTClient
 	for c := range r.Clients {
-		if c.RoomID == roomID {
-			c.SendNonBlocking(msg)
+		if c.GetRoomID() == roomID {
+			targets = append(targets, c)
 		}
+	}
+	r.ClientsMutex.Unlock()
+
+	for _, c := range targets {
+		c.SendNonBlocking(msg)
 	}
 }
 
@@ -59,10 +89,11 @@ func (r *LocalClientsTracker) BroadcastPresenceToRoom(roomID string) {
 	var users []string
 	var targets []*WTClient
 	for c := range r.Clients {
-		if c.RoomID == roomID {
+		if c.GetRoomID() == roomID {
 			targets = append(targets, c)
-			if c.Nickname != "" {
-				users = append(users, c.Nickname)
+			nick := c.GetNickname()
+			if nick != "" {
+				users = append(users, nick)
 			} else {
 				users = append(users, "Anonymous")
 			}
@@ -97,9 +128,9 @@ func clientWriter(ctx context.Context, client *WTClient) {
 // ── Queue mutation helpers ────────────────────────────────────────────────────
 // These apply modifications to a given slice. The caller handles saving to Redis.
 
-func removeQueueByID(q []map[string]interface{}, id float64) ([]map[string]interface{}, bool) {
+func removeQueueByID(q []map[string]interface{}, id string) ([]map[string]interface{}, bool) {
 	for i, item := range q {
-		if qID, ok := item["id"].(float64); ok && qID == id {
+		if qID, ok := item["id"].(string); ok && qID == id {
 			return removeQueueByIndex(q, i)
 		}
 	}

@@ -28,13 +28,19 @@ func main() {
 	initRedis()
 	subscribeRedis()
 
-	resp, err := ntp.Query("time.google.com")
-	if err == nil {
-		ntpOffset = resp.ClockOffset
-		log.Printf("[INFO] NTP Time sync complete. Offset: %v\n", ntpOffset)
-	} else {
-		log.Printf("[WARN] NTP sync failed, using local HTTP server time: %v\n", err)
-	}
+	// Periodic NTP re-calibration to prevent clock drift between backend instances
+	go func() {
+		for {
+			resp, err := ntp.Query("time.google.com")
+			if err == nil {
+				ntpOffset = resp.ClockOffset
+				log.Printf("[INFO] NTP Time sync complete. Offset: %v\n", ntpOffset)
+			} else {
+				log.Printf("[WARN] NTP sync failed, using last known offset or local time: %v\n", err)
+			}
+			time.Sleep(6 * time.Hour)
+		}
+	}()
 
 	tlsCert, hash := generateIdentity()
 	certHashStr = hash

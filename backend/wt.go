@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 
+	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/quic-go/webtransport-go"
@@ -56,8 +57,9 @@ func handleWTSession(session *webtransport.Session) {
 		globalLocalClients.ClientsMutex.Unlock()
 		activeClients.Dec()
 		log.Printf("[INFO] WT Client disconnected: %s. Local clients: %d\n", clientIP, remaining)
-		if client.RoomID != "" {
-			globalLocalClients.BroadcastPresenceToRoom(client.RoomID)
+		roomID := client.GetRoomID()
+		if roomID != "" {
+			globalLocalClients.BroadcastPresenceToRoom(roomID)
 		}
 		session.CloseWithError(0, "")
 	}()
@@ -80,25 +82,25 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 
 	if action == "join" {
 		if nick, ok := msg["nickname"].(string); ok {
-			client.Nickname = nick
+			client.SetNickname(nick)
 		}
 		
-		// SSO JWT Decoding (Trust on First Use / Identity Mapping)
+		// SSO JWT Decoding (Verified Identity Mapping)
 		if token, ok := msg["token"].(string); ok && token != "" {
 			if nickname := DecodeJWTBody(token); nickname != "" {
-				client.Nickname = nickname + " (SSO)"
-				log.Printf("[AUTH] Identified SSO User: %s\n", client.Nickname)
+				client.SetNickname(nickname + " (SSO)")
+				log.Printf("[AUTH] Identified SSO User: %s\n", nickname)
 			}
 		}
 
+		roomID := "global"
 		if room, ok := msg["room_id"].(string); ok && room != "" {
-			client.RoomID = room
-		} else {
-			client.RoomID = "global"
+			roomID = room
 		}
-		log.Printf("[INFO] Client %s joined room: %s as %s\n", clientIP, client.RoomID, client.Nickname)
+		client.SetRoomID(roomID)
+		log.Printf("[INFO] Client %s joined room: %s as %s\n", clientIP, roomID, client.GetNickname())
 
-		state := GetRoomState(client.RoomID)
+		state := GetRoomState(roomID)
 		if state.CurrentSong != "" {
 			pos := state.CurrentPosition
 			if state.IsPlaying {
@@ -147,8 +149,9 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 		return
 	}
 
-	withStateLock(client.RoomID, func() {
-		state := GetRoomState(client.RoomID)
+	roomID := client.GetRoomID()
+	withStateLock(roomID, func() {
+		state := GetRoomState(roomID)
 
 		switch action {
 
@@ -231,7 +234,7 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 					log.Printf("[ACTION] Client %s enqueue rejected (queue full)\n", clientIP)
 					return
 				}
-				item["id"] = float64(NowNTP().UnixNano())
+				item["id"] = uuid.NewString()
 				state.Queue = append(state.Queue, item)
 				broadcastMsg := map[string]interface{}{"action": "queue_update", "queue": state.Queue}
 				saveAndPublish(client.RoomID, state, broadcastMsg)
@@ -240,7 +243,7 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 
 		case "dequeue":
 			removed := false
-			if idVal, ok := msg["id"].(float64); ok {
+			if idVal, ok := msg["id"].(string); ok {
 				state.Queue, removed = removeQueueByID(state.Queue, idVal)
 			} else if idx, ok := msg["index"].(float64); ok {
 				state.Queue, removed = removeQueueByIndex(state.Queue, int(idx))
@@ -261,6 +264,6 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 				}
 			}
 		}
-		clientActions.WithLabelValues(action, client.RoomID).Inc()
+		clientActions.WithLabelValues(action, roomID).Inc()
 	})
 }

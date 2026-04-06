@@ -1,14 +1,22 @@
 package main
 
 import (
-	"encoding/base64"
-	"encoding/json"
+	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
+
+var jwtSecret = []byte(os.Getenv("JWT_SECRET"))
+
+func init() {
+	if len(jwtSecret) == 0 {
+		jwtSecret = []byte("syncmusic-dev-secret-change-me")
+	}
+}
 
 type UserClaims struct {
 	Username  string
@@ -16,15 +24,20 @@ type UserClaims struct {
 	ExpiresAt time.Time
 }
 
-// ParseJWT extracts basic user information from a JWT without signature verification (for simplified security).
+// ParseJWT parses and validates the JWT signature.
 func ParseJWT(tokenString string) (*UserClaims, error) {
-	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return jwtSecret, nil
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
+	if !ok || !token.Valid {
 		return nil, jwt.ErrInvalidKey
 	}
 
@@ -88,25 +101,11 @@ func authMiddleware(next http.HandlerFunc, mandatory bool) http.HandlerFunc {
 	}
 }
 
-// DecodeJWTBody is a helper for WebTransport sessions to extract nickname from token if present.
+// DecodeJWTBody extracts the verified username from a JWT.
 func DecodeJWTBody(token string) string {
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return ""
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	claims, err := ParseJWT(token)
 	if err != nil {
 		return ""
 	}
-	var claims struct {
-		PreferredUsername string `json:"preferred_username"`
-		Name              string `json:"name"`
-	}
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return ""
-	}
-	if claims.PreferredUsername != "" {
-		return claims.PreferredUsername
-	}
-	return claims.Name
+	return claims.Username
 }

@@ -2,14 +2,16 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dhowden/tag"
-	_ "modernc.org/sqlite"
+	_ "github.com/lib/pq"
 )
 
 var db *sql.DB
@@ -33,25 +35,49 @@ func GetScanStatus() ScanStatus {
 }
 
 func initDB() {
-	dbPath := "music_library.db"
-	var err error
-	db, err = sql.Open("sqlite", dbPath)
-	if err != nil {
-		log.Fatalf("[ERROR] Failed to open SQLite database: %v", err)
+	host := os.Getenv("POSTGRES_HOST")
+	if host == "" {
+		host = "syncmusic-postgres"
+	}
+	user := os.Getenv("POSTGRES_USER")
+	if user == "" {
+		user = "postgres"
+	}
+	pass := os.Getenv("POSTGRES_PASSWORD")
+	dbname := os.Getenv("POSTGRES_DB")
+	if dbname == "" {
+		dbname = "syncmusic" // Separate from Keycloak!
 	}
 
-	if err = db.Ping(); err != nil {
-		log.Fatalf("[ERROR] Failed to ping SQLite database: %v", err)
+	connStr := fmt.Sprintf("host=%s port=5432 user=%s password=%s dbname=%s sslmode=disable",
+		host, user, pass, dbname)
+
+	var err error
+	// Retry loop for Postgres startup in Docker
+	for i := 1; i <= 10; i++ {
+		db, err = sql.Open("postgres", connStr)
+		if err == nil {
+			err = db.Ping()
+			if err == nil {
+				break
+			}
+		}
+		log.Printf("[INFO] Waiting for Postgres... (%d/10)\n", i)
+		time.Sleep(2 * time.Second)
+	}
+
+	if err != nil {
+		log.Fatalf("[ERROR] Failed to connect to Postgres after 10 retries: %v", err)
 	}
 
 	createTableQuery := `
 	CREATE TABLE IF NOT EXISTS songs (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		id SERIAL PRIMARY KEY,
 		path TEXT UNIQUE,
 		title TEXT,
 		artist TEXT,
 		folder TEXT,
-		size INTEGER DEFAULT 0
+		size BIGINT DEFAULT 0
 	);`
 
 	_, err = db.Exec(createTableQuery)
@@ -59,7 +85,7 @@ func initDB() {
 		log.Fatalf("[ERROR] Failed to create tables: %v", err)
 	}
 
-	log.Printf("[INFO] SQLite database initialized at %s\n", dbPath)
+	log.Printf("[INFO] Postgres database initialized: %s@%s/%s\n", user, host, dbname)
 }
 
 var validAudioExts = map[string]bool{
