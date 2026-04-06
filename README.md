@@ -30,6 +30,10 @@ SyncMusic is a self-hosted, low-latency music synchronization server. Every conn
 | **Mobile mini-player** | Fixed mini-player that morphs into full-screen expanded view |
 | **Media Session API** | Lock screen / notification bar controls with artwork on Android & iOS |
 | **Settings panel** | Configurable soft-sync threshold, library rescan, cache management |
+| **Distributed Locking** | Redlock (go-redsync) ensures atomic state across multiple backend instances |
+| **Observability** | Integrated Prometheus & Grafana metrics for real-time traffic and performance monitoring |
+| **Security** | Full JWT signature verification (HMAC-SHA256) and isolated DB environments |
+| **Clock Precision** | Background NTP re-calibration (6h loop) to prevent server-side clock drift |
 | **Presence list** | See who else is listening in real time |
 | **RTT indicator** | Live round-trip time display with colour-coded quality signal |
 | **Self-signed TLS** | Backend auto-generates short-lived ECDSA cert; hash fetched via `/api/cert-hash` |
@@ -59,9 +63,16 @@ SyncMusic is a self-hosted, low-latency music synchronization server. Every conn
 │                   │  │   • Service Worker (PWA)         │
 │  • REST API       │  │   • player/, library/, queue.js │
 │  • WebTransport   │  └────────────────────────────────┘
-│  • SQLite (DB)    │
-│  • Redis Pub/Sub  │  ←→ [Redis 8 In-Memory State]
+│  • Redis Redlock  │
+│                   │  ←→ [Redis 8 / PubSub Cluster]
+│  • Postgres (DB)  │  ←→ [PostgreSQL 17 (Isolated)]
 └───────────────────┘
+          │
+┌─────────▼──────────────────────┐
+│   Observability Layer          │
+│   • Prometheus (:9090)         │
+│   • Grafana (:3000)            │
+└────────────────────────────────┘
 ```
 
 ### WebTransport Message Protocol
@@ -88,11 +99,11 @@ Messages are newline-delimited JSON:
 
 ## 🛠️ Tech Stack
 
-| Layer | Technology |
-|---|---|
-| **Backend** | Go 1.24, `quic-go`, `webtransport-go`, `dhowden/tag`, `go-redis` |
-| **Database/Cache**| `modernc.org/sqlite` (ID3 tagging), `redis:8-alpine` (Real-time Pub/Sub & State) |
+| **Backend** | Go 1.24, `quic-go`, `webtransport-go`, `dhowden/tag`, `go-redis`, `redsync` |
+| **Database** | PostgreSQL 17 (Application data), Keycloak DB (Isolated) |
+| **Cache/Sync**| `redis:8-alpine` (Real-time Pub/Sub & Redlock) |
 | **Frontend** | Vanilla JS (ES modules), Vite 5, Web Audio API |
+| **Monitoring** | Prometheus (Scraping), Grafana (Visualization) |
 | **Transport** | WebTransport over HTTP/3 (QUIC / UDP) |
 | **Reverse Proxy** | Caddy 2 (HTTP/3, internal CA, on-demand TLS) |
 | **CI/CD** | GitHub Actions → GHCR (`:dev` on push, `:latest` + version on Release) |
@@ -137,7 +148,17 @@ docker compose up -d
 | **LAN (HTTPS)** | `https://192.168.x.x` | Accept the self-signed cert warning once |
 | **Tailscale** | `https://your-machine.tailnet.ts.net` | Run `tailscale serve --bg https / http://localhost:80` first |
 
-### 5. Keycloak Setup (Identity & Rooms)
+### 5. Monitoring & Observability
+
+Quick-links for maintenance and performance tracking:
+
+| Service | Port | Use Case |
+|---|---|---|
+| **Grafana** | `http://localhost:3000` | High-level visualization (User: `admin` / Password: `admin`) |
+| **Prometheus** | `http://localhost:9090` | Raw metric scraping and alerts |
+| **Endpoint (Backend)** | `http://localhost:8080/metrics` | Real-time exporter for custom collectors |
+
+### 6. Keycloak Setup (Identity & Rooms)
 
 SyncMusic introduces isolated rooms and integrates Keycloak for Google SSO & Accounts. To set it up manually:
 
@@ -247,6 +268,7 @@ SyncMusic/
 | `GET` | `/api/scan-status` | Current library scan progress `{ is_scanning, scan_current, scan_total }` |
 | `POST` | `/api/rescan` | Trigger a full library rescan |
 | `GET` | `/api/ok` | Health check (used by Caddy's on-demand TLS `ask`) |
+| `GET` | `/api/metrics` | Prometheus exporter for monitoring |
 | `GET` | `/music/<path>` | Streams audio file directly from the music directory |
 | `WT` | `/wt` (UDP :4433) | WebTransport endpoint for real-time playback sync |
 
