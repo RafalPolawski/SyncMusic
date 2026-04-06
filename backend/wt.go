@@ -131,7 +131,7 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 		return
 	}
 
-	withStateLock(func() {
+	withStateLock(client.RoomID, func() {
 		state := GetRoomState(client.RoomID)
 
 		switch action {

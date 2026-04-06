@@ -6,22 +6,38 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 
+	"github.com/go-redsync/redsync/v4"
+	"github.com/go-redsync/redsync/v4/redis/goredis/v9"
 	"github.com/redis/go-redis/v9"
 )
 
 var rdb *redis.Client
+var rs *redsync.Redsync
 var ctx = context.Background()
 
 func getRoomStateKey(roomID string) string { return "syncmusic:room_state:" + roomID }
 func getPubsubChannel(roomID string) string { return "syncmusic:room_events:" + roomID }
 
-// Go mutex for local serialization — zero network overhead vs Redis SETNX.
-// For single-instance deployments this is strictly better (sub-microsecond vs ~1ms).
-// For multi-instance horizontal scaling, promote this back to a distributed lock.
-var stateMu sync.Mutex
+// withStateLock serializes state mutations with a distributed Redis lock (Redlock).
+// This allows multiple backend instances to safely manage room state.
+func withStateLock(roomID string, fn func()) {
+	mutex := rs.NewMutex("syncmusic:lock:room:" + roomID)
+
+	if err := mutex.Lock(); err != nil {
+		log.Printf("[ERROR] Failed to acquire Redis lock for room %s: %v\n", roomID, err)
+		return
+	}
+
+	defer func() {
+		if ok, err := mutex.Unlock(); !ok || err != nil {
+			log.Printf("[WARN] Failed to release Redis lock for room %s: %v\n", roomID, err)
+		}
+	}()
+
+	fn()
+}
 
 func initRedis() {
 	redisUrl := os.Getenv("REDIS_URL")
@@ -46,7 +62,9 @@ func initRedis() {
 		time.Sleep(2 * time.Second)
 	}
 
-	// Default state is initialized per-room on demand.
+	// Initialize redsync for distributed locking
+	pool := goredis.NewPool(rdb)
+	rs = redsync.New(pool)
 }
 
 func subscribeRedis() {
@@ -61,14 +79,7 @@ func subscribeRedis() {
 	log.Println("[INFO] Listening on Redis Pub/Sub pattern: syncmusic:room_events:*")
 }
 
-// withStateLock serialises state mutations with a local Go mutex.
-// All Redis I/O inside fn() is still atomic from the perspective of this process.
-func withStateLock(fn func()) {
-	stateMu.Lock()
-	defer stateMu.Unlock()
-	fn()
-}
-
+// subscribeRedis listens for room events globally.
 // saveAndPublish writes room state and broadcasts the event in a single
 // Redis pipeline — halves the number of round-trips vs two separate calls.
 func saveAndPublish(roomID string, state RoomState, msg map[string]interface{}) {
