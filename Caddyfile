@@ -1,55 +1,38 @@
 {
-	# Global options
-	# Disable forced redirection to HTTPS on port 80 (standard HTTP).
-	# This fixes Service Worker registration on http://localhost.
+	# Completely disable ALL automatic HTTPS behaviors.
 	auto_https off
-
-	# Enable on-demand TLS for Tailscale/custom domains
-	on_demand_tls {
-		ask http://syncmusic-backend:8080/api/ok
-	}
-
-	# Required for internal CA usage
 	local_certs
 }
 
-# (Snippet) Reusable proxy logic for all protocols
+# (Snippet) Reusable routing
 (syncmusic_proxy) {
-	# API Endpoints
-	@api {
-		path /api/*
-	}
+	header -Strict-Transport-Security
+	header Cache-Control "no-cache, no-store, must-revalidate"
+
+	@api path /api/*
 	handle @api {
 		reverse_proxy syncmusic-backend:8080
 	}
 
-	# Music Files (Audio + Cover Art)
-	@music {
-		path /music/*
-	}
+	@music path /music/*
 	handle @music {
 		reverse_proxy syncmusic-backend:8080
 	}
 
-	# Keycloak Authentication
-	@auth {
-		path /auth/* /realms/* /resources/*
-	}
+	@auth path /realms/* /resources/* /admin/* /idp/* /static/* /js/* /css/* /health/* /robots.txt
 	handle @auth {
-		reverse_proxy syncmusic-keycloak:8080
+		reverse_proxy syncmusic-keycloak:8080 {
+			header_up X-Forwarded-Host {host}
+			header_up X-Forwarded-Proto {scheme}
+		}
 	}
 
-	# Frontend - Static files or Dev Server
 	handle {
-		# If FRONTEND_DEV is set, proxy to Vite dev server (hot reload)
-		@dev_server {
-			expression {env.FRONTEND_DEV} != ""
-		}
+		@dev_server expression {env.FRONTEND_DEV} != ""
 		handle @dev_server {
 			reverse_proxy syncmusic-frontend:5173
 		}
 
-		# Otherwise, serve static build from disk (Production mode)
 		handle {
 			root * /usr/share/caddy
 			file_server
@@ -58,22 +41,19 @@
 	}
 }
 
-# Catch-all HTTP (Port 80 inside container)
-# Accessible via http://localhost or http://<tailscale-ip>
-:80 {
+# EXPLICIT HTTP Block (Crucial for blocking redirects)
+http://localhost, http://127.0.0.1, http://:80 {
 	import syncmusic_proxy
 }
 
-# Catch-all HTTPS (Port 443 inside container)
-# Self-signed certificates granted for any domain that hits this.
-:443 {
-	# Use internal CA for Tailscale/LAN, with on-demand cert generation
+# EXPLICIT HTTPS Block (For Tailscale/LAN and those who want HTTPS)
+https://localhost, https://127.0.0.1, https://:443 {
 	tls internal {
 		on_demand
 	}
 	import syncmusic_proxy
 }
 
-# WebTransport (Handled directly by Backend)
+# WebTransport
 :4433 {
 }

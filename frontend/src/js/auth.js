@@ -1,8 +1,8 @@
 import Keycloak from 'keycloak-js';
 
 // Setup Keycloak instance
-// Proxy-based URL: uses the same host/port as the frontend (Caddy handles the routing to /auth)
-const kcUrl = window.location.origin + '/auth';
+// Proxy-based URL: uses the same host/port as the frontend (Caddy handles the routing)
+const kcUrl = window.location.origin;
 
 const keycloak = new Keycloak({
     url: kcUrl,
