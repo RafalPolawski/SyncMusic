@@ -1,10 +1,5 @@
 # SyncMusic — Development Compose
 # Builds images locally, mounts source code for hot reload.
-#
-# Usage:
-#   docker compose -f docker-compose.dev.yml up --build
-#
-# Set MUSIC_DIR to your local music path (defaults to /Muzyka for backwards compat).
 
 services:
   syncmusic-backend:
@@ -43,20 +38,20 @@ services:
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
-    depends_on:
-      - syncmusic-backend
 
   syncmusic-proxy:
+    image: caddy:2.9-alpine
     container_name: syncmusic-proxy
-    build:
-      context: ./caddy
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
       - "443:443/udp"
+    environment:
+      - DOMAIN=localhost
+      - FRONTEND_DEV=true
     volumes:
-      - ./Caddyfile.dev:/etc/caddy/Caddyfile:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data_dev:/data
       - caddy_config_dev:/config
     depends_on:
@@ -92,8 +87,6 @@ services:
       KC_HTTP_ENABLED: "true"
       KC_PROXY: edge
     command: start-dev
-    ports:
-      - "8082:8080"
     depends_on:
       - syncmusic-postgres
       - syncmusic-redis
@@ -101,7 +94,6 @@ services:
 volumes:
   caddy_data_dev:
   caddy_config_dev:
-  syncmusic_db_dev:
   syncmusic_redis:
   frontend_node_modules:
   syncmusic_postgres_data:

@@ -1,74 +1,61 @@
-# local_certs forces Caddy's internal CA for LAN access (192.168.x.x)
-# For MagicDNS access, run on the Windows host:
-#   tailscale serve --bg https / http://localhost:80
 {
-	auto_https off
+	# Global options
+	# For Tailscale MagicDNS access without public DNS, we use internal CA.
 	local_certs
-	on_demand_tls {
-		ask http://syncmusic-backend:8080/api/ok
-	}
 }
 
-# Port 80 (HTTP) — proxied by tailscale serve for MagicDNS HTTPS access
-http://:80 {
+# The public domain or localhost (default)
+{$DOMAIN:localhost} {
+	# Use internal CA for LAN/Tailscale access (no browser warning if Tailscale certs added, 
+	# but avoids public Let's Encrypt requirement for internal hostnames).
+	tls internal
+
+	# API Endpoints
 	@api {
 		path /api/*
 	}
-
-	@music {
-		path /music/*
-	}
-	@auth {
-		path /auth/* /realms/* /resources/*
-	}
-
-	handle @auth {
-		reverse_proxy syncmusic-keycloak:8080
-	}
-
 	handle @api {
 		reverse_proxy syncmusic-backend:8080
 	}
 
+	# Music Files (Audio + Cover Art)
+	@music {
+		path /music/*
+	}
 	handle @music {
 		reverse_proxy syncmusic-backend:8080
 	}
 
-	handle {
-		reverse_proxy syncmusic-frontend:3000
-	}
-}
-
-# Port 443 (HTTPS) — for direct LAN access (192.168.x.x), one-time browser warning
-:443 {
-	tls internal {
-		on_demand
-	}
-
-	@api {
-		path /api/*
-	}
-
-	@music {
-		path /music/*
-	}
+	# Keycloak Authentication
 	@auth {
 		path /auth/* /realms/* /resources/*
 	}
-
 	handle @auth {
 		reverse_proxy syncmusic-keycloak:8080
 	}
 
-	handle @api {
-		reverse_proxy syncmusic-backend:8080
-	}
-
-	handle @music {
-		reverse_proxy syncmusic-backend:8080
-	}
-
+	# Frontend - Static files or Dev Server
 	handle {
-		reverse_proxy syncmusic-frontend:3000
+		# If FRONTEND_DEV is set, proxy to Vite dev server (hot reload)
+		@dev_server {
+			expression {env.FRONTEND_DEV} != ""
+		}
+		handle @dev_server {
+			reverse_proxy syncmusic-frontend:5173
+		}
+
+		# Otherwise, serve static build from disk (Production mode)
+		handle {
+			root * /usr/share/caddy
+			file_server
+			try_files {path} /index.html
+		}
 	}
+}
+
+# WebTransport (Protocol: QUIC/UDP)
+:4433 {
+	# WebTransport must be handled by the backend directly
+	# Caddy can only proxy HTTP/3, but WebTransport/QUIC is usually direct.
+	# We leave this port for the direct backend access as configured in main.go.
 }

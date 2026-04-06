@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"log"
-	"strings"
 
 	"github.com/quic-go/webtransport-go"
 )
@@ -71,32 +69,9 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 		
 		// SSO JWT Decoding (Trust on First Use / Identity Mapping)
 		if token, ok := msg["token"].(string); ok && token != "" {
-			parts := strings.Split(token, ".")
-			if len(parts) == 3 {
-				if payload, err := base64.RawURLEncoding.DecodeString(parts[1]); err == nil {
-					var claims struct {
-						PreferredUsername string `json:"preferred_username"`
-						GivenName         string `json:"given_name"`
-						Name              string `json:"name"`
-					}
-					if err := json.Unmarshal(payload, &claims); err == nil {
-						authLabel := " (SSO ✔️)"
-						if claims.PreferredUsername != "" {
-							client.Nickname = claims.PreferredUsername + authLabel
-						} else if claims.GivenName != "" {
-							client.Nickname = claims.GivenName + authLabel
-						} else if claims.Name != "" {
-							client.Nickname = claims.Name + authLabel
-						}
-						log.Printf("[AUTH] Identified SSO User: %s (Claims: pref=%s, given=%s)\n", client.Nickname, claims.PreferredUsername, claims.GivenName)
-					} else {
-						log.Printf("[AUTH] Failed to unmarshal JWT payload: %v\n", err)
-					}
-				} else {
-					log.Printf("[AUTH] Failed to decode JWT base64: %v\n", err)
-				}
-			} else {
-				log.Printf("[AUTH] Invalid JWT parts count: %d\n", len(parts))
+			if nickname := DecodeJWTBody(token); nickname != "" {
+				client.Nickname = nickname + " (SSO)"
+				log.Printf("[AUTH] Identified SSO User: %s\n", client.Nickname)
 			}
 		}
 

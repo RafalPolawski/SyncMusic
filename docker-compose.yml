@@ -3,8 +3,6 @@
 #
 # Usage:
 #   docker compose pull && docker compose up -d
-#
-# First run: update the image tags to the desired release version.
 
 services:
   syncmusic-backend:
@@ -18,31 +16,47 @@ services:
     volumes:
       - "${MUSIC_DIR:-/music}:/app/music:ro"
       - syncmusic_redis:/data
+    environment:
+      - REDIS_URL=redis://syncmusic-redis:6379/0
+      - DATABASE_URL=postgres://keycloak:password@syncmusic-postgres:5432/keycloak?sslmode=disable
+    depends_on:
+      - syncmusic-redis
+      - syncmusic-postgres
 
   syncmusic-frontend:
-    image: ghcr.io/rafalpolawski/syncmusic-frontend:latest
+    build:
+      context: ./frontend
     container_name: syncmusic-frontend
-    restart: unless-stopped
-    expose:
-      - "3000" # nginx static — internal only (Caddy proxies)
-    depends_on:
-      - syncmusic-backend
+    volumes:
+      - frontend_dist:/usr/share/caddy
+    restart: "no" # Runs build once then exits
 
   syncmusic-proxy:
-    image: ghcr.io/rafalpolawski/syncmusic-proxy:latest
+    image: caddy:2.9-alpine
     container_name: syncmusic-proxy
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
       - "443:443/udp"
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+      - FRONTEND_DEV=""
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - frontend_dist:/usr/share/caddy:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
       - syncmusic-backend
       - syncmusic-frontend
+
+  syncmusic-redis:
+    image: redis:8-alpine
+    container_name: syncmusic-redis
+    restart: unless-stopped
+    volumes:
+      - syncmusic_redis:/data
 
   syncmusic-postgres:
     image: postgres:18-alpine
@@ -73,8 +87,6 @@ services:
       KC_HTTP_ENABLED: "true"
       KC_PROXY: edge
     command: start
-    ports:
-      - "8082:8080"
     depends_on:
       - syncmusic-postgres
       - syncmusic-redis
@@ -82,7 +94,6 @@ services:
 volumes:
   caddy_data:
   caddy_config:
-  syncmusic_db:
+  frontend_dist:
   syncmusic_redis:
-  frontend_node_modules:
   syncmusic_postgres_data:

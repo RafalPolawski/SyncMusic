@@ -154,7 +154,6 @@ func handleGetCover(w http.ResponseWriter, r *http.Request) {
 
 // handleRescan triggers an async library rescan.
 func handleRescan(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 	go scanLibraryToDB()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "scanning"})
@@ -163,7 +162,6 @@ func handleRescan(w http.ResponseWriter, r *http.Request) {
 // handleCertHash returns the WebTransport certificate hash so the browser
 // can pin the self-signed cert.
 func handleCertHash(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"hash": certHashStr})
 }
@@ -175,7 +173,6 @@ func handleOK(w http.ResponseWriter, r *http.Request) {
 
 // handleGetRooms returns a JSON list of active rooms from Redis.
 func handleGetRooms(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 	var rooms []string
 	iter := rdb.Scan(ctx, 0, "syncmusic:room_state:*", 0).Iterator()
 	for iter.Next(ctx) {
