@@ -13,9 +13,13 @@ services:
       - "4433:4433/udp" # WebTransport - Client must reach directly
     environment:
       - REDIS_URL=redis://syncmusic-redis:6379/0
+      - POSTGRES_HOST=syncmusic-postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=syncmusic
+      - JWT_SECRET=syncmusic_dev_secret_change_me
     volumes:
       - "${MUSIC_DIR:-./music}:/app/music:ro"
-      - backend_data:/app # Persist SQLite library cache
     depends_on:
       syncmusic-redis:
         condition: service_healthy
@@ -25,7 +29,7 @@ services:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/api/ok || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 15
 
   syncmusic-frontend:
     image: ghcr.io/rafalpolawski/syncmusic-frontend:latest
@@ -70,7 +74,7 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=keycloak
+      - POSTGRES_DB=postgres
     volumes:
       - syncmusic_postgres_data:/var/lib/postgresql/data
       - ./caddy/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
@@ -88,7 +92,7 @@ services:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://syncmusic-postgres:5432/keycloak
       KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: ${KC_DB_PASSWORD:-password}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-admin}
       KC_HOSTNAME: "127.0.0.1"
