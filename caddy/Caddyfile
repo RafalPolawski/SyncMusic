@@ -31,16 +31,7 @@
 	}
 
 	handle {
-		@dev_server expression {env.FRONTEND_DEV} != ""
-		handle @dev_server {
-			reverse_proxy syncmusic-frontend:5173
-		}
-
-		handle {
-			root * /usr/share/caddy
-			file_server
-			try_files {path} /index.html
-		}
+		reverse_proxy syncmusic-frontend:3000
 	}
 }
 

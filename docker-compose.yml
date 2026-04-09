@@ -4,6 +4,7 @@
 
 services:
   syncmusic-backend:
+    build: ./backend
     image: ghcr.io/rafalpolawski/syncmusic-backend:latest
     container_name: syncmusic-backend
     restart: unless-stopped
@@ -26,18 +27,22 @@ services:
       syncmusic-postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/api/ok || exit 1"]
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/api/ok || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 15
 
   syncmusic-frontend:
+    build: ./frontend
     image: ghcr.io/rafalpolawski/syncmusic-frontend:latest
     container_name: syncmusic-frontend
-    restart: "no"
+    restart: unless-stopped
+    expose:
+      - "3000"
 
   syncmusic-proxy:
-    image: caddy:2.11-alpine
+    build: ./caddy
+    image: ghcr.io/rafalpolawski/syncmusic-proxy:latest
     container_name: syncmusic-proxy
     restart: unless-stopped
     ports:
@@ -47,13 +52,13 @@ services:
     environment:
       - DOMAIN=${DOMAIN:-localhost}
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - frontend_dist:/usr/share/caddy:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
       syncmusic-backend:
         condition: service_healthy
+      syncmusic-frontend:
+        condition: service_started
 
   syncmusic-redis:
     image: redis:8-alpine
@@ -62,13 +67,14 @@ services:
     volumes:
       - syncmusic_redis:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       timeout: 3s
       retries: 5
 
   syncmusic-postgres:
-    image: postgres:18-alpine
+    build: ./infrastructure/postgres
+    image: ghcr.io/rafalpolawski/syncmusic-postgres:latest
     container_name: syncmusic-postgres
     restart: unless-stopped
     environment:
@@ -78,9 +84,8 @@ services:
       - KC_DB_PASSWORD=${KC_DB_PASSWORD}
     volumes:
       - syncmusic_postgres_data:/var/lib/postgresql/data
-      - ./infrastructure/postgres/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -107,7 +112,7 @@ services:
       syncmusic-postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/health/live || exit 1"]
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/health/live || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -144,7 +149,6 @@ services:
 volumes:
   caddy_data:
   caddy_config:
-  frontend_dist:
   backend_data:
   syncmusic_redis:
   syncmusic_postgres_data:

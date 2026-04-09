@@ -6,8 +6,6 @@
 
 SyncMusic is a self-hosted, low-latency music synchronization server. Every connected client plays the same song at the same position — simultaneously. Built on cutting-edge web protocols: **HTTP/3**, **WebTransport**, and **QUIC**.
 
-[![Build Dev Images](https://github.com/RafalPolawski/SyncMusic/actions/workflows/dev.yml/badge.svg)](https://github.com/RafalPolawski/SyncMusic/actions/workflows/dev.yml)
-
 ---
 
 ## ✨ Features
@@ -75,210 +73,89 @@ SyncMusic is a self-hosted, low-latency music synchronization server. Every conn
 └────────────────────────────────┘
 ```
 
-### WebTransport Message Protocol
-
-All playback control flows through a single **WebTransport stream** on UDP `:4433`.
-Messages are newline-delimited JSON:
-
-| Direction | Action | Payload |
-|---|---|---|
-| Client → Server | `load` | `{ song, folder }` |
-| Client → Server | `play` | `{ time }` |
-| Client → Server | `pause` | `{ time }` |
-| Client → Server | `seek` | `{ time, isPlaying }` |
-| Client → Server | `shuffle` | `{ state: bool }` |
-| Client → Server | `repeat` | `{ state: 0\|1\|2 }` |
-| Client → Server | `enqueue` | `{ item: {path, title, artist} }` |
-| Client → Server | `dequeue` | `{ id: float64 }` |
-| Client → Server | `queue_move` | `{ from, to }` |
-| Server → Client | `sync` | `{ song, time, isPlaying, isShuffle, isRepeat, folder, queue }` *(on connect)* |
-| Server → All | `queue_update` | `{ queue: [...] }` |
-| Server → All | *(echo)* | All playback actions broadcast to every connected client |
-
----
-
-## 🛠️ Tech Stack
-
-| **Backend** | Go 1.24, `quic-go`, `webtransport-go`, `dhowden/tag`, `go-redis`, `redsync` |
-| **Database** | PostgreSQL 17 (Application data), Keycloak DB (Isolated) |
-| **Cache/Sync**| `redis:8-alpine` (Real-time Pub/Sub & Redlock) |
-| **Frontend** | Vanilla JS (ES modules), Vite 5, Web Audio API |
-| **Monitoring** | Prometheus (Scraping), Grafana (Visualization) |
-| **Transport** | WebTransport over HTTP/3 (QUIC / UDP) |
-| **Reverse Proxy** | Caddy 2 (HTTP/3, internal CA, on-demand TLS) |
-| **CI/CD** | GitHub Actions → GHCR (`:dev` on push, `:latest` + version on Release) |
-| **Containerization** | Docker multi-stage, Docker Compose |
-| **Networking** | Tailscale + MagicDNS for zero-config remote access |
-
 ---
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### 1. Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) + Docker Compose
 - A folder of music files on the host machine
 - (Optional) [Tailscale](https://tailscale.com/) for remote access
 
-### 1. Clone the repository
+### 2. Clone the repository
 
 ```bash
+# Clone the repository
 git clone https://github.com/RafalPolawski/SyncMusic.git
 cd SyncMusic
-```
 
-### 2. Set your music path
-
-```bash
+# Set your music path
 echo "MUSIC_DIR=/path/to/your/music" > .env
 ```
 
 ### 3. Start the stack
 
-```bash
-docker compose pull   # pulls latest images from GHCR
-docker compose up -d
-```
+Choose your preferred distribution channel:
 
-### 4. Access the app
+*   **Stable Version (Recommended)**: Pulls the latest verified release from GHCR. This is the fastest and most reliable way to run the app.
+    ```bash
+    docker compose pull
+    docker compose up -d
+    ```
+
+*   **Development Build**: Builds the application from your local source code. Use this if you want to test the latest (potentially unstable) changes before a formal release.
+    ```bash
+    docker compose up -d --build
+    ```
+
+### 4. Keycloak Setup (Identity & Persistence)
+
+SyncMusic uses Keycloak to manage users and sessions. To get started:
+
+1.  Access the Keycloak Admin Console at `http://localhost:8080/admin` (or via Caddy at your domain).
+2.  Log in using the credentials set in your `.env` file (Default: `admin` / `admin`).
+3.  **Create a Realm**:
+    -   Click the **Master** dropdown in the top-left → **Create Realm**.
+    -   Name it `syncmusic`.
+4.  **Create a Client**:
+    -   Go to **Clients** → **Create client**.
+    -   Client ID: `syncmusic-frontend`.
+    -   Valid Redirect URIs: `http://localhost/*` and `https://*`.
+    -   Web Origins: `*` (or your domain).
+5.  **Create a User**:
+    -   Go to **Users** → **Add user**.
+    -   Set a username, save, and go to the **Credentials** tab to set a password (toggle off "Temporary").
+
+### 5. Access the app
 
 | Method | URL | Notes |
 |---|---|---|
-| **Local (HTTP)** | `http://localhost` | No HTTPS needed locally |
-| **LAN (HTTPS)** | `https://192.168.x.x` | Accept the self-signed cert warning once |
-| **Tailscale** | `https://your-machine.tailnet.ts.net` | Run `tailscale serve --bg https / http://localhost:80` first |
-
-### 5. Monitoring & Observability
-
-Quick-links for maintenance and performance tracking:
-
-| Service | Port | Use Case |
-|---|---|---|
-| **Grafana** | `http://localhost:3000` | High-level visualization (User: `admin` / Password: `admin`) |
-| **Prometheus** | `http://localhost:9090` | Raw metric scraping and alerts |
-| **Endpoint (Backend)** | `http://localhost:8080/metrics` | Real-time exporter for custom collectors |
-
-### 6. Keycloak Setup (Identity & Rooms)
-
-SyncMusic introduces isolated rooms and integrates Keycloak for Google SSO & Accounts. To set it up manually:
-
-1. Open the Keycloak Admin Console at `http://localhost:8082`.
-2. Log in using `admin` / `admin`.
-3. **Create a Realm**:
-   - Click the top-left dropdown (under the Keycloak logo) → **Create Realm**.
-   - Name it `syncmusic` and click Create.
-4. **Create a Client**:
-   - Go to **Clients** → **Create client**.
-   - Set **Client ID** to `syncmusic-frontend`.
-   - **Capability config**: Enable *Standard flow* and *Direct access grants*.
-   - **Login settings**: 
-     - Valid redirect URIs: `http://localhost/*`, `https://*`
-     - Web origins: `+`
-   - Save.
-5. **Create a User (or Enable Registration)**:
-   - To manually add: Go to **Users** → **Add user**. Set a username, then go to the user's **Credentials** tab to set a password (disable "Temporary").
-   - To allow users to create their own accounts: Go to **Realm Settings** → **Login** and toggle **User registration** to ON.
-
-*(Google Identity setup can be done in Keycloak under Identity Providers → Google, requiring a Google Console OAuth Client ID).*
+| **Local (HTTP)** | `http://localhost` | Standard access |
+| **LAN (HTTPS)** | `https://<your-ip>` | Accept the self-signed cert warning |
 
 ---
 
-## 🔧 Development
+## 🛠️ Tech Stack
 
-Use `docker-compose.dev.yml` to run with hot reload (Vite HMR):
-
-```bash
-docker compose -f docker-compose.dev.yml up --build
-```
-
-Frontend source is bind-mounted — changes are reflected instantly without rebuilding.
-
-### Running services individually
-
-```bash
-# Frontend (Vite HMR)
-cd frontend && npm install && npm run dev
-
-# Backend
-cd backend && go run .
-```
-
-> The backend expects a `./music` directory relative to its working directory,
-> or use the Docker volume mount.
+| Component | Technology |
+|---|---|
+| **Backend** | Go 1.24, `quic-go`, `webtransport-go`, `go-redis` |
+| **Database** | PostgreSQL 18, Keycloak DB |
+| **Cache/Sync**| Redis 8 (Pub/Sub & Redlock) |
+| **Frontend** | Vanilla JS, Vite 5 (Build tool), Nginx (Production server) |
+| **Proxy** | Caddy 2 (HTTP/3, Automatic TLS) |
 
 ---
 
-## 📁 Project Structure
+## 📁 Repository Structure
 
-```
-SyncMusic/
-├── backend/
-│   ├── Dockerfile          # Multi-stage: Go builder → Alpine runtime
-│   ├── main.go             # Entry point, HTTP mux, WebTransport init
-│   ├── room.go             # Local instance client tracker
-│   ├── handlers.go         # REST API endpoints
-│   ├── wt.go               # WebTransport session & Redis state logic
-│   ├── redis.go            # Redis lock, state structs & PubSub listener
-│   ├── tls.go              # Self-signed ECDSA cert generation
-│   └── db.go               # SQLite library scan & cache
-├── frontend/
-│   ├── Dockerfile          # Multi-stage: Node builder → nginx:alpine
-│   ├── Dockerfile.dev      # Vite dev server + HMR (dev only)
-│   ├── nginx.conf          # SPA fallback, asset caching
-│   ├── index.html
-│   ├── vite.config.js
-│   ├── sw.js               # Service Worker (PWA / offline cache)
-│   └── src/
-│       ├── js/
-│       │   ├── main.js         # App bootstrap & orchestration
-│       │   ├── ui.js           # DOM refs & shared utilities
-│       │   ├── webtransport.js # WebTransport connection
-│       │   ├── cache.js        # Service Worker cache manager
-│       │   ├── queue.js        # Queue UI
-│       │   ├── api.js          # HTTP API helpers
-│       │   ├── player/         # Audio engine (8 focused modules)
-│       │   └── library/        # Library browser (3 focused modules)
-│       └── styles/
-│           ├── main.css        # @import hub
-│           ├── base.css        # Variables, reset, layout
-│           ├── player.css      # Player & mini-player
-│           ├── library.css     # Library, folder list, cache badges
-│           ├── queue.css       # Queue & drag-and-drop
-│           └── overlay.css     # Join screen & settings modal
-├── caddy/
-│   └── Dockerfile          # Custom xcaddy build (no Tailscale module)
-├── .github/workflows/
-│   ├── dev.yml             # Push to main → :dev images on GHCR
-│   └── release.yml         # GitHub Release → :latest + :<version> on GHCR
-├── Caddyfile               # Production Caddy config
-├── Caddyfile.dev           # Dev Caddy config (Vite on :5173)
-├── docker-compose.yml      # Production (pulls from GHCR)
-└── docker-compose.dev.yml  # Development (builds locally)
-```
-
----
-
-## 📡 API Reference
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/songs` | JSON array of all scanned tracks `[{ path, title, artist, size }]` |
-| `GET` | `/api/cover?song=<path>` | Embedded album art for the given track |
-| `GET` | `/api/cert-hash` | SHA-256 hash of the WebTransport TLS cert |
-| `GET` | `/api/scan-status` | Current library scan progress `{ is_scanning, scan_current, scan_total }` |
-| `POST` | `/api/rescan` | Trigger a full library rescan |
-| `GET` | `/api/ok` | Health check (used by Caddy's on-demand TLS `ask`) |
-| `GET` | `/api/metrics` | Prometheus exporter for monitoring |
-| `GET` | `/music/<path>` | Streams audio file directly from the music directory |
-| `WT` | `/wt` (UDP :4433) | WebTransport endpoint for real-time playback sync |
-
----
-
-## 📝 Notes
-
-- **WebTransport TLS**: The self-signed certificate regenerates on every container restart. The frontend fetches the new hash automatically via `/api/cert-hash`.
-- **MagicDNS**: WebTransport connects directly to the host IP due to browser restrictions on self-signed certs for arbitrary hostnames.
-- **Service Worker caching**: Per-folder caching stores tracks individually; a folder can be cached offline even while others stream live.
+- `backend/`: Go source code and Dockerfile.
+- `frontend/`: JS/CSS source code and Nginx-based Dockerfile.
+- `monitoring/`: Prometheus and Grafana configurations.
+- `infrastructure/`: Database initialization scripts.
+- `Caddyfile`: Reverse proxy and TLS configuration.
+- `docker-compose.yml`: Production-ready stack definition.
 
 ---
 
