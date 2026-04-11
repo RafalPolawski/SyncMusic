@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useNetworkStore } from '../../store/useNetworkStore';
+import { useQueueStore } from '../../store/useQueueStore';
 import { socket } from '../../lib/webtransport';
 
 export default function AudioController() {
@@ -15,6 +16,7 @@ export default function AudioController() {
         syncThreshold,
         setProgress
     } = usePlayerStore();
+    const nextTrack = useQueueStore(state => state.nextTrack);
 
     // 1. Handle Track Switches
     useEffect(() => {
@@ -72,9 +74,13 @@ export default function AudioController() {
                 audio.currentTime = 0;
                 audio.play();
             } else {
-                // Let backend handle queue progression, or simulate if offline
-                if (usePlayerStore.getState().offlineMode) {
-                    socket.sendCommand('skip'); // Custom offline handled skip?
+                // Shift queue
+                const next = nextTrack();
+                if (next) {
+                    // Send load to room or offline simulator
+                    socket.sendCommand('load', { song: next.path, folder: next.folder });
+                } else if (usePlayerStore.getState().isRepeat === 1) {
+                    // repeat playlist? Not fully implemented, stop
                 }
             }
         };

@@ -10,7 +10,7 @@ export default function AuthOverlay() {
   
   const { rooms, isLoadingRooms, fetchRooms } = useNetworkStore();
   const { setOffline, setRoom } = usePlayerStore();
-  const { setGuestMode } = useAuthStore();
+  const { setGuestMode, login } = useAuthStore();
 
   useEffect(() => {
     fetchRooms();
@@ -83,25 +83,38 @@ export default function AuthOverlay() {
           )}
         </div>
 
-        <button 
-          onClick={handleJoin}
-          disabled={isLoadingRooms}
-          style={{
-            width: '100%', padding: '16px', borderRadius: '30px',
-            background: 'var(--primary)', color: 'white', 
-            fontWeight: 700, fontSize: '16px', marginBottom: '12px',
-            opacity: isLoadingRooms ? 0.5 : 1
-          }}
-        >
-          JOIN SESSION
-        </button>
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+          <button 
+            onClick={login}
+            style={{
+              flex: 1, padding: '16px', borderRadius: '30px',
+              background: '#0d6efd', color: 'white', 
+              fontWeight: 700, fontSize: '15px'
+            }}
+          >
+            LOGIN (SSO)
+          </button>
+          
+          <button 
+            onClick={handleJoin}
+            disabled={isLoadingRooms}
+            style={{
+              flex: 1.5, padding: '16px', borderRadius: '30px',
+              background: 'var(--primary)', color: 'white', 
+              fontWeight: 700, fontSize: '15px',
+              opacity: isLoadingRooms ? 0.5 : 1
+            }}
+          >
+            JOIN GUEST
+          </button>
+        </div>
         
         <button 
           onClick={handleOffline}
           style={{
             width: '100%', padding: '16px', borderRadius: '30px',
             background: 'rgba(255,255,255,0.1)', color: 'white', 
-            fontWeight: 600, fontSize: '16px'
+            fontWeight: 600, fontSize: '15px'
           }}
         >
           OFFLINE MODE

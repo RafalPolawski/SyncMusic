@@ -18,6 +18,7 @@ export default function App() {
   const checkAuth = useAuthStore((state) => state.checkAuth);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isAuthChecking = useAuthStore((state) => state.isChecking);
+  const isGuestMode = useAuthStore((state) => state.isGuestMode);
 
   // Initialize Auth & Network on mount
   useEffect(() => {
@@ -50,7 +51,7 @@ export default function App() {
       />
 
       {/* Login / Setup Overlay */}
-      {(!isAuthenticated && !isAuthChecking) && <AuthOverlay />}
+      {(!isAuthenticated && !isGuestMode && !isAuthChecking) && <AuthOverlay />}
 
       {/* Headless Audio Engine */}
       <AudioController />

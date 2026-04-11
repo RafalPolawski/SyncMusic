@@ -11,6 +11,7 @@ export const keycloak = new Keycloak({
 export const useAuthStore = create((set, get) => ({
     isAuthenticated: false,
     isChecking: true,
+    isGuestMode: false,
     userProfile: null,
     error: null,
 
@@ -47,6 +48,7 @@ export const useAuthStore = create((set, get) => ({
             set({ 
                 isAuthenticated: result.authenticated, 
                 isChecking: false,
+                isGuestMode: false,
                 userProfile: result.authenticated ? keycloak.tokenParsed : null 
             });
 
@@ -65,6 +67,7 @@ export const useAuthStore = create((set, get) => ({
     // For anonymous mode
     setGuestMode: (nickname) => {
         localStorage.setItem("syncMusicNick", nickname);
-        set({ isAuthenticated: false, isChecking: false, userProfile: { preferred_username: nickname } });
+        set({ isAuthenticated: false, isChecking: false, isGuestMode: true, userProfile: { preferred_username: nickname } });
     }
 }));
+
