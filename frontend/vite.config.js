@@ -1,10 +1,11 @@
 import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
 // vite-plugin-pwa is only needed in production builds (generates precache manifest).
 // In dev mode (Vite HMR) we skip it entirely to avoid unnecessary complexity.
 const isProduction = process.env.NODE_ENV === 'production';
 
-const plugins = [];
+const plugins = [react()];
 
 if (isProduction) {
     // Dynamically import to avoid crashing dev server if the package isn't installed
