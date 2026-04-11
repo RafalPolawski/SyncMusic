@@ -1,7 +1,11 @@
 import React from 'react';
 import { Library, ListMusic, Settings } from 'lucide-react';
 
+import { useQueueStore } from '../store/useQueueStore';
+
 export default function BottomNav({ activeTab, onChangeTab }) {
+  const queueLength = useQueueStore(state => state.queue.length);
+  
   const tabs = [
     { id: 'library', label: 'Library', icon: Library },
     { id: 'queue', label: 'Queue', icon: ListMusic },
@@ -33,10 +37,23 @@ export default function BottomNav({ activeTab, onChangeTab }) {
               color: isActive ? 'var(--primary)' : 'var(--text-tertiary)',
               transition: 'color 0.2s',
               gap: '4px',
-              width: '70px'
+              width: '70px',
+              position: 'relative'
             }}
           >
-            <Icon size={24} strokeWidth={isActive ? 2.5 : 2} />
+            <div style={{ position: 'relative' }}>
+                <Icon size={24} strokeWidth={isActive ? 2.5 : 2} />
+                {tab.id === 'queue' && queueLength > 0 && (
+                    <div style={{ 
+                        position: 'absolute', top: '-4px', right: '-8px',
+                        background: 'var(--primary)', color: 'var(--bg-base)',
+                        fontSize: '9px', fontWeight: 'bold', padding: '2px 5px',
+                        borderRadius: '10px', border: '2px solid var(--bg-surface-elevated)'
+                    }}>
+                        {queueLength > 99 ? '99+' : queueLength}
+                    </div>
+                )}
+            </div>
             <span style={{ fontSize: '10px', fontWeight: isActive ? 600 : 500 }}>
               {tab.label}
             </span>

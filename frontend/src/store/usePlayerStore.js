@@ -29,8 +29,10 @@ export const usePlayerStore = create(
             isRepeat: 0, // 0=off, 1=playlist, 2=track
             offlineMode: false,
             roomId: null,
+            drift: 0,
 
             // Actions
+            setDrift: (drift) => set({ drift }),
             setTrack: (path, folder, title, artist) => set({
                 currentPath: path,
                 currentFolder: folder,

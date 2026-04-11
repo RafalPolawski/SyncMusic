@@ -85,23 +85,25 @@ export const useCacheStore = create((set, get) => ({
 
     cacheSongs: (songs, jobId = 'manual') => {
         if (!navigator.serviceWorker?.controller) return;
-        
-        const urls = [];
-        songs.forEach(s => {
-            urls.push(`/music/${encodeURIComponent(s.path)}`);
-            urls.push(`/api/cover?song=${encodeURIComponent(s.path)}`);
-        });
 
-        // Initialize progress in state locally too
+        // Filter out already cached songs
+        const uncached = songs.filter(s => !get().cachedPaths.has(s.path));
+        if (uncached.length === 0) return;
+
+        const audioUrls = uncached.map(s => `/music/${s.path.split('/').map(encodeURIComponent).join('/')}`);
+        const coverUrls = uncached.map(s => `/api/cover?song=${encodeURIComponent(s.path)}`);
+
+        // total = only audio files (covers are silent bonus downloads)
         set(state => {
             const jobs = new Map(state.activeJobs);
-            jobs.set(jobId, { processed: 0, total: urls.length, songs });
+            jobs.set(jobId, { processed: 0, total: uncached.length, songs: uncached });
             return { activeJobs: jobs };
         });
 
         navigator.serviceWorker.controller.postMessage({
             action: 'cache_playlist',
-            urls,
+            urls: [...audioUrls, ...coverUrls],
+            audioUrls,  // SW uses this to count progress separately
             cacheId: jobId
         });
     },

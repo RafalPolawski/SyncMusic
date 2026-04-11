@@ -116,6 +116,8 @@ func saveAndPublish(roomID string, state RoomState, msg map[string]interface{}) 
 	pipe := rdb.Pipeline()
 	pipe.HSet(ctx, getRoomStateKey(roomID), map[string]interface{}{
 		"CurrentSong":     state.CurrentSong,
+		"CurrentTitle":    state.CurrentTitle,
+		"CurrentArtist":   state.CurrentArtist,
 		"IsPlaying":       isPlaying,
 		"CurrentPosition": state.CurrentPosition,
 		"LastUpdate":      state.LastUpdate.UnixMilli(),
@@ -147,6 +149,8 @@ func SaveRoomState(roomID string, state RoomState) {
 
 	rdb.HSet(ctx, getRoomStateKey(roomID), map[string]interface{}{
 		"CurrentSong":     state.CurrentSong,
+		"CurrentTitle":    state.CurrentTitle,
+		"CurrentArtist":   state.CurrentArtist,
 		"IsPlaying":       isPlaying,
 		"CurrentPosition": state.CurrentPosition,
 		"LastUpdate":      state.LastUpdate.UnixMilli(),
@@ -162,6 +166,8 @@ func SaveRoomState(roomID string, state RoomState) {
 // RoomState is the parsed in-memory representation of the room.
 type RoomState struct {
 	CurrentSong     string
+	CurrentTitle    string
+	CurrentArtist   string
 	IsPlaying       bool
 	CurrentPosition float64
 	LastUpdate      time.Time
@@ -204,6 +210,8 @@ func GetRoomState(roomID string) RoomState {
 
 	return RoomState{
 		CurrentSong:     res["CurrentSong"],
+		CurrentTitle:    res["CurrentTitle"],
+		CurrentArtist:   res["CurrentArtist"],
 		IsPlaying:       isPlaying == 1,
 		CurrentPosition: currentPos,
 		LastUpdate:      time.UnixMilli(lastUpdateUnix),

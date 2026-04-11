@@ -1,5 +1,6 @@
 import { useNetworkStore } from '../store/useNetworkStore';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useQueueStore } from '../store/useQueueStore';
 
 export class SyncWebTransport {
     constructor() {
@@ -200,13 +201,17 @@ export class SyncWebTransport {
             // OFFLINE MODE: simulate server echo
             const allowed = ['load', 'play', 'pause', 'seek', 'shuffle', 'repeat', 'enqueue', 'dequeue'];
             if (!allowed.includes(action)) return;
-            const sim = { action, ...payload };
+            const sim = { action, isSimulated: true, ...payload };
             if (['load', 'play', 'pause', 'seek'].includes(action)) sim.server_ts = Date.now();
             setTimeout(() => this.dispatchMessage(sim), 50);
         }
     }
 
     dispatchMessage(msg) {
+        if (usePlayerStore.getState().offlineMode && !msg.isSimulated) {
+            return; // Block actual server messages when we explicitly enabled Offline Mode
+        }
+
         // Here we map WT messages to Zustand store mutations
         const player = usePlayerStore.getState();
         const offsetTime = (msg.server_ts && msg.action !== 'pause') 
@@ -254,7 +259,23 @@ export class SyncWebTransport {
                     isPlaying: msg.isPlaying !== undefined ? msg.isPlaying : true
                 });
                 break;
-            // TODO: presence, queue
+            case 'shuffle':
+                usePlayerStore.setState({ isShuffle: msg.state });
+                break;
+            case 'repeat':
+                usePlayerStore.setState({ isRepeat: typeof msg.state === 'number' ? msg.state : parseInt(msg.state) });
+                break;
+            case 'queue_update': {
+                const queue = (msg.queue || []).map(item => ({
+                    path: item.path,
+                    title: item.title || item.path,
+                    artist: item.artist || '',
+                    folder: item.folder || '',
+                    id: item.id
+                }));
+                useQueueStore.getState().setQueue(queue);
+                break;
+            }
         }
     }
 }

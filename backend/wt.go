@@ -110,6 +110,8 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 			syncMsg := map[string]interface{}{
 				"action":    "sync",
 				"song":      state.CurrentSong,
+				"title":     state.CurrentTitle,
+				"artist":    state.CurrentArtist,
 				"time":      pos,
 				"server_ts": NowNTP().UnixMilli(),
 				"isPlaying": state.IsPlaying,
@@ -165,6 +167,13 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 					}
 				}
 				state.CurrentSong = s
+				if title, hasTitle := msg["title"].(string); hasTitle {
+					state.CurrentTitle = title
+				}
+				if artist, hasArtist := msg["artist"].(string); hasArtist {
+					state.CurrentArtist = artist
+				}
+				
 				state.CurrentPosition = 0
 				state.IsPlaying = true
 				state.LastUpdate = NowNTP()

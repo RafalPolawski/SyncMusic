@@ -4,6 +4,9 @@
   --bg-surface: rgba(255, 255, 255, 0.05);
   --bg-surface-elevated: rgba(35, 35, 45, 0.95);
   
+  --dominant-color: #1DB954;
+  --dominant-color-rgb: 29, 185, 84;
+  
   --primary: #1DB954;
   --primary-hover: #1ed760;
   

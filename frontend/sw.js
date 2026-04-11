@@ -151,8 +151,10 @@ async function networkFirstWithCache(request) {
 self.addEventListener('message', (event) => {
     if (!event.data || event.data.action !== 'cache_playlist') return;
 
-    const { urls = [], cacheId = 'default' } = event.data;
-    const total = urls.length;
+    const { urls = [], audioUrls = urls, cacheId = 'default' } = event.data;
+    const audioSet = new Set(audioUrls);
+    // total = number of audio tracks (not covers)
+    const total = audioUrls.length;
     if (total === 0) return;
 
     const notify = (action, extra = {}) => {
@@ -166,12 +168,15 @@ self.addEventListener('message', (event) => {
         for (let i = 0; i < urls.length; i++) {
             const urlStr = urls[i];
             const req = new Request(urlStr);
+            const isAudio = audioSet.has(urlStr);
+
+            // If already cached, count progress only for audio files
             if (await cache.match(req)) {
-                notify('cache_progress', { url: urlStr });
+                if (isAudio) notify('cache_progress', { url: urlStr });
                 continue;
             }
+
             try {
-                // Abort request if it stalls for > 15s to keep the worker alive
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 15000);
                 const res = await fetch(req, { signal: controller.signal });
@@ -180,7 +185,9 @@ self.addEventListener('message', (event) => {
             } catch (e) {
                 console.warn('[SW] cache_playlist failed:', urlStr, e);
             }
-            notify('cache_progress', { url: urlStr });
+
+            // Only notify progress for audio files (not covers)
+            if (isAudio) notify('cache_progress', { url: urlStr });
         }
         notify('cache_done');
     };
