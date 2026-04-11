@@ -1,27 +1,30 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, Play, Pause, SkipBack, SkipForward, Shuffle, Repeat } from 'lucide-react';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useQueueStore } from '../../store/useQueueStore';
+import { useCacheStore } from '../../store/useCacheStore';
 import { socket } from '../../lib/webtransport';
+import ProgressBar from './ProgressBar';
 
 export default function FullPlayer({ isOpen, onClose }) {
   const { 
     title, artist, coverUrl, isPlaying, 
-    currentTime, duration, isShuffle, isRepeat,
-    setModes
+    isShuffle, isRepeat, currentPath, setModes 
   } = usePlayerStore();
+
+  const cachedPaths = useCacheStore(state => state.cachedPaths);
 
   const togglePlay = () => {
     socket.sendCommand(isPlaying ? 'pause' : 'play', { time: usePlayerStore.getState().currentTime });
   };
 
   const handleNext = () => {
-    const { nextTrack } = require('../../store/useQueueStore').useQueueStore.getState();
-    const next = nextTrack();
+    const next = useQueueStore.getState().nextTrack();
     if (next) {
-        socket.sendCommand('load', { song: next.path, folder: next.folder });
+        socket.sendCommand('load', { song: next.path, folder: next.folder, title: next.title, artist: next.artist });
     } else {
-        socket.sendCommand('skip'); // Let server/host handle if no local queue
+        socket.sendCommand('skip');
     }
   };
 
@@ -40,6 +43,8 @@ export default function FullPlayer({ isOpen, onClose }) {
       setModes(isShuffle, newRepeat);
       socket.sendCommand('repeat', { state: newRepeat });
   };
+
+  const isCached = currentPath && cachedPaths.has(currentPath);
 
   return (
     <AnimatePresence>
@@ -61,84 +66,102 @@ export default function FullPlayer({ isOpen, onClose }) {
             <button onClick={onClose} style={{ padding: '8px' }}>
               <ChevronDown size={32} />
             </button>
-            <span style={{ fontSize: '13px', fontWeight: 600, letterSpacing: '2px', color: 'var(--text-tertiary)' }}>
-              NOW PLAYING
-            </span>
-            <div style={{ width: 48 }} /> {/* spacer */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '2.5px', color: 'var(--text-tertiary)', marginBottom: '4px' }}>
+                NOW PLAYING
+              </span>
+              {isCached && (
+                <span style={{ fontSize: '10px', background: 'var(--primary)', color: 'var(--bg-base)', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                  OFFLINE READY
+                </span>
+              )}
+            </div>
+            <div style={{ width: 48 }} />
           </div>
 
           {/* Cover Art */}
           <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 0 }}>
             <motion.img 
-              layoutId="cover-art"
+              layoutId="cover-art-large"
               src={coverUrl || '/default-album.png'} 
               style={{
                 width: '100%',
-                maxWidth: '400px',
+                maxWidth: '420px',
                 aspectRatio: '1/1',
                 borderRadius: 'var(--radius-lg)',
                 objectFit: 'cover',
-                boxShadow: isPlaying ? '0 20px 50px rgba(0,0,0,0.5)' : '0 10px 30px rgba(0,0,0,0.3)',
-                transition: 'box-shadow 0.3s ease'
+                boxShadow: isPlaying ? '0 30px 60px rgba(0,0,0,0.6)' : '0 10px 30px rgba(0,0,0,0.3)',
+                transition: 'box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
               }}
             />
           </div>
 
           {/* Info & Controls */}
-          <div style={{ marginTop: '40px' }}>
-            <h2 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '4px' }}>{title}</h2>
-            <p style={{ fontSize: '16px', color: 'var(--text-secondary)' }}>{artist}</p>
-
-            {/* Progress Bar */}
-            <div style={{ marginTop: '30px', marginBottom: '20px' }}>
-              <div 
-                onClick={(e) => {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  const percent = (e.clientX - rect.left) / rect.width;
-                  socket.sendCommand('seek', { time: percent * duration });
-                }}
-                style={{ 
-                  width: '100%', height: '8px', background: 'rgba(255,255,255,0.1)', 
-                  borderRadius: '4px', cursor: 'pointer', position: 'relative' 
-                }}
-              >
-                <div style={{ width: `${(currentTime / (duration || 1)) * 100}%`, height: '100%', background: 'var(--primary)', borderRadius: '4px', transition: 'width 0.1s linear' }} />
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px', fontSize: '13px', color: 'var(--text-tertiary)', fontWeight: 500 }}>
-                <span>{Math.floor(currentTime/60)}:{(Math.floor(currentTime%60)).toString().padStart(2,'0')}</span>
-                <span>{Math.floor(duration/60)}:{(Math.floor(duration%60)).toString().padStart(2,'0')}</span>
-              </div>
+          <div style={{ marginTop: '30px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <h2 style={{ fontSize: '26px', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</h2>
+                    <p style={{ fontSize: '17px', color: 'var(--text-secondary)', marginTop: '2px' }}>{artist}</p>
+                </div>
             </div>
 
+            {/* Performance Optimized ProgressBar */}
+            <ProgressBar />
+
             {/* Main Controls */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px', marginTop: '10px' }}>
               <button 
                 onClick={toggleShuffle} 
-                style={{ color: isShuffle ? 'var(--primary)' : 'var(--text-tertiary)' }}
+                className={isShuffle ? 'active-icon' : ''}
+                style={{ 
+                    padding: '12px',
+                    color: isShuffle ? 'var(--primary)' : 'var(--text-tertiary)',
+                    transition: 'all 0.2s'
+                }}
               >
-                <Shuffle size={24} />
+                <Shuffle size={26} />
               </button>
-              <button onClick={handlePrev}><SkipBack size={32} fill="currentColor" /></button>
               
-              <button 
+              <button onClick={handlePrev} style={{ padding: '12px' }}>
+                <SkipBack size={36} fill="white" strokeWidth={0} />
+              </button>
+              
+              <motion.button 
+                whileTap={{ scale: 0.92 }}
                 onClick={togglePlay}
                 style={{ 
                   background: 'white', color: 'black', 
-                  width: '64px', height: '64px', 
-                  borderRadius: '32px', 
-                  display: 'flex', justifyContent: 'center', alignItems: 'center' 
+                  width: '76px', height: '76px', 
+                  borderRadius: '38px', 
+                  display: 'flex', justifyContent: 'center', alignItems: 'center',
+                  boxShadow: '0 10px 20px rgba(255,255,255,0.1)'
                 }}
               >
-                {isPlaying ? <Pause size={32} fill="black" /> : <Play size={32} fill="black" style={{ marginLeft: '4px' }}/>}
+                {isPlaying ? <Pause size={36} fill="black" strokeWidth={0} /> : <Play size={36} fill="black" strokeWidth={0} style={{ marginLeft: '6px' }}/>}
+              </motion.button>
+              
+              <button onClick={handleNext} style={{ padding: '12px' }}>
+                <SkipForward size={36} fill="white" strokeWidth={0} />
               </button>
               
-              <button onClick={handleNext}><SkipForward size={32} fill="currentColor" /></button>
               <button 
                 onClick={toggleRepeat} 
-                style={{ color: isRepeat ? 'var(--primary)' : 'var(--text-tertiary)' }}
+                style={{ 
+                    padding: '12px',
+                    color: isRepeat > 0 ? 'var(--primary)' : 'var(--text-tertiary)',
+                    position: 'relative',
+                    transition: 'all 0.2s'
+                }}
               >
-                <Repeat size={24} />
-                {isRepeat === 2 && <span style={{ position: 'absolute', fontSize: '10px', fontWeight: 'bold', marginTop: '14px', marginLeft: '-14px', color: 'var(--bg-base)', background: 'var(--primary)', borderRadius: '50%', padding: '1px 3px' }}>1</span>}
+                <Repeat size={26} />
+                {isRepeat === 2 && (
+                    <span style={{ 
+                        position: 'absolute', top: '8px', right: '8px',
+                        fontSize: '9px', fontWeight: 900, background: 'var(--primary)',
+                        color: 'var(--bg-base)', borderRadius: '50%', width: '13px', height: '13px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}>1</span>
+                )}
               </button>
             </div>
           </div>

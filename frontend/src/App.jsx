@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import { useNetworkStore } from './store/useNetworkStore';
 import { useAuthStore } from './store/useAuthStore';
 import BottomNav from './components/BottomNav';
@@ -14,47 +15,65 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('library');
   const [isFullPlayerOpen, setFullPlayerOpen] = useState(false);
   
-  const initNetwork = useNetworkStore((state) => state.initNetwork);
   const checkAuth = useAuthStore((state) => state.checkAuth);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isAuthChecking = useAuthStore((state) => state.isChecking);
   const isGuestMode = useAuthStore((state) => state.isGuestMode);
 
-  // Initialize Auth & Network on mount
+  // Initialize Auth on mount
   useEffect(() => {
-    checkAuth().then((authStatus) => {
-      // If we are authenticated, or we bypass as guest, connect WebTransport
-      // For now, let AuthOverlay handle the bypass/login forcing.
-    });
-  }, []);
+    checkAuth();
+  }, [checkAuth]);
+
+  if (isAuthChecking) {
+    return (
+      <div style={{ 
+        height: '100vh', display: 'flex', flexDirection: 'column', 
+        alignItems: 'center', justifyContent: 'center', background: 'var(--bg-base)' 
+      }}>
+        <div style={{ fontSize: '32px', fontWeight: 900, color: 'var(--primary)', letterSpacing: '-1px' }}>
+          SyncMusic
+        </div>
+        <div style={{ marginTop: '20px', width: '30px', height: '2px', background: 'rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+            <div style={{ width: '100%', height: '100%', background: 'var(--primary)', animation: 'ms-loading 1.5s infinite linear' }} />
+        </div>
+        <style>{`
+            @keyframes ms-loading {
+                0% { transform: translateX(-100%); }
+                100% { transform: translateX(100%); }
+            }
+        `}</style>
+      </div>
+    );
+  }
+
+  const showAuthOverlay = !isAuthenticated && !isGuestMode;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      
-      {/* Views */}
-      <main style={{ flex: 1, overflowY: 'auto', paddingBottom: '140px' }}>
-        {activeTab === 'library' && <LibraryView />}
-        {activeTab === 'queue' && <QueueView />}
-        {activeTab === 'settings' && <SettingsView />}
-      </main>
-
-      {/* Floating Bottom UI */}
-      <div style={{ position: 'fixed', bottom: 0, width: '100%', zIndex: 50 }}>
-        <MiniPlayer onClick={() => setFullPlayerOpen(true)} />
-        <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} />
-      </div>
-
-      {/* Full Screen Player Drawer */}
-      <FullPlayer 
-        isOpen={isFullPlayerOpen} 
-        onClose={() => setFullPlayerOpen(false)} 
-      />
-
-      {/* Login / Setup Overlay */}
-      {(!isAuthenticated && !isGuestMode && !isAuthChecking) && <AuthOverlay />}
-
-      {/* Headless Audio Engine */}
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-base)', overflow: 'hidden' }}>
       <AudioController />
+      
+      {showAuthOverlay ? (
+        <AuthOverlay />
+      ) : (
+        <>
+          <main style={{ flex: 1, overflowY: 'auto', paddingBottom: '140px' }}>
+            {activeTab === 'library' && <LibraryView />}
+            {activeTab === 'queue' && <QueueView />}
+            {activeTab === 'settings' && <SettingsView />}
+          </main>
+
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 50 }}>
+            <MiniPlayer onClick={() => setFullPlayerOpen(true)} />
+            <BottomNav activeTab={activeTab} onChangeTab={setActiveTab} />
+          </div>
+
+          <FullPlayer 
+            isOpen={isFullPlayerOpen} 
+            onClose={() => setFullPlayerOpen(false)} 
+          />
+        </>
+      )}
     </div>
   );
 }

@@ -2,12 +2,14 @@ import React, { useEffect, useRef } from 'react';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useNetworkStore } from '../../store/useNetworkStore';
 import { useQueueStore } from '../../store/useQueueStore';
+import { useCacheStore } from '../../store/useCacheStore';
 import { socket } from '../../lib/webtransport';
 
 export default function AudioController() {
     const audioRef = useRef(null);
     const { 
         currentPath, 
+        currentFolder,
         isPlaying, 
         volume, 
         syncReceivedTime, 
@@ -17,6 +19,7 @@ export default function AudioController() {
         setProgress
     } = usePlayerStore();
     const nextTrack = useQueueStore(state => state.nextTrack);
+    const { cacheSongs, cachedPaths } = useCacheStore();
 
     // 1. Handle Track Switches
     useEffect(() => {
@@ -31,11 +34,16 @@ export default function AudioController() {
             audioRef.current.pause();
             audioRef.current.src = targetSrc;
             audioRef.current.load();
+
+            // Auto-cache on play
+            if (currentPath && !cachedPaths.has(currentPath)) {
+                cacheSongs([{ path: currentPath }], 'auto-cache');
+            }
         } else if (!targetSrc) {
             audioRef.current.pause();
             audioRef.current.src = '';
         }
-    }, [currentPath]);
+    }, [currentPath, cachedPaths]);
 
     // 2. Handle Play/Pause and Seek Sync
     useEffect(() => {
