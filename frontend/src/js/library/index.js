@@ -82,17 +82,35 @@ export const initLibrary = (socket, player, tokenResolver) => {
     let savedScrollPanel  = 0;
     let currentView       = 'root';
 
-    // ── Join / Offline Logic (Bound permanently, safe from cache failure) ────
+    // ── Join / Offline Logic ──────────────────────────────────────────────────
 
     if (UI.roomIdInput) {
         const savedRoom = localStorage.getItem('syncMusicRoom');
         if (savedRoom) UI.roomIdInput.value = savedRoom;
     }
 
+    // Disable JOIN and OFFLINE while rooms are loading (Bug #7/#8)
+    const setOverlayLoading = (loading) => {
+        if (UI.joinBtn) {
+            UI.joinBtn.disabled    = loading;
+            UI.joinBtn.style.opacity = loading ? '0.5' : '1';
+            UI.joinBtn.style.cursor  = loading ? 'not-allowed' : 'pointer';
+        }
+        if (UI.offlineModeBtn) {
+            UI.offlineModeBtn.disabled    = loading;
+            UI.offlineModeBtn.style.opacity = loading ? '0.5' : '1';
+            UI.offlineModeBtn.style.cursor  = loading ? 'not-allowed' : 'pointer';
+        }
+    };
+
     if (UI.offlineModeBtn) UI.offlineModeBtn.onclick = startLocalOffline;
     if (UI.joinBtn) UI.joinBtn.onclick = performJoin;
 
-    // Fetch active rooms on mount
+    // ── Bug #7/#8: Fetch active rooms with loading state in overlay ───────────
+
+    // Start with buttons disabled until rooms are fetched
+    setOverlayLoading(true);
+
     if (UI.activeRoomsList) {
         UI.activeRoomsList.innerHTML = `
             <div style="display:flex; flex-direction:column; gap:8px;">
@@ -101,8 +119,7 @@ export const initLibrary = (socket, player, tokenResolver) => {
                     <div style="width:30%; height:100%; background:var(--primary); border-radius:2px; animation: progress-indefinite 2s infinite ease-in-out;"></div>
                 </div>
             </div>`;
-        
-        // Add CSS animation if not present (inline injection for zero-config simplicity)
+
         if (!document.getElementById('sync-room-anim')) {
             const style = document.createElement('style');
             style.id = 'sync-room-anim';
@@ -115,42 +132,48 @@ export const initLibrary = (socket, player, tokenResolver) => {
             document.head.appendChild(style);
         }
     }
-    
-    fetch('/api/rooms').then(res => res.json()).then(rooms => {
-        if (UI.activeRoomsList) UI.activeRoomsList.innerHTML = '';
-        if (rooms && rooms.length > 0 && UI.activeRoomsContainer && UI.activeRoomsList) {
-            UI.activeRoomsContainer.style.display = 'block';
-            UI.activeRoomsList.innerHTML = rooms.map(roomId => 
-                `<button type="button" class="room-pill">${roomId}</button>`
-            ).join('');
-            
-            document.querySelectorAll('.room-pill').forEach(pill => {
-                pill.style.background = 'rgba(29, 185, 84, 0.2)';
-                pill.style.border = '1px solid #1DB954';
-                pill.style.color = '#fff';
-                pill.style.padding = '4px 10px';
-                pill.style.borderRadius = '16px';
-                pill.style.fontSize = '12px';
-                pill.style.cursor = 'pointer';
-                pill.onclick = () => { if (UI.roomIdInput) UI.roomIdInput.value = pill.innerText; };
-            });
-        } else if (UI.activeRoomsList) {
-            UI.activeRoomsList.innerHTML = '<span style="color:rgba(255,255,255,0.3); font-size:12px;">No active rooms found.</span>';
-        }
-    }).catch(e => {
-        console.warn('Offline or failed to fetch rooms:', e);
-        if (UI.activeRoomsList) UI.activeRoomsList.innerHTML = '<span style="color:rgba(255,255,255,0.3); font-size:12px;">Offline Mode</span>';
-    });
+
+    fetch('/api/rooms')
+        .then(res => res.json())
+        .then(rooms => {
+            if (UI.activeRoomsList) UI.activeRoomsList.innerHTML = '';
+            if (rooms && rooms.length > 0 && UI.activeRoomsContainer && UI.activeRoomsList) {
+                UI.activeRoomsContainer.style.display = 'block';
+                UI.activeRoomsList.innerHTML = rooms.map(roomId =>
+                    `<button type="button" class="room-pill">${roomId}</button>`
+                ).join('');
+
+                document.querySelectorAll('.room-pill').forEach(pill => {
+                    pill.style.background = 'rgba(29, 185, 84, 0.2)';
+                    pill.style.border = '1px solid #1DB954';
+                    pill.style.color = '#fff';
+                    pill.style.padding = '4px 10px';
+                    pill.style.borderRadius = '16px';
+                    pill.style.fontSize = '12px';
+                    pill.style.cursor = 'pointer';
+                    pill.onclick = () => { if (UI.roomIdInput) UI.roomIdInput.value = pill.innerText; };
+                });
+            } else if (UI.activeRoomsList) {
+                UI.activeRoomsList.innerHTML = '<span style="color:rgba(255,255,255,0.3); font-size:12px;">No active rooms found.</span>';
+            }
+        })
+        .catch(e => {
+            console.warn('Offline or failed to fetch rooms:', e);
+            if (UI.activeRoomsList) UI.activeRoomsList.innerHTML = '<span style="color:rgba(255,255,255,0.3); font-size:12px;">Offline Mode</span>';
+        })
+        .finally(() => {
+            // Re-enable buttons after rooms fetch completes (success or failure)
+            // But don't re-enable JOIN if library is still scanning (Bug #9)
+            setOverlayLoading(false);
+        });
 
     function startLocalOffline() {
-        // Skips WebTransport entirely
         player.setOfflineStatus(true);
         history.replaceState({ view: 'exit' }, '');
         history.pushState({ view: 'root' }, '');
         currentView = 'root';
         UI.overlay.style.display = 'none';
-        
-        // Hide top status for offline local mode
+
         if (document.querySelector('.app-bar-status')) {
             document.querySelector('.app-bar-status').style.display = 'none';
         }
@@ -159,22 +182,19 @@ export const initLibrary = (socket, player, tokenResolver) => {
     function performJoin() {
         let nick = UI.nicknameInput.value.trim() || 'Anonymous';
         let room = (UI.roomIdInput && UI.roomIdInput.value.trim()) ? UI.roomIdInput.value.trim() : 'global';
-        
+
         localStorage.setItem('syncMusicNick', nick);
         localStorage.setItem('syncMusicRoom', room);
-        
+
         history.replaceState({ view: 'exit' }, '');
         history.pushState({ view: 'root' }, '');
         currentView = 'root';
-        
-        // Send join with Room ID and Token (if authorized)
+
         let token = tokenResolver ? tokenResolver() : null;
         socket.sendCommand('join', { nickname: nick, room_id: room, token: token });
         UI.overlay.style.display = 'none';
         player.handleJoinUserInit();
     }
-
-    // Button listeners moved to top of initLibrary for immediate responsiveness
 
     socket.onReconnect = () => {
         const nick = localStorage.getItem('syncMusicNick');
@@ -186,7 +206,25 @@ export const initLibrary = (socket, player, tokenResolver) => {
     // ── Library polling w/ exponential back-off ───────────────────────────────
 
     let isPolling = false;
-    let wasScanning = false; // track if we were just scanning
+    let wasScanning = false;
+    let libraryHasData = false; // tracks if DB already has data (Bug #9)
+
+    const setJoinBtnScanning = (scanning) => {
+        if (!UI.joinBtn) return;
+        // Bug #9: Only block JOIN if DB had NO data when the scan started (first run).
+        // Re-scans should not block JOIN if library already has content.
+        if (scanning && !libraryHasData) {
+            UI.joinBtn.disabled      = true;
+            UI.joinBtn.innerText     = 'SCANNING…';
+            UI.joinBtn.style.opacity = '0.5';
+            UI.joinBtn.style.cursor  = 'not-allowed';
+        } else if (!scanning) {
+            UI.joinBtn.disabled      = false;
+            UI.joinBtn.innerText     = 'JOIN SESSION 🎧';
+            UI.joinBtn.style.opacity = '1';
+            UI.joinBtn.style.cursor  = 'pointer';
+        }
+    };
 
     const loadLibrary = () => {
         if (isPolling) return;
@@ -219,31 +257,25 @@ export const initLibrary = (socket, player, tokenResolver) => {
                             </div>
                             <div class="scan-count" style="margin-top:8px; font-size:13px; color:rgba(255,255,255,0.5);">${c} files found</div>
                         </div>`;
-                    UI.joinBtn.disabled   = true;
-                    UI.joinBtn.innerText  = 'SCANNING…';
-                    UI.joinBtn.style.opacity = '0.5';
-                    UI.joinBtn.style.cursor  = 'not-allowed';
+                    setJoinBtnScanning(true);
                     setTimeout(() => poll(1000), 1000);
                     return;
                 }
 
                 isPolling = false;
-                UI.joinBtn.disabled      = false;
-                UI.joinBtn.innerText     = 'JOIN SESSION 🎧';
-                UI.joinBtn.style.opacity = '1';
-                UI.joinBtn.style.cursor  = 'pointer';
+                setJoinBtnScanning(false);
 
                 const songs = data;
                 UI.loadingIndicator.style.display = 'none';
-                
+
                 if (!songs || !Array.isArray(songs)) {
-                    // Fallback: if we got an object (like ScanStatus) but is_scanning was false, 
-                    // it means the scan finished but songs aren't ready yet. Poll again.
                     setTimeout(() => poll(1000), 1000);
                     return;
                 }
 
                 if (songs.length === 0) return;
+
+                libraryHasData = true; // DB has data — re-scans won't block JOIN (Bug #9)
 
                 // Group songs by top-level folder
                 const groups = {};
@@ -287,18 +319,30 @@ export const initLibrary = (socket, player, tokenResolver) => {
                         label:     `Cache Library (${libraryTotalTracks} tracks, ~${Utils.formatBytes(libraryTotalSize)})`,
                     });
 
-                    // Rescan button
+                    // Rescan button — Bug #6: proper reload after scan completes
                     const rescanBtn = document.createElement('button');
                     rescanBtn.className = 'cache-playlist-btn';
                     rescanBtn.style.cssText = 'background:rgba(255,100,100,0.12);color:#ff6b6b;border-color:rgba(255,100,100,0.35);';
                     rescanBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg> Rescan Library`;
                     rescanBtn.onclick = () => {
                         if (!confirm('Are you sure you want to rescan the music directory?')) return;
-                        fetch('/api/rescan').then(() => {
-                            isPolling = false;
-                            UI.settingsOverlay.style.display = 'none';
-                            loadLibrary();
-                        }).catch(console.error);
+                        rescanBtn.disabled = true;
+                        rescanBtn.style.opacity = '0.5';
+                        // Bug #6: POST to /api/rescan, then wait 500ms for backend to set is_scanning=true
+                        fetch('/api/rescan')
+                            .then(() => {
+                                UI.settingsOverlay.style.display = 'none';
+                                // Give backend 500ms to flip is_scanning flag before polling
+                                setTimeout(() => {
+                                    isPolling = false;
+                                    loadLibrary();
+                                }, 500);
+                            })
+                            .catch(err => {
+                                console.error('Rescan failed:', err);
+                                rescanBtn.disabled = false;
+                                rescanBtn.style.opacity = '1';
+                            });
                     };
                     UI.settingsActionContainer.appendChild(rescanBtn);
 
@@ -388,7 +432,7 @@ export const initLibrary = (socket, player, tokenResolver) => {
                     const s = e.state;
                     if (!s) return;
                     if (s.view === 'exit') {
-                        if (confirm('Czy na pewno chcesz wyjść z aplikacji?')) {
+                        if (confirm('Are you sure you want to exit the application?')) {
                             history.back();
                         } else {
                             history.pushState({ view: 'root' }, '');
@@ -403,7 +447,7 @@ export const initLibrary = (socket, player, tokenResolver) => {
 
                 if (wasScanning && songs && songs.length > 0) {
                     wasScanning = false;
-                    setTimeout(performJoin, 300); // Auto-jump into the app without clicking
+                    setTimeout(performJoin, 300);
                 }
 
             }).catch(err => {
@@ -427,7 +471,6 @@ export const initLibrary = (socket, player, tokenResolver) => {
             searchDebounce = setTimeout(() => runSearch(songs, groups), 200);
         });
 
-        // Clear search when navigating away
         UI.searchInput.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 UI.searchInput.value = '';

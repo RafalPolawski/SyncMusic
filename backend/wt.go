@@ -38,6 +38,7 @@ func handleWTSession(session *webtransport.Session) {
 		Stream:   stream,
 		SendChan: make(chan []byte, 100),
 		cancel:   cancel,
+		ClientID: uuid.NewString(),
 	}
 
 	go clientWriter(ctx, client)

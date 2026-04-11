@@ -6,6 +6,7 @@ import (
 	"log"
 	"sync"
 
+
 	"github.com/quic-go/webtransport-go"
 )
 
@@ -18,6 +19,7 @@ type WTClient struct {
 	mu       sync.RWMutex
 	Nickname string
 	RoomID   string
+	ClientID string // Unique ID assigned at connection time for deduplication
 }
 
 func (c *WTClient) GetNickname() string {
@@ -81,21 +83,26 @@ func (r *LocalClientsTracker) BroadcastToRoom(roomID string, msg []byte) {
 }
 
 // BroadcastPresenceToRoom sends the listener list to every client in the room.
+// Deduplicates nicks so a reconnecting client doesn't appear twice.
 func (r *LocalClientsTracker) BroadcastPresenceToRoom(roomID string) {
 	if roomID == "" {
 		return
 	}
 	r.ClientsMutex.Lock()
+	seenNicks := make(map[string]bool)
 	var users []string
 	var targets []*WTClient
 	for c := range r.Clients {
 		if c.GetRoomID() == roomID {
 			targets = append(targets, c)
 			nick := c.GetNickname()
-			if nick != "" {
+			if nick == "" {
+				nick = "Anonymous"
+			}
+			// Only add each nickname once (handles brief double-connect on reconnect)
+			if !seenNicks[nick] {
+				seenNicks[nick] = true
 				users = append(users, nick)
-			} else {
-				users = append(users, "Anonymous")
 			}
 		}
 	}

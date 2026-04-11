@@ -3,8 +3,6 @@
  * All player sub-modules receive this object by reference and mutate it directly.
  */
 
-
-
 /** Persist key player state across page reloads */
 export function savePlayerState(path, folder) {
     if (path) localStorage.setItem('syncMusicLastPath', path);
@@ -22,6 +20,10 @@ export function loadPlayerState() {
  * Creates an initial player state bag shared across all sub-modules.
  */
 export function createState() {
+    // Load sync settings from localStorage (persisted across reloads)
+    const savedSyncEnabled   = localStorage.getItem('syncMusicSyncEnabled');
+    const savedSyncThreshold = parseFloat(localStorage.getItem('syncMusicSyncThreshold') || '3.0');
+
     return {
         // Sync / timing
         pendingPlay: false,
@@ -31,6 +33,13 @@ export function createState() {
         hasJoined: false,
         isOfflineMode: false,
         lastKnownTime: -1,
+
+        // Sync configuration (user-adjustable via Settings)
+        syncEnabled: savedSyncEnabled !== 'false',          // default: enabled
+        syncHardSeekThreshold: isNaN(savedSyncThreshold) ? 3.0 : savedSyncThreshold, // seconds before hard-seek
+
+        // Deferred updateNowPlaying when library cache is not yet ready (Bug #1 fix)
+        pendingNowPlayingPath: null,
 
         // Volume
         isMuted: false,

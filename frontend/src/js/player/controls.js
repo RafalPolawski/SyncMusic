@@ -50,13 +50,14 @@ export function initControls(audio, dom, state, socket, { updatePositionState, u
     };
 
     audio.onpause = () => {
-        if (!state.shouldBePlaying) {
-            playPauseBtn.innerHTML = Icons.play;
-            miniPlayPauseBtn.innerHTML = Icons.play;
-            coverArt.classList.remove('playing');
-            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
-            updatePositionState();
-        }
+        // Always update the UI on pause — even if shouldBePlaying=true
+        // (handles network stall on Tailscale where audio stalls without play resuming, Bug #2b)
+        playPauseBtn.innerHTML = Icons.play;
+        miniPlayPauseBtn.innerHTML = Icons.play;
+        coverArt.classList.remove('playing');
+        if ('mediaSession' in navigator) navigator.mediaSession.playbackState =
+            state.shouldBePlaying ? 'playing' : 'paused';
+        updatePositionState();
     };
 
     audio.addEventListener('canplay', () => {
@@ -66,17 +67,29 @@ export function initControls(audio, dom, state, socket, { updatePositionState, u
     audio.onended = () => playNext(true);
 
     // Keep-alive watchdog: re-triggers play if audio stalls while it should be playing.
-    // A 2-second cooldown prevents rapid forcePlay() calls from causing jitter.
+    // Uses two consecutive checks to avoid false positives from seek/load transitions.
+    // Guards against NETWORK_NO_SOURCE (no valid src assigned yet).
     let watchdogLastForced = 0;
+    let watchdogStallCount  = 0; // must be stalled for 2 checks in a row
     setInterval(() => {
-        if (!state.hasJoined || !state.shouldBePlaying) return;
+        if (!state.hasJoined || !state.shouldBePlaying) {
+            watchdogStallCount = 0;
+            return;
+        }
+        if (audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) return;
         if (audio.readyState < 3) return; // not enough data buffered yet
         const isActuallyMoving = audio.currentTime > state.lastKnownTime;
         state.lastKnownTime = audio.currentTime;
         const now = Date.now();
-        if ((audio.paused || !isActuallyMoving) && now - watchdogLastForced > 2000) {
-            watchdogLastForced = now;
-            forcePlay();
+        if (audio.paused || !isActuallyMoving) {
+            watchdogStallCount++;
+            if (watchdogStallCount >= 2 && now - watchdogLastForced > 2000) {
+                watchdogLastForced = now;
+                watchdogStallCount = 0;
+                forcePlay();
+            }
+        } else {
+            watchdogStallCount = 0;
         }
     }, 800);
 

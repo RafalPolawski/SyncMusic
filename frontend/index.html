@@ -238,8 +238,32 @@
     <div id="settingsOverlay" style="display: none;" class="modal-overlay">
         <div class="modal-content">
             <h2 style="color: white; margin-bottom: 20px; font-weight: 700;">Settings ⚙️</h2>
-            
-            <div id="settingsActionContainer" style="display:flex; flex-direction:column; gap:10px;">
+
+            <!-- Sync Settings Section (Bug #3) -->
+            <div class="settings-section">
+                <div class="settings-section-title">🔄 Synchronization</div>
+
+                <label class="settings-row">
+                    <span class="settings-label">Sync Enabled</span>
+                    <label class="settings-toggle">
+                        <input type="checkbox" id="syncEnabledToggle" checked>
+                        <span class="settings-toggle-slider"></span>
+                    </label>
+                </label>
+
+                <label class="settings-row" id="syncThresholdRow">
+                    <span class="settings-label">
+                        Hard-seek Threshold
+                        <span class="settings-hint">Time difference in seconds before snapping to server time</span>
+                    </span>
+                    <div class="settings-slider-wrap">
+                        <input type="range" id="syncThresholdSlider" min="1" max="15" step="0.5" value="3" class="settings-slider">
+                        <span id="syncThresholdValue" class="settings-slider-display">3.0s</span>
+                    </div>
+                </label>
+            </div>
+
+            <div id="settingsActionContainer" style="display:flex; flex-direction:column; gap:10px; margin-top: 16px;">
                 <!-- Cache / Rescan buttons dynamically relocated here by library.js -->
             </div>
 

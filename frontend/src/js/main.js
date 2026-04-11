@@ -8,7 +8,7 @@ import { initAuth, login, logout, getProfile, getToken } from './auth.js';
 
 /**
  * Main Application Entry Point (Modularized)
- * 
+ *
  * Responsible for orchestrating the application's lifecycle on the browser:
  * - Bootstrapping the WebTransport connection.
  * - Initializing the Music Player instance.
@@ -20,18 +20,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     // ── Authentication (Keycloak) ─────────────────────────────────────────────
     const authResult = await initAuth();
     const guestContainer = document.getElementById("guestContainer");
-    
+
     if (authResult.authenticated) {
         const prof = getProfile();
         const username = prof.preferred_username || prof.given_name || prof.name || "SSO User";
-        
+
         if (guestContainer) guestContainer.style.display = "none";
-        // Setup hidden nickname input to still feed into WebTransport join event
         if (UI.nicknameInput) {
             UI.nicknameInput.value = username;
             UI.nicknameInput.type = "hidden";
         }
-        
+
         if (UI.ssoBtn) {
             UI.ssoBtn.innerHTML = `✅ Signed in as ${username} – 🔌 LOGOUT`;
             UI.ssoBtn.title = 'Logout from Keycloak';
@@ -88,7 +87,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     socket.onMessage((msg) => {
         if (msg.action === "presence") {
             if (!UI.usersList) return;
-            UI.usersList.innerHTML = ""; // Clear existing
+            UI.usersList.innerHTML = "";
             if (msg.users && msg.users.length > 0) {
                 msg.users.forEach(nick => {
                     const tag = document.createElement("div");
@@ -120,17 +119,51 @@ document.addEventListener("DOMContentLoaded", async () => {
         };
     }
 
+    // ── Settings panel — wire sync settings to player (Bug #3) ───────────────
     if (UI.openSettingsBtn) {
-        // We might have multiple buttons doing this, so select all if needed, but ui.js binds only one.
         document.querySelectorAll('#openSettingsBtn').forEach(btn => {
-            btn.onclick = () => { UI.settingsOverlay.style.display = "flex"; };
+            btn.onclick = () => {
+                // Populate current values each time the panel opens
+                const syncSettings = player.getSyncSettings();
+                const toggleEl  = document.getElementById('syncEnabledToggle');
+                const sliderEl  = document.getElementById('syncThresholdSlider');
+                const displayEl = document.getElementById('syncThresholdValue');
+                const rowEl     = document.getElementById('syncThresholdRow');
+
+                if (toggleEl)  toggleEl.checked          = syncSettings.enabled;
+                if (sliderEl)  sliderEl.value            = syncSettings.threshold;
+                if (displayEl) displayEl.textContent     = syncSettings.threshold.toFixed(1) + 's';
+                if (rowEl)     rowEl.style.opacity        = syncSettings.enabled ? '1' : '0.4';
+
+                UI.settingsOverlay.style.display = 'flex';
+            };
         });
-        UI.closeSettingsBtn.onclick = () => { UI.settingsOverlay.style.display = "none"; };
+        UI.closeSettingsBtn.onclick = () => { UI.settingsOverlay.style.display = 'none'; };
+
+        // Sync enabled toggle
+        const syncToggle   = document.getElementById('syncEnabledToggle');
+        const thresholdRow = document.getElementById('syncThresholdRow');
+        if (syncToggle) {
+            syncToggle.onchange = () => {
+                player.setSyncEnabled(syncToggle.checked);
+                if (thresholdRow) thresholdRow.style.opacity = syncToggle.checked ? '1' : '0.4';
+            };
+        }
+
+        // Hard-seek threshold slider
+        const syncSlider  = document.getElementById('syncThresholdSlider');
+        const syncDisplay = document.getElementById('syncThresholdValue');
+        if (syncSlider) {
+            syncSlider.oninput = () => {
+                const val = parseFloat(syncSlider.value);
+                if (syncDisplay) syncDisplay.textContent = val.toFixed(1) + 's';
+                player.setSyncThreshold(val);
+            };
+        }
     }
 
-
     initQueue(socket, player);
-    
+
     // Pass the token resolver if backend wants to verify
     const tokenResolver = authResult.authenticated ? getToken : null;
     initLibrary(socket, player, tokenResolver);

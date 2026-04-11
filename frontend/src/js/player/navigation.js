@@ -8,6 +8,7 @@ export function initNavigation(audio, state, socket, { updateNowPlaying, forcePl
     const handleEagerLoadAndPlay = (targetPath) => {
         state.pendingEagerPaths.push(targetPath);
         if (state.currentSongPath !== targetPath || !state.currentSongPath) {
+            audio.pause(); // Mute old buffer immediately — prevents audible click on skip (Bug #4)
             audio.src = '/music/' + Utils.encodePath(targetPath);
             audio.currentTime = 0; // Fixes random offset start
             state.currentSongPath = targetPath;

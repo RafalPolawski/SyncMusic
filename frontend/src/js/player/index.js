@@ -108,6 +108,12 @@ export function initPlayer(socket) {
                 state.currentPlaylist = groups[state.currentFolderName];
                 precacheNextTracks(state);
             }
+            // Bug #1: flush deferred updateNowPlaying (arrived before library cache was ready)
+            if (state.pendingNowPlayingPath) {
+                const path = state.pendingNowPlayingPath;
+                state.pendingNowPlayingPath = null;
+                mediaSession.updateNowPlaying(path);
+            }
         },
 
         setCurrentPlaylistFolder: (folder) => {
@@ -115,6 +121,20 @@ export function initPlayer(socket) {
             state.currentFolderName = folder;
             state.currentPlaylist = state.allGroupsCache[folder];
         },
+
+        // Bug #3: expose sync config setters (called from settings UI)
+        setSyncEnabled: (enabled) => {
+            state.syncEnabled = enabled;
+            localStorage.setItem('syncMusicSyncEnabled', String(enabled));
+        },
+        setSyncThreshold: (seconds) => {
+            state.syncHardSeekThreshold = seconds;
+            localStorage.setItem('syncMusicSyncThreshold', String(seconds));
+        },
+        getSyncSettings: () => ({
+            enabled:   state.syncEnabled,
+            threshold: state.syncHardSeekThreshold,
+        }),
 
         onTrackChanged:  (cb) => { state.onTrackChangeCallback = cb; },
         onQueueUpdate:   (cb) => { state.onQueueUpdateCallback = cb; },

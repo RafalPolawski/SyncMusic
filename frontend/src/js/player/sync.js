@@ -1,14 +1,15 @@
 /**
  * Server message handler (downstream sync).
  *
- * Drift correction strategy (adaptive, based on drift magnitude):
- *   < 0.05s  → ignore (within human perception threshold)
- *   0.05–0.5s → ±2% playbackRate  (completely inaudible, corrects in ~25s)
- *   0.5–2.0s  → ±5% playbackRate  (barely perceptible, corrects in ~10s)
- *   > 2.0s    → hard seek          (necessary, happens rarely)
+ * Drift correction strategy (adaptive, user-configurable):
+ *   sync disabled  → no drift correction at all
+ *   < threshold*5% → ignore (negligible)
+ *   < threshold*50% → ±5% playbackRate (inaudible, gradual)
+ *   < threshold     → ±10% playbackRate (aggressive but audible)
+ *   >= threshold    → hard seek (jumps to exact server time)
  *
- * The continuous drift loop runs every 500ms independently of server events,
- * so sync is maintained even between messages.
+ * state.syncEnabled and state.syncHardSeekThreshold are user-adjustable
+ * via Settings and persisted in localStorage.
  */
 
 import { Utils } from '../ui.js';
@@ -43,21 +44,30 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
         if (audio.readyState < 3) return; // Prevent fake drift accumulation while buffering
         if (!state.syncReceivedTime || !state.syncAudioTime) return;
 
+        // Bug #3: respect user preference to disable sync entirely
+        if (!state.syncEnabled) {
+            if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0;
+            return;
+        }
+
         const elapsed = (Date.now() - state.syncReceivedTime) / 1000;
         const expectedTime = state.syncAudioTime + elapsed;
         const drift = audio.currentTime - expectedTime; // + = ahead, - = behind
         const absDrift = Math.abs(drift);
 
-        if (absDrift < 0.015) {
-            if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0; // snap back perfectly
-        } else if (absDrift < 0.15) {
-            // ±5% — fast correction without glitching (corrects 100ms in 2s)
+        const T = state.syncHardSeekThreshold; // user-configured threshold (seconds)
+
+        if (absDrift < T * 0.05) {
+            // Well within tolerance — snap back to perfect rate
+            if (audio.playbackRate !== 1.0) audio.playbackRate = 1.0;
+        } else if (absDrift < T * 0.5) {
+            // Mild drift — ±5% rate adjustment (inaudible, corrects slowly)
             audio.playbackRate = drift > 0 ? 0.95 : 1.05;
-        } else if (absDrift < 1.5) {
-            // ±10% — aggressive correction
+        } else if (absDrift < T) {
+            // Significant drift — ±10% rate adjustment (may be barely perceptible)
             audio.playbackRate = drift > 0 ? 0.90 : 1.10;
         } else {
-            // Large drift — hard seek, snap playbackRate
+            // Large drift >= threshold — hard seek
             audio.currentTime = expectedTime;
             audio.playbackRate = 1.0;
         }
@@ -82,17 +92,37 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
                     }
                 }
 
-                const songChanged = state.currentSongPath !== msg.song;
-                if (songChanged || !state.currentSongPath) {
-                    audio.src = '/music/' + Utils.encodePath(msg.song);
-                    audio.currentTime = 0; // force explicit reset
-                    state.currentSongPath = msg.song;
-                    updateNowPlaying(state.currentSongPath);
-                    savePlayerState(msg.song, msg.folder);
-                    if (precacheNextTracks) precacheNextTracks();
+                // ── Bug #2a: guard against stale server echo reverting eager skip ──
+                // If the client has already skipped ahead, ignore a sync for an old song.
+                if (state.pendingEagerPaths.length > 0 && msg.song && msg.song !== state.pendingEagerPaths[state.pendingEagerPaths.length - 1]) {
+                    // Update timing state without changing src/UI
+                    state.syncReceivedTime = Date.now();
+                    state.syncAudioTime = offsetTime;
+                    state.shouldBePlaying = msg.isPlaying;
+                    if (msg.isShuffle !== undefined) { state.isShuffle = msg.isShuffle; updateShuffleUI(state, dom); }
+                    if (msg.isRepeat !== undefined) { state.isRepeat = msg.isRepeat; updateRepeatUI(state, dom); }
+                    if (msg.volume !== undefined) { audio.volume = msg.volume; volumeSlider.value = msg.volume; }
+                    break;
                 }
 
-                // On initial sync — prefer hard seek to exactly the right position
+                const songChanged = state.currentSongPath !== msg.song;
+                if (songChanged || !state.currentSongPath) {
+                    audio.pause(); // Prevent audible pop (Bug #4) when sync causes src change
+                    audio.src = '/music/' + Utils.encodePath(msg.song);
+                    audio.currentTime = 0;
+                    state.currentSongPath = msg.song;
+                    savePlayerState(msg.song, msg.folder);
+                    if (precacheNextTracks) precacheNextTracks();
+
+                    // ── Bug #1: defer updateNowPlaying if library cache not yet loaded ──
+                    if (Object.keys(state.allGroupsCache).length > 0) {
+                        updateNowPlaying(state.currentSongPath);
+                    } else {
+                        state.pendingNowPlayingPath = msg.song;
+                    }
+                }
+
+                // On initial sync — hard seek to exactly the right position
                 audio.currentTime = offsetTime;
 
                 state.syncReceivedTime = Date.now();
@@ -124,7 +154,7 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
                     if (msg.folder !== 'Queue') state.backgroundPlaylistPath = msg.song;
                 }
 
-                // Prevent delayed server echoes from reverting rapid eager loads
+                // Prevent delayed server echoes from reverting rapid eager loads (Bug #2a)
                 if (state.pendingEagerPaths.length > 0) {
                     const idx = state.pendingEagerPaths.lastIndexOf(msg.song);
                     if (idx !== -1) {
@@ -146,11 +176,18 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
                 }
 
                 if (state.currentSongPath !== msg.song || !state.currentSongPath) {
+                    audio.pause(); // Prevent pop (Bug #4)
                     audio.src = '/music/' + Utils.encodePath(msg.song);
-                    audio.currentTime = 0; // force explicit reset
+                    audio.currentTime = 0;
                     state.currentSongPath = msg.song;
-                    updateNowPlaying(state.currentSongPath);
                     savePlayerState(msg.song, msg.folder);
+
+                    // Bug #1: defer updateNowPlaying if cache not ready
+                    if (Object.keys(state.allGroupsCache).length > 0) {
+                        updateNowPlaying(state.currentSongPath);
+                    } else {
+                        state.pendingNowPlayingPath = msg.song;
+                    }
                 }
                 state.syncReceivedTime = Date.now();
                 state.syncAudioTime = 0;
@@ -239,7 +276,6 @@ export function initSync(audio, dom, state, socket, { forcePlay, updateNowPlayin
      */
     const loadTrack = (path, folder) => {
         if (state.isOfflineMode) {
-            // Directly simulate the server's 'load' message to update local state/UI
             handleSocketMessage({
                 action: 'load',
                 song: path,
