@@ -15,7 +15,7 @@ export default function LibraryView() {
   }, [fetchLibrary]);
 
   const handlePlaySong = (song, folder) => {
-    socket.sendCommand('load', { song: song.path, folder });
+    socket.sendCommand('load', { song: song.path, folder, title: song.title, artist: song.artist });
   };
 
   const handleEnqueue = (e, song, folder) => {

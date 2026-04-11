@@ -7,15 +7,39 @@ import { socket } from '../../lib/webtransport';
 export default function FullPlayer({ isOpen, onClose }) {
   const { 
     title, artist, coverUrl, isPlaying, 
-    currentTime, duration, isShuffle, isRepeat 
+    currentTime, duration, isShuffle, isRepeat,
+    setModes
   } = usePlayerStore();
 
   const togglePlay = () => {
     socket.sendCommand(isPlaying ? 'pause' : 'play', { time: usePlayerStore.getState().currentTime });
   };
 
-  const handleNext = () => { /* PlayNext logic mapped later to QueueStore */ };
-  const handlePrev = () => { /* PlayPrev logic */ };
+  const handleNext = () => {
+    const { nextTrack } = require('../../store/useQueueStore').useQueueStore.getState();
+    const next = nextTrack();
+    if (next) {
+        socket.sendCommand('load', { song: next.path, folder: next.folder });
+    } else {
+        socket.sendCommand('skip'); // Let server/host handle if no local queue
+    }
+  };
+
+  const handlePrev = () => {
+      socket.sendCommand('seek', { time: 0 });
+  };
+
+  const toggleShuffle = () => {
+      const newShuffle = !isShuffle;
+      setModes(newShuffle, isRepeat);
+      socket.sendCommand('shuffle', { state: newShuffle });
+  };
+
+  const toggleRepeat = () => {
+      const newRepeat = (isRepeat + 1) % 3;
+      setModes(isShuffle, newRepeat);
+      socket.sendCommand('repeat', { state: newRepeat });
+  };
 
   return (
     <AnimatePresence>
@@ -65,12 +89,22 @@ export default function FullPlayer({ isOpen, onClose }) {
             <h2 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '4px' }}>{title}</h2>
             <p style={{ fontSize: '16px', color: 'var(--text-secondary)' }}>{artist}</p>
 
-            {/* Progress Bar (Mock for now, needs Audio sync) */}
+            {/* Progress Bar */}
             <div style={{ marginTop: '30px', marginBottom: '20px' }}>
-              <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px' }}>
-                <div style={{ width: `${(currentTime / (duration || 1)) * 100}%`, height: '100%', background: 'var(--primary)', borderRadius: '2px' }} />
+              <div 
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const percent = (e.clientX - rect.left) / rect.width;
+                  socket.sendCommand('seek', { time: percent * duration });
+                }}
+                style={{ 
+                  width: '100%', height: '8px', background: 'rgba(255,255,255,0.1)', 
+                  borderRadius: '4px', cursor: 'pointer', position: 'relative' 
+                }}
+              >
+                <div style={{ width: `${(currentTime / (duration || 1)) * 100}%`, height: '100%', background: 'var(--primary)', borderRadius: '4px', transition: 'width 0.1s linear' }} />
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '12px', color: 'var(--text-tertiary)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px', fontSize: '13px', color: 'var(--text-tertiary)', fontWeight: 500 }}>
                 <span>{Math.floor(currentTime/60)}:{(Math.floor(currentTime%60)).toString().padStart(2,'0')}</span>
                 <span>{Math.floor(duration/60)}:{(Math.floor(duration%60)).toString().padStart(2,'0')}</span>
               </div>
@@ -78,7 +112,10 @@ export default function FullPlayer({ isOpen, onClose }) {
 
             {/* Main Controls */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 10px' }}>
-              <button style={{ color: isShuffle ? 'var(--primary)' : 'var(--text-tertiary)' }}>
+              <button 
+                onClick={toggleShuffle} 
+                style={{ color: isShuffle ? 'var(--primary)' : 'var(--text-tertiary)' }}
+              >
                 <Shuffle size={24} />
               </button>
               <button onClick={handlePrev}><SkipBack size={32} fill="currentColor" /></button>
@@ -96,8 +133,12 @@ export default function FullPlayer({ isOpen, onClose }) {
               </button>
               
               <button onClick={handleNext}><SkipForward size={32} fill="currentColor" /></button>
-              <button style={{ color: isRepeat ? 'var(--primary)' : 'var(--text-tertiary)' }}>
+              <button 
+                onClick={toggleRepeat} 
+                style={{ color: isRepeat ? 'var(--primary)' : 'var(--text-tertiary)' }}
+              >
                 <Repeat size={24} />
+                {isRepeat === 2 && <span style={{ position: 'absolute', fontSize: '10px', fontWeight: 'bold', marginTop: '14px', marginLeft: '-14px', color: 'var(--bg-base)', background: 'var(--primary)', borderRadius: '50%', padding: '1px 3px' }}>1</span>}
               </button>
             </div>
           </div>

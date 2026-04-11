@@ -24,7 +24,10 @@ export default function AudioController() {
         const currentSrc = audioRef.current.src ? new URL(audioRef.current.src).pathname + new URL(audioRef.current.src).search : null;
         const targetSrc = currentPath ? `/api/stream?song=${encodeURIComponent(currentPath)}` : null;
         
+        console.log('[AudioController] Path changed.', { currentPath, currentSrc, targetSrc });
+
         if (targetSrc && currentSrc !== targetSrc) {
+            console.log('[AudioController] Loading new track:', targetSrc);
             audioRef.current.pause();
             audioRef.current.src = targetSrc;
             audioRef.current.load();
@@ -51,14 +54,21 @@ export default function AudioController() {
 
             // Hard seek if drift exceeds threshold, or just seeking after pause
             if (drift > syncThreshold && syncEnabled) {
-                audioRef.current.currentTime = targetTime;
+                try {
+                    audioRef.current.currentTime = targetTime;
+                } catch (err) {
+                    console.warn('[AudioController] Ignored currentTime seek on unready audio', err);
+                }
             }
 
             // Deal with browser restrictions
+            console.log('[AudioController] Playing audio at drift:', drift);
             audioRef.current.play().catch(e => console.warn("Auto-play blocked", e));
         } else {
             audioRef.current.pause();
-            audioRef.current.currentTime = syncAudioTime;
+            try {
+                audioRef.current.currentTime = syncAudioTime;
+            } catch (err) {}
         }
     }, [isPlaying, syncAudioTime, syncReceivedTime, syncEnabled, syncThreshold, currentPath, volume]);
 
@@ -85,13 +95,29 @@ export default function AudioController() {
             }
         };
 
-        audio.addEventListener('timeupdate', onTimeUpdate);
-        audio.addEventListener('ended', onEnded);
+        // Unlock audio element on first interaction
+        const unlockAudio = () => {
+            if (audioRef.current && audioRef.current.src === '') {
+                // Load empty blob to satisfy browser unlock without breaking currentSrc logic
+                audioRef.current.src = 'data:audio/mp3;base64,//NgxAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq';
+                audioRef.current.play().then(() => {
+                    audioRef.current.pause();
+                    audioRef.current.src = currentPath ? `/api/stream?song=${encodeURIComponent(currentPath)}` : '';
+                }).catch(() => {});
+            }
+            window.removeEventListener('click', unlockAudio);
+            window.removeEventListener('touchstart', unlockAudio);
+        };
+        window.addEventListener('click', unlockAudio);
+        window.addEventListener('touchstart', unlockAudio);
+
         return () => {
             audio.removeEventListener('timeupdate', onTimeUpdate);
             audio.removeEventListener('ended', onEnded);
+            window.removeEventListener('click', unlockAudio);
+            window.removeEventListener('touchstart', unlockAudio);
         };
-    }, [setProgress]);
+    }, [setProgress, currentPath]);
 
     return <audio ref={audioRef} preload="auto" style={{ display: 'none' }} />;
 }

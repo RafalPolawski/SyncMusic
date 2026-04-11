@@ -215,7 +215,7 @@ export class SyncWebTransport {
 
         switch(msg.action) {
             case 'sync':
-                if (msg.song) player.setTrack(msg.song, msg.folder);
+                if (msg.song) player.setTrack(msg.song, msg.folder, msg.title, msg.artist);
                 usePlayerStore.setState({
                     syncReceivedTime: Date.now(),
                     syncAudioTime: offsetTime,
@@ -226,7 +226,7 @@ export class SyncWebTransport {
                 });
                 break;
             case 'load':
-                if (msg.song) player.setTrack(msg.song, msg.folder);
+                if (msg.song) player.setTrack(msg.song, msg.folder, msg.title, msg.artist);
                 usePlayerStore.setState({
                     syncReceivedTime: Date.now(),
                     syncAudioTime: 0,
