@@ -159,21 +159,22 @@ func moveQueueItem(q []map[string]interface{}, from, to int) []map[string]interf
 		return q
 	}
 	item := q[from]
-	// Remove from old position
-	copy(q[from:], q[from+1:])
-	q[len(q)-1] = nil
-	q = q[:len(q)-1]
-
-	// Insert at new position
-	var newQ []map[string]interface{}
+	// Remove item (creates a new slice)
+	temp := append(q[:from], q[from+1:]...)
+	
+	// Create final slice with space for item
+	newQ := make([]map[string]interface{}, 0, len(q))
+	
 	if to == 0 {
-		newQ = append([]map[string]interface{}{item}, q...)
-	} else if to >= len(q) {
-		newQ = append(q, item)
-	} else {
-		newQ = append(newQ, q[:to]...)
 		newQ = append(newQ, item)
-		newQ = append(newQ, q[to:]...)
+		newQ = append(newQ, temp...)
+	} else if to >= len(temp) {
+		newQ = append(newQ, temp...)
+		newQ = append(newQ, item)
+	} else {
+		newQ = append(newQ, temp[:to]...)
+		newQ = append(newQ, item)
+		newQ = append(newQ, temp[to:]...)
 	}
 	return newQ
 }

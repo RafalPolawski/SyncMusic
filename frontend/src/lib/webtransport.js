@@ -104,6 +104,7 @@ export class SyncWebTransport {
     }
 
     startPinging() {
+        if (usePlayerStore.getState().offlineMode) return;
         clearInterval(this._pingInterval);
         this._pingInterval = setInterval(() => this._sendPing(), 2000);
     }
@@ -193,34 +194,58 @@ export class SyncWebTransport {
     }
 
     getServerTime() { return Date.now() + (this.serverTimeOffset || 0); }
+    toServerTime(clientTime) { return clientTime + (this.serverTimeOffset || 0); }
 
     sendCommand(action, payload = {}) {
-        if (this.writer && !usePlayerStore.getState().offlineMode) {
+        const player = usePlayerStore.getState();
+        if (this.writer && !player.offlineMode) {
+            if (['load', 'play', 'pause', 'seek'].includes(action)) {
+                player.setLastAction();
+            }
             this._writeRaw({ action, ...payload });
         } else {
             // OFFLINE MODE: simulate server echo
             const allowed = ['load', 'play', 'pause', 'seek', 'shuffle', 'repeat', 'enqueue', 'dequeue'];
             if (!allowed.includes(action)) return;
             const sim = { action, isSimulated: true, ...payload };
-            if (['load', 'play', 'pause', 'seek'].includes(action)) sim.server_ts = Date.now();
+            if (['load', 'play', 'pause', 'seek'].includes(action)) {
+                player.setLastAction();
+                sim.server_ts = Date.now();
+            }
             setTimeout(() => this.dispatchMessage(sim), 50);
         }
     }
 
     dispatchMessage(msg) {
-        if (usePlayerStore.getState().offlineMode && !msg.isSimulated) {
+        const player = usePlayerStore.getState();
+        if (player.offlineMode && !msg.isSimulated) {
             return; // Block actual server messages when we explicitly enabled Offline Mode
         }
 
-        // Here we map WT messages to Zustand store mutations
-        const player = usePlayerStore.getState();
+        // Stale rejection logic: 
+        // 1. Explicit actions (load, play, pause, seek) should NEVER be rejected, as they are often our own confirmation.
+        // 2. Periodic heartbeats (sync) should be rejected if they were sent by the server BEFORE our last local action.
+        if (msg.action === 'sync' && !msg.isSimulated) {
+            if (player.lastActionTimestamp > 0 && msg.server_ts) {
+                const lastActionInServerTime = this.toServerTime(player.lastActionTimestamp);
+                // Allow 200ms grace for network scheduling
+                if (msg.server_ts < lastActionInServerTime - 200) {
+                    console.log("[SYNC] Rejecting stale periodic heartbeat (Server TS:", msg.server_ts, " < Last Action Server TS:", lastActionInServerTime, ")");
+                    return;
+                }
+            }
+        }
+
         const offsetTime = (msg.server_ts && msg.action !== 'pause') 
             ? msg.time + Math.max(0, (this.getServerTime() - msg.server_ts) / 1000) 
             : msg.time;
 
         switch(msg.action) {
             case 'sync':
-                if (msg.song) player.setTrack(msg.song, msg.folder, msg.title, msg.artist);
+                if (msg.song) {
+                    // Only update context if we don't have one, or if it's a sync heartbeat that matches metadata
+                    player.setTrack(msg.song, msg.folder, msg.title, msg.artist, false);
+                }
                 usePlayerStore.setState({
                     syncReceivedTime: Date.now(),
                     syncAudioTime: offsetTime,
@@ -231,7 +256,12 @@ export class SyncWebTransport {
                 });
                 break;
             case 'load':
-                if (msg.song) player.setTrack(msg.song, msg.folder, msg.title, msg.artist);
+                if (msg.song) {
+                    const queue = useQueueStore.getState().queue;
+                    const isFromQueue = queue.length > 0 && queue[0].path === msg.song;
+                    // If it's not from the queue, it's a manual playlist change
+                    player.setTrack(msg.song, msg.folder, msg.title, msg.artist, !isFromQueue);
+                }
                 usePlayerStore.setState({
                     syncReceivedTime: Date.now(),
                     syncAudioTime: 0,

@@ -1,13 +1,15 @@
 import React from 'react';
-import { Play, Pause, Shuffle, Repeat, SkipBack, SkipForward } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Shuffle, Repeat } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { usePlayerStore } from '../../store/usePlayerStore';
-import { useQueueStore } from '../../store/useQueueStore';
-import { socket } from '../../lib/webtransport';
 import { playNext, playPrev } from '../../lib/playerActions';
+import { socket } from '../../lib/webtransport';
 
 export default function MiniPlayer({ onClick }) {
-  const { title, artist, coverUrl, currentPath, isPlaying, isShuffle, isRepeat, currentTime, duration } = usePlayerStore();
+  const { 
+    title, artist, coverUrl, currentPath, isPlaying, 
+    currentTime, duration, isShuffle, isRepeat, setModes 
+  } = usePlayerStore();
 
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
   
@@ -15,105 +17,113 @@ export default function MiniPlayer({ onClick }) {
 
   const handlePlayPause = (e) => {
     e.stopPropagation();
-    usePlayerStore.setState({ isPlaying: !isPlaying }); // Optimistic UI
+    if (window.navigator.vibrate) window.navigator.vibrate(8);
+    usePlayerStore.setState({ isPlaying: !isPlaying }); 
     socket.sendCommand(isPlaying ? 'pause' : 'play', { time: usePlayerStore.getState().currentTime });
   };
 
   const handleNext = (e) => {
     e.stopPropagation();
+    if (window.navigator.vibrate) window.navigator.vibrate(8);
     playNext();
   };
 
   const handlePrev = (e) => {
     e.stopPropagation();
+    if (window.navigator.vibrate) window.navigator.vibrate(8);
     playPrev();
   };
 
   const toggleShuffle = (e) => {
     e.stopPropagation();
+    if (window.navigator.vibrate) window.navigator.vibrate(8);
     const newShuffle = !isShuffle;
+    setModes(newShuffle, isRepeat);
     usePlayerStore.setState({ isShuffle: newShuffle });
     socket.sendCommand('shuffle', { state: newShuffle });
   };
 
   const toggleRepeat = (e) => {
     e.stopPropagation();
+    if (window.navigator.vibrate) window.navigator.vibrate(8);
     const newRepeat = (isRepeat + 1) % 3;
+    setModes(isShuffle, newRepeat);
     usePlayerStore.setState({ isRepeat: newRepeat });
     socket.sendCommand('repeat', { state: newRepeat });
   };
 
   return (
-    <div 
+    <motion.div 
       onClick={onClick}
+      initial={{ y: 80, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      className="glass-panel"
       style={{
         display: 'flex',
         alignItems: 'center',
-        background: 'rgba(20, 20, 25, 0.95)',
-        backdropFilter: 'var(--glass-blur)',
-        margin: '8px',
-        padding: '8px',
-        borderRadius: '12px',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-        border: '1px solid rgba(255,255,255,0.05)',
+        margin: '0 12px 12px 12px',
+        padding: '10px 14px',
+        borderRadius: 'var(--radius-md)',
         cursor: 'pointer',
         position: 'relative',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        boxShadow: '0 12px 30px rgba(0,0,0,0.4)',
       }}
     >
-      {/* Seekable Progress Bar at top */}
-      <div 
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '20px', cursor: 'pointer', zIndex: 1 }}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (!duration) return;
-          const rect = e.currentTarget.getBoundingClientRect();
-          const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-          socket.sendCommand('seek', { time: pct * duration });
-        }}
-      >
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: 'rgba(255,255,255,0.1)' }}>
-          <div style={{ width: `${progressPercent}%`, height: '100%', background: 'var(--primary)', transition: 'width 0.1s linear', position: 'relative' }}>
-            <div style={{ position: 'absolute', right: '-4px', top: '50%', transform: 'translateY(-50%)', width: '8px', height: '8px', borderRadius: '50%', background: 'white' }} />
-          </div>
-        </div>
+      {/* Animated Glass Progress Bar at top (Non-interactive) */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'rgba(255,255,255,0.05)' }}>
+        <motion.div 
+          style={{ 
+            height: '100%', 
+            background: 'var(--primary)', 
+            boxShadow: '0 0 10px var(--primary)'
+          }} 
+          animate={{ width: `${progressPercent}%` }}
+          transition={{ type: 'tween', ease: 'linear', duration: 0.2 }}
+        />
       </div>
-      <img 
+
+      <motion.img 
+        layoutId="cover-art-large"
         src={coverUrl || '/default-album.png'} 
-        alt="Cover" 
-        style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover' }}
+        alt="" 
+        style={{ width: '44px', height: '44px', borderRadius: '10px', objectFit: 'cover', background: 'rgba(255,255,255,0.05)' }}
         onError={(e) => { e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23333"%3E%3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14.5c-2.49 0-4.5-2.01-4.5-4.5S9.51 7.5 12 7.5s4.5 2.01 4.5 4.5-2.01 4.5-4.5 4.5zm0-5.5c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"/%3E%3C/svg%3E'; }}
       />
       
-      <div style={{ flex: 1, margin: '0 12px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        <div className="text-ellipsis" style={{ fontWeight: 600, fontSize: '14px', color: 'white' }}>
+      <div style={{ flex: 1, margin: '0 12px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '1px' }}>
+        <div className="text-ellipsis" style={{ fontWeight: 700, fontSize: '14px', color: 'white' }}>
           {title}
         </div>
-        <div className="text-ellipsis" style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+        <div className="text-ellipsis" style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 500 }}>
           {artist}
         </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-        <button onClick={toggleShuffle} style={{ padding: '6px', color: isShuffle ? 'var(--primary)' : 'var(--text-tertiary)' }}>
+        <button onClick={toggleShuffle} style={{ padding: '8px', color: isShuffle ? 'var(--primary)' : 'var(--text-tertiary)' }}>
             <Shuffle size={18} />
         </button>
-        <button onClick={handlePrev} style={{ padding: '6px', color: 'var(--text-primary)' }}>
+        <button onClick={handlePrev} style={{ padding: '8px', color: 'white' }}>
             <SkipBack size={20} fill="white" strokeWidth={0} />
         </button>
-        <button onClick={handlePlayPause} style={{ padding: '6px', color: 'var(--text-primary)' }}>
-            {isPlaying ? <Pause size={24} fill="white" strokeWidth={0} /> : <Play size={24} fill="white" strokeWidth={0} />}
+        <button 
+          onClick={handlePlayPause} 
+          style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'white', color: 'black', margin: '0 4px' }}
+        >
+          {isPlaying ? <Pause size={18} fill="black" strokeWidth={0} /> : <Play size={18} fill="black" strokeWidth={0} style={{ marginLeft: '2px' }} />}
         </button>
-        <button onClick={handleNext} style={{ padding: '6px', color: 'var(--text-primary)' }}>
-            <SkipForward size={20} fill="white" strokeWidth={0} />
+        <button 
+          onClick={handleNext} 
+          style={{ padding: '8px', color: 'white' }}
+        >
+          <SkipForward size={20} fill="white" strokeWidth={0} />
         </button>
-        <button onClick={toggleRepeat} style={{ padding: '6px', color: isRepeat > 0 ? 'var(--primary)' : 'var(--text-tertiary)', position: 'relative' }}>
+        <button onClick={toggleRepeat} style={{ padding: '8px', color: isRepeat > 0 ? 'var(--primary)' : 'var(--text-tertiary)', position: 'relative' }}>
             <Repeat size={18} />
-            {isRepeat === 2 && (
-                <span style={{ position: 'absolute', top: '2px', right: '2px', fontSize: '7px', fontWeight: 900, background: 'var(--primary)', color: 'var(--bg-base)', borderRadius: '50%', width: '10px', height: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>1</span>
-            )}
+            {isRepeat === 2 && <span style={{ position: 'absolute', top: '4px', right: '4px', fontSize: '8px', fontWeight: 900 }}>1</span>}
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 }

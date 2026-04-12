@@ -1,16 +1,16 @@
 import React, { useEffect, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useLibraryStore } from '../../store/useLibraryStore';
 import { useCacheStore } from '../../store/useCacheStore';
-import { Trash2, Database, ExternalLink, HardDrive, Download, CheckCircle2 } from 'lucide-react';
+import { useNetworkStore } from '../../store/useNetworkStore';
+import { Trash2, Database, HardDrive, Download, CheckCircle2, Wifi, Info, Activity } from 'lucide-react';
 
 export default function SettingsView() {
-  const { syncEnabled, syncThreshold, setSyncSettings } = usePlayerStore();
-  const { rescanLibrary, isScanning } = useLibraryStore();
+  const { syncEnabled, syncThreshold, setSyncSettings, drift, offlineMode, setOffline } = usePlayerStore();
+  const { rescanLibrary, isScanning, groups } = useLibraryStore();
   const { initCacheListener, totalCacheSize, cachedPaths, activeJobs, clearCache, cacheSongs } = useCacheStore();
-
-  // Subscribe to groups via hook so component re-renders when library loads
-  const groups = useLibraryStore(state => state.groups);
+  const { rtt } = useNetworkStore();
 
   useEffect(() => {
     initCacheListener();
@@ -24,17 +24,18 @@ export default function SettingsView() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const activeJobArray = Array.from(activeJobs.values());
-  const totalProcessing = activeJobArray.reduce((acc, job) => acc + job.processed, 0);
-  const totalJobFilesCount = activeJobArray.reduce((acc, job) => acc + job.total, 0);
   const isCachingGlobal = activeJobs.size > 0;
 
-  // Derived from reactive Zustand state
   const folderCacheStats = useMemo(() => {
     const stats = {};
     Object.entries(groups).forEach(([folder, songs]) => {
       const cached = songs.filter(s => cachedPaths.has(s.path)).length;
-      stats[folder] = { total: songs.length, cached, fullyDone: songs.length > 0 && cached === songs.length };
+      stats[folder] = { 
+        total: songs.length, 
+        cached, 
+        fullyDone: songs.length > 0 && cached === songs.length,
+        sizeEstimate: songs.length * 6 // Rough estimation 6MB/track Opus
+      };
     });
     return stats;
   }, [groups, cachedPaths]);
@@ -48,27 +49,56 @@ export default function SettingsView() {
   const handleCacheAll = () => {
     if (allCached || isCachingGlobal) return;
     if (!window.confirm('Do you want to download all tracks to offline storage? This may take a while.')) return;
-    const allSongs = Object.values(groups).flat();
-    if (allSongs.length > 0) cacheSongs(allSongs, 'cache-all');
+    
+    Object.entries(groups).forEach(([folder, songs]) => {
+        cacheSongs(songs, folder);
+    });
   };
 
   return (
-    <div style={{ padding: '24px', paddingBottom: '100px', maxWidth: '600px', margin: '0 auto' }}>
-      <h1 style={{ fontSize: '32px', fontWeight: 800, marginBottom: '24px' }}>Settings</h1>
+    <div style={{ padding: '24px', paddingBottom: '120px', maxWidth: '640px', margin: '0 auto', height: '100%', overflowY: 'auto' }}>
+      <h1 style={{ fontSize: '32px', fontWeight: 800, marginBottom: '28px' }}>Settings</h1>
       
+      {/* Real-time Diagnostics */}
+      <section style={{ marginBottom: '32px' }}>
+        <h2 style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '16px', fontWeight: 700 }}>
+          Diagnostics & Network
+        </h2>
+        <div className="glass-panel" style={{ padding: '20px', borderRadius: 'var(--radius-md)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600 }}>NETWORK LATENCY</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '18px', fontWeight: 700 }}>
+                    <Wifi size={18} color={rtt === 'OFFLINE' ? '#ff6b6b' : 'var(--primary)'} />
+                    {rtt === 'OFFLINE' ? 'Offline' : `${Math.round(rtt)}ms`}
+                </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', fontWeight: 600 }}>SYNC DRIFT (L-S)</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '18px', fontWeight: 700 }}>
+                    <Activity size={18} color={drift > 300 ? '#ff6b6b' : 'var(--primary)'} />
+                    {offlineMode ? '--' : `${drift}ms`}
+                </div>
+            </div>
+            <div style={{ gridColumn: '1 / span 2', marginTop: '8px', padding: '12px', background: 'rgba(255,255,255,0.04)', borderRadius: '12px', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                <div style={{ fontWeight: 700, color: 'white', marginBottom: '4px' }}>What is Sync Drift?</div>
+                Difference between Server time and your local Audio time. If it exceeds <b>{syncThreshold}s</b>, a hard-sync seek is triggered.
+            </div>
+        </div>
+      </section>
+
       {/* Sync Section */}
       <section style={{ marginBottom: '32px' }}>
-        <h2 style={{ fontSize: '12px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px', fontWeight: 700 }}>
+        <h2 style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '16px', fontWeight: 700 }}>
           Playback Synchronization
         </h2>
-        <div style={{ background: 'var(--bg-surface)', padding: '20px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+        <div className="glass-panel" style={{ padding: '20px', borderRadius: 'var(--radius-md)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <span style={{ fontWeight: 600 }}>Sync with Server</span>
               <input 
                 type="checkbox" 
                 checked={syncEnabled} 
                 onChange={(e) => setSyncSettings(e.target.checked, syncThreshold)} 
-                style={{ width: '24px', height: '24px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                style={{ width: '22px', height: '22px', accentColor: 'var(--primary)', cursor: 'pointer' }}
               />
             </div>
             <div style={{ opacity: syncEnabled ? 1 : 0.4, transition: 'opacity 0.2s' }}>
@@ -80,62 +110,66 @@ export default function SettingsView() {
                 type="range" min="0.5" max="10" step="0.5" 
                 value={syncThreshold}
                 onChange={(e) => setSyncSettings(syncEnabled, parseFloat(e.target.value))}
-                style={{ width: '100%', accentColor: 'var(--primary)', height: '6px', borderRadius: '3px' }}
+                style={{ width: '100%', accentColor: 'var(--primary)', height: '4px', cursor: 'pointer' }}
               />
-              <p style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '12px', lineHeight: '1.5' }}>
-                Tolerated delay before the player forces synchronization with the server time.
-              </p>
             </div>
         </div>
       </section>
 
       {/* Offline Storage Section */}
       <section style={{ marginBottom: '32px' }}>
-        <h2 style={{ fontSize: '12px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px', fontWeight: 700 }}>
-          Offline Storage (PWA)
-        </h2>
-        <div style={{ background: 'var(--bg-surface)', padding: '20px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
-            {/* Storage summary */}
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px' }}>
-                <div style={{ background: 'rgba(29, 185, 84, 0.1)', padding: '10px', borderRadius: '12px', marginRight: '16px' }}>
-                    <HardDrive size={24} color="var(--primary)" />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h2 style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.15em', fontWeight: 700 }}>
+                Offline Storage
+            </h2>
+            <button 
+                onClick={() => setOffline(!offlineMode)}
+                style={{ fontSize: '10px', fontWeight: 800, padding: '4px 10px', borderRadius: '6px', background: offlineMode ? 'var(--primary)' : 'rgba(255,255,255,0.1)', color: offlineMode ? 'black' : 'white' }}
+            >
+                {offlineMode ? 'OFFLINE MODE ON' : 'GO OFFLINE'}
+            </button>
+        </div>
+        
+        <div className="glass-panel" style={{ padding: '20px', borderRadius: 'var(--radius-md)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '24px' }}>
+                <div style={{ background: 'var(--primary-glass)', padding: '12px', borderRadius: '14px', marginRight: '16px' }}>
+                    <HardDrive size={26} color="var(--primary)" />
                 </div>
                 <div>
-                    <div style={{ fontWeight: 700, fontSize: '18px' }}>{formatBytes(totalCacheSize)}</div>
-                    <div style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>
+                    <div style={{ fontWeight: 800, fontSize: '20px' }}>{formatBytes(totalCacheSize)} Used</div>
+                    <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                       {cachedPaths.size} / {totalLibraryCount} tracks available offline
                     </div>
                 </div>
-                {allCached && (
-                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--primary)', fontSize: '13px', fontWeight: 600 }}>
-                    <CheckCircle2 size={18} />
-                    All cached
-                  </div>
-                )}
             </div>
 
             {/* Per-folder cache status */}
             {Object.entries(folderCacheStats).length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '24px' }}>
                 {Object.entries(folderCacheStats).map(([folder, stats]) => {
-                  const job = activeJobs.get(folder) || activeJobs.get('cache-all');
+                  const job = activeJobs.get(folder);
                   const jobProgress = job ? Math.round((job.processed / job.total) * 100) : null;
                   const pct = stats.total > 0 ? stats.cached / stats.total : 0;
+                  
                   return (
                     <div key={folder} style={{ fontSize: '13px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span style={{ color: stats.fullyDone ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: stats.fullyDone ? 600 : 400 }}>
-                          {stats.fullyDone && '✓ '}{folder}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                        <span style={{ color: stats.fullyDone ? 'var(--primary)' : 'var(--text-primary)', fontWeight: 600 }}>
+                          {folder} {!stats.fullyDone && `(~${stats.sizeEstimate} MB)`}
                         </span>
-                        <span style={{ color: 'var(--text-tertiary)' }}>{stats.cached}/{stats.total}</span>
+                        <span style={{ color: 'var(--text-tertiary)', fontSize: '11px', fontWeight: 700 }}>
+                            {job ? `CACHING ${job.processed}/${job.total}` : `${stats.cached} / ${stats.total}`}
+                        </span>
                       </div>
-                      <div style={{ height: '3px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px', overflow: 'hidden' }}>
-                        <div style={{ 
-                          width: `${jobProgress !== null ? jobProgress : pct * 100}%`, 
-                          height: '100%', 
-                          background: stats.fullyDone ? 'var(--primary)' : 'rgba(29, 185, 84, 0.5)',
-                          transition: 'width 0.4s' 
-                        }} />
+                      <div style={{ height: '4px', background: 'rgba(255,255,255,0.06)', borderRadius: '2px', overflow: 'hidden' }}>
+                        <motion.div 
+                          initial={false}
+                          animate={{ width: `${jobProgress !== null ? jobProgress : pct * 100}%` }}
+                          style={{ 
+                            height: '100%', 
+                            background: stats.fullyDone ? 'var(--primary)' : 'var(--text-tertiary)',
+                          }} 
+                        />
                       </div>
                     </div>
                   );
@@ -143,48 +177,33 @@ export default function SettingsView() {
               </div>
             )}
 
-            {/* Global progress bar when caching */}
-            {isCachingGlobal && (
-                <div style={{ marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-tertiary)', marginBottom: '6px' }}>
-                        <span>Downloading... {totalProcessing} / {totalJobFilesCount}</span>
-                        <span>{totalJobFilesCount > 0 ? Math.round((totalProcessing / totalJobFilesCount) * 100) : 0}%</span>
-                    </div>
-                    <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
-                        <div style={{ width: `${(totalProcessing / totalJobFilesCount) * 100}%`, height: '100%', background: 'var(--primary)', transition: 'width 0.3s' }} />
-                    </div>
-                </div>
-            )}
-
-            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+            <div style={{ display: 'flex', gap: '12px' }}>
                 <button 
                     onClick={handleCacheAll}
                     disabled={allCached || isCachingGlobal}
                     style={{
-                        flex: 2, padding: '14px', 
-                        background: allCached ? 'rgba(29, 185, 84, 0.08)' : isCachingGlobal ? 'rgba(255,255,255,0.05)' : 'rgba(29, 185, 84, 0.1)', 
-                        color: allCached ? 'var(--primary)' : isCachingGlobal ? 'var(--text-tertiary)' : 'var(--primary)', 
-                        borderRadius: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                        border: allCached ? '1px solid var(--primary)' : '1px solid rgba(29, 185, 84, 0.2)',
+                        flex: 1, padding: '16px', 
+                        background: 'var(--primary)', 
+                        color: 'black', 
+                        borderRadius: 'var(--radius-md)', fontWeight: 800, gap: '8px',
+                        opacity: allCached || isCachingGlobal ? 0.4 : 1,
                         cursor: allCached || isCachingGlobal ? 'not-allowed' : 'pointer'
                     }}
                 >
-                    {allCached ? <><CheckCircle2 size={18} /> All Playlists Cached</> : <><Download size={18} /> {isCachingGlobal ? 'Caching...' : 'Cache All Playlists'}</>}
+                    {allCached ? <CheckCircle2 size={18} /> : <Download size={18} />}
+                    {allCached ? 'COMPLETE' : isCachingGlobal ? 'CACHING...' : 'CACHE ALL'}
                 </button>
                 <button 
                     onClick={() => {
-                        if (window.confirm('Are you sure you want to delete all offline tracks and cache? This cannot be undone.')) {
-                            clearCache();
-                        }
+                        if (window.confirm('Delete all offline data?')) clearCache();
                     }}
                     style={{
-                        flex: 1, padding: '14px', 
+                        padding: '16px',
                         background: 'rgba(255,100,100,0.1)', color: '#ff6b6b', 
-                        borderRadius: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                        border: '1px solid rgba(255,100,100,0.2)'
+                        borderRadius: 'var(--radius-md)', border: '1px solid rgba(255,100,100,0.2)'
                     }}
                 >
-                    <Trash2 size={18} /> Clear
+                    <Trash2 size={20} />
                 </button>
             </div>
         </div>
@@ -192,27 +211,25 @@ export default function SettingsView() {
 
       {/* Library Section */}
       <section>
-        <h2 style={{ fontSize: '12px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px', fontWeight: 700 }}>
+        <h2 style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '16px', fontWeight: 700 }}>
           Backend Library
         </h2>
-        <div style={{ background: 'var(--bg-surface)', padding: '20px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+        <div className="glass-panel" style={{ padding: '20px', borderRadius: 'var(--radius-md)' }}>
             <button 
                 onClick={() => {
-                    if (window.confirm('Triggering a global rescan is intensive. Continue?')) {
-                        rescanLibrary();
-                    }
+                    if (window.confirm('Trigger library rescan?')) rescanLibrary();
                 }}
                 disabled={isScanning}
                 style={{
-                    width: '100%', padding: '14px', 
-                    background: isScanning ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.03)',
-                    color: isScanning ? 'var(--text-tertiary)' : 'white',
-                    borderRadius: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-                    border: '1px solid rgba(255,255,255,0.08)', cursor: isScanning ? 'not-allowed' : 'pointer'
+                    width: '100%', padding: '16px', 
+                    background: 'rgba(255,255,255,0.05)',
+                    color: 'white',
+                    borderRadius: 'var(--radius-md)', fontWeight: 700, gap: '10px',
+                    border: '1px solid rgba(255,255,255,0.1)',
                 }}
             >
                 <Database size={18} />
-                {isScanning ? 'Scanning library...' : 'Rescan Library'}
+                {isScanning ? 'SCANNING...' : 'RESCAN LIBRARY'}
             </button>
         </div>
       </section>

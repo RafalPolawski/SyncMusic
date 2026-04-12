@@ -25,14 +25,21 @@ export default function AudioController() {
     const nextTrack = useQueueStore(state => state.nextTrack);
     const { cacheSongs, cachedPaths } = useCacheStore();
 
-    // Theming (Symfonium Style)
+    const lastCoverUrl = useRef(null);
+    const lastColor = useRef({ hex: '#1DB954', rbg: '29,185,84' });
+
+    // Theming (Symfonium Style) - Optimized with cache
     useEffect(() => {
-        if (!coverUrl) return;
+        if (!coverUrl || coverUrl === lastCoverUrl.current) return;
+        lastCoverUrl.current = coverUrl;
+
         const fac = new FastAverageColor();
         fac.getColorAsync(coverUrl)
             .then(color => {
+                const rgb = color.value.slice(0,3).join(',');
                 document.documentElement.style.setProperty('--dominant-color', color.hex);
-                document.documentElement.style.setProperty('--dominant-color-rgb', color.value.slice(0,3).join(','));
+                document.documentElement.style.setProperty('--dominant-color-rgb', rgb);
+                lastColor.current = { hex: color.hex, rgb };
             })
             .catch(e => {
                 console.warn('[Theming] Failed to extract color', e);
@@ -109,10 +116,8 @@ export default function AudioController() {
             audioRef.current.src = targetSrc;
             audioRef.current.load();
 
-            // Auto-cache on play
-            if (currentPath && !cachedPaths.has(currentPath)) {
-                cacheSongs([{ path: currentPath }], 'auto-cache');
-            }
+            // Standard browser preloading/buffering is handled by the <audio> tag.
+            // Aggressive auto-cache is removed to prevent saturating bandwidth on slow networks.
         } else if (!targetSrc) {
             audioRef.current.pause();
             audioRef.current.src = '';
@@ -129,13 +134,17 @@ export default function AudioController() {
         if (isPlaying) {
             // Calculate target time based on server sync
             const now = Date.now();
-            const elapsedSinceSync = (now - syncReceivedTime) / 1000;
-            const targetTime = syncAudioTime + elapsedSinceSync;
+            const hasValidSync = syncReceivedTime > 0;
+            const elapsedSinceSync = hasValidSync ? (now - syncReceivedTime) / 1000 : 0;
+            const targetTime = hasValidSync ? (syncAudioTime + elapsedSinceSync) : audioRef.current.currentTime;
+            
             const drift = audioRef.current.currentTime - targetTime;
-            setDrift(Math.round(Math.abs(drift) * 1000));
+            if (hasValidSync) {
+                setDrift(Math.round(Math.abs(drift) * 1000));
+            }
 
             // Hard seek if drift exceeds threshold, or just seeking after pause
-            if (Math.abs(drift) > syncThreshold && syncEnabled) {
+            if (hasValidSync && Math.abs(drift) > syncThreshold && syncEnabled) {
                 try {
                     audioRef.current.currentTime = targetTime;
                 } catch (err) {

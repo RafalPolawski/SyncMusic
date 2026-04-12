@@ -6,7 +6,8 @@ export const usePlayerStore = create(
         (set, get) => ({
             // Current Track Data
             currentPath: null,
-            currentFolder: null,
+            currentFolder: null, // Metadata folder of the song
+            playbackContextFolder: null, // The folder/playlist context we are playing from
             title: 'Select a Track',
             artist: 'SyncMusic',
             coverUrl: null,
@@ -30,16 +31,19 @@ export const usePlayerStore = create(
             offlineMode: false,
             roomId: null,
             drift: 0,
+            lastActionTimestamp: 0,
+            shuffledQueue: [],
 
             // Actions
             setDrift: (drift) => set({ drift }),
-            setTrack: (path, folder, title, artist) => set({
+            setTrack: (path, folder, title, artist, updateContext = false) => set((state) => ({
                 currentPath: path,
                 currentFolder: folder,
+                playbackContextFolder: updateContext ? folder : (state.playbackContextFolder || folder),
                 title: title || 'Unknown Title',
                 artist: artist || 'Unknown Artist',
                 coverUrl: path ? `/api/cover?song=${encodeURIComponent(path)}` : null
-            }),
+            })),
             setPlaying: (isPlaying) => set({ isPlaying }),
             setVolume: (volume) => set({ volume, isMuted: volume === 0 }),
             setProgress: (currentTime, duration) => set({ currentTime, duration }),
@@ -47,6 +51,8 @@ export const usePlayerStore = create(
             setModes: (isShuffle, isRepeat) => set({ isShuffle, isRepeat }),
             setRoom: (roomId) => set({ roomId }),
             setOffline: (offlineMode) => set({ offlineMode }),
+            setLastAction: () => set({ lastActionTimestamp: Date.now() }),
+            setShuffledQueue: (shuffledQueue) => set({ shuffledQueue }),
         }),
         {
             name: 'syncmusic-player-storage',
@@ -55,7 +61,8 @@ export const usePlayerStore = create(
                 syncEnabled: state.syncEnabled, 
                 syncThreshold: state.syncThreshold,
                 currentPath: state.currentPath,
-                currentFolder: state.currentFolder
+                currentFolder: state.currentFolder,
+                playbackContextFolder: state.playbackContextFolder
             }),
         }
     )
