@@ -8,6 +8,7 @@ export const usePlayerStore = create(
             currentPath: null,
             currentFolder: null, // Metadata folder of the song
             playbackContextFolder: null, // The folder/playlist context we are playing from
+            playbackContextPath: null, // The last song played from the context (used for resumption)
             title: 'Select a Track',
             artist: 'SyncMusic',
             coverUrl: null,
@@ -39,7 +40,7 @@ export const usePlayerStore = create(
             setTrack: (path, folder, title, artist, updateContext = false) => set((state) => ({
                 currentPath: path,
                 currentFolder: folder,
-                playbackContextFolder: updateContext ? folder : (state.playbackContextFolder || folder),
+                playbackContextFolder: updateContext ? folder : state.playbackContextFolder,
                 title: title || 'Unknown Title',
                 artist: artist || 'Unknown Artist',
                 coverUrl: path ? `/api/cover?song=${encodeURIComponent(path)}` : null
@@ -62,7 +63,8 @@ export const usePlayerStore = create(
                 syncThreshold: state.syncThreshold,
                 currentPath: state.currentPath,
                 currentFolder: state.currentFolder,
-                playbackContextFolder: state.playbackContextFolder
+                playbackContextFolder: state.playbackContextFolder,
+                playbackContextPath: state.playbackContextPath
             }),
         }
     )

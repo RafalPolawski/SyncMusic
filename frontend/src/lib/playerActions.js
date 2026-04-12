@@ -3,71 +3,99 @@ import { useQueueStore } from '../store/useQueueStore';
 import { useLibraryStore } from '../store/useLibraryStore';
 import { socket } from './webtransport';
 
+/**
+ * Generates a random sequence for a folder and returns it.
+ * This should be used to seed the server's shared sequence.
+ * @param {string} folderName - The name of the folder to shuffle.
+ * @param {string} startPath - Optional track path that should be moved to the beginning of the shuffle.
+ */
+export const generateSharedShuffle = (folderName, startPath = null) => {
+    const { groups } = useLibraryStore.getState();
+    const tracks = groups[folderName] || [];
+    if (tracks.length === 0) return [];
+    
+    let pool = [...tracks].map(s => ({ ...s, __folder: folderName }));
+    let result = [];
+
+    // Prioritize startPath or the last known context path to anchor the shuffle
+    const anchorPath = startPath || usePlayerStore.getState().playbackContextPath;
+    
+    if (anchorPath) {
+        const anchorIdx = pool.findIndex(s => s.path === anchorPath);
+        if (anchorIdx !== -1) {
+            result.push(pool[anchorIdx]);
+            pool.splice(anchorIdx, 1);
+        }
+    }
+
+    // Shuffle remaining tracks
+    for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+
+    return [...result, ...pool];
+};
+
 export const playNext = () => {
     const nextInQueue = useQueueStore.getState().nextTrack();
     if (nextInQueue) {
-        // When playing from queue, we DON'T update the context folder.
-        // The server will echo 'load', and our WT handler will see it's from queue.
-        socket.sendCommand('load', { song: nextInQueue.path, folder: nextInQueue.folder, title: nextInQueue.title, artist: nextInQueue.artist });
+        socket.sendCommand('load', { 
+            song: nextInQueue.path, 
+            folder: nextInQueue.folder, 
+            title: nextInQueue.title, 
+            artist: nextInQueue.artist,
+            is_queue: true 
+        });
         return;
     }
 
-    // Fallback to library folder context
     const player = usePlayerStore.getState();
-    const { currentPath, playbackContextFolder, isRepeat, isShuffle, shuffledQueue } = player;
+    const { currentPath, playbackContextFolder, playbackContextPath, isRepeat, isShuffle, shuffledQueue } = player;
     const { groups } = useLibraryStore.getState();
     
-    // Always use playbackContextFolder for the automatic sequence
     const activeFolder = playbackContextFolder;
+    if (!activeFolder || !groups[activeFolder]) return;
 
-    if (activeFolder && groups[activeFolder]) {
-        const fullPlaylist = groups[activeFolder];
-        
-        let nextTrack = null;
-        if (isShuffle) {
-            let workingQueue = shuffledQueue;
-            
-            // Regeneration logic: 
-            // 1. No queue exists
-            // 2. Queue doesn't match active folder
-            // 3. Queue size doesn't match the folder size (Bug fix for incomplete shuffles)
-            const needsRegen = !workingQueue || 
-                               workingQueue.length === 0 || 
-                               workingQueue[0]?.__folder !== activeFolder ||
-                               workingQueue.length !== fullPlaylist.length;
+    const fullPlaylist = groups[activeFolder];
+    const source = isShuffle ? (shuffledQueue.length > 0 ? shuffledQueue : fullPlaylist) : fullPlaylist;
+    
+    // We attempt to find our position in the sequence using multiple fallback steps:
+    // 1. Current song path (best case)
+    // 2. The 'pivot' anchor (last known good context song)
+    // 3. Fallback to start or loop
+    const idx = source.findIndex(s => s.path === currentPath);
+    let effectiveIdx = idx;
+    
+    if (idx === -1 && playbackContextPath) {
+        effectiveIdx = source.findIndex(s => s.path === playbackContextPath);
+    }
 
-            if (needsRegen) {
-                console.log(`[Shuffle] Regenerating full sequence for ${activeFolder} (${fullPlaylist.length} tracks)`);
-                workingQueue = [...fullPlaylist]
-                    .map(s => ({ ...s, __folder: activeFolder }))
-                    .sort(() => Math.random() - 0.5);
-                usePlayerStore.setState({ shuffledQueue: workingQueue });
-            }
-            
-            const idx = workingQueue.findIndex(s => s.path === currentPath);
-            if (idx >= 0 && idx < workingQueue.length - 1) {
-                nextTrack = workingQueue[idx + 1];
-            } else if (isRepeat === 1) { // Repeat Playlist
-                nextTrack = workingQueue[0];
-            }
-        } else {
-            const idx = fullPlaylist.findIndex(s => s.path === currentPath);
-            if (idx >= 0 && idx < fullPlaylist.length - 1) {
-                nextTrack = fullPlaylist[idx + 1];
-            } else if (isRepeat === 1) { // Repeat Playlist
-                nextTrack = fullPlaylist[0];
-            }
-        }
+    let nextTrack = null;
+    if (effectiveIdx >= 0 && effectiveIdx < source.length - 1) {
+        nextTrack = source[effectiveIdx + 1];
+    } else if (effectiveIdx === -1 && source.length > 0) {
+        // We aren't in the sequence at all (e.g. queue just finished)
+        // Just play the first track in the sequence as a safety resume
+        nextTrack = source[0];
+    } else if (isRepeat === 1) { // Repeat Playlist
+        nextTrack = source[0];
+    }
 
-        if (nextTrack) {
-            socket.sendCommand('load', { song: nextTrack.path, folder: activeFolder, title: nextTrack.title, artist: nextTrack.artist });
-        }
+    if (nextTrack) {
+        socket.sendCommand('load', { 
+            song: nextTrack.path, 
+            folder: activeFolder, 
+            title: nextTrack.title, 
+            artist: nextTrack.artist,
+            is_queue: false 
+        });
     }
 };
 
 export const playPrev = () => {
     const player = usePlayerStore.getState();
-    const { currentPath, playbackContextFolder, currentTime, isShuffle, shuffledQueue } = player;
+    const { currentPath, playbackContextFolder, playbackContextPath, currentTime, isShuffle, shuffledQueue } = player;
     
     if (currentTime > 3) {
         socket.sendCommand('seek', { time: 0 });
@@ -76,28 +104,28 @@ export const playPrev = () => {
 
     const { groups } = useLibraryStore.getState();
     const activeFolder = playbackContextFolder;
+    if (!activeFolder || !groups[activeFolder]) {
+        socket.sendCommand('seek', { time: 0 });
+        return;
+    }
 
-    if (activeFolder && groups[activeFolder]) {
-        const fullPlaylist = groups[activeFolder];
-        let prevTrack = null;
+    const fullPlaylist = groups[activeFolder];
+    const source = isShuffle ? (shuffledQueue.length > 0 ? shuffledQueue : fullPlaylist) : fullPlaylist;
+    
+    let effectiveIdx = source.findIndex(s => s.path === currentPath);
+    if (effectiveIdx === -1 && playbackContextPath) {
+        effectiveIdx = source.findIndex(s => s.path === playbackContextPath);
+    }
 
-        if (isShuffle && shuffledQueue.length > 0) {
-            const idx = shuffledQueue.findIndex(s => s.path === currentPath);
-            if (idx > 0) {
-                prevTrack = shuffledQueue[idx - 1];
-            }
-        } else {
-            const idx = fullPlaylist.findIndex(s => s.path === currentPath);
-            if (idx > 0) {
-                prevTrack = fullPlaylist[idx - 1];
-            }
-        }
-
-        if (prevTrack) {
-            socket.sendCommand('load', { song: prevTrack.path, folder: activeFolder, title: prevTrack.title, artist: prevTrack.artist });
-        } else {
-            socket.sendCommand('seek', { time: 0 });
-        }
+    if (effectiveIdx > 0) {
+        const prevTrack = source[effectiveIdx - 1];
+        socket.sendCommand('load', { 
+            song: prevTrack.path, 
+            folder: activeFolder, 
+            title: prevTrack.title, 
+            artist: prevTrack.artist,
+            is_queue: false 
+        });
     } else {
         socket.sendCommand('seek', { time: 0 });
     }
@@ -111,13 +139,10 @@ export const skipTime = (delta) => {
     socket.sendCommand('seek', { time: target });
 };
 
-/**
- * Returns the next N tracks in the current playback sequence.
- */
 export const getUpcomingTracks = (limit = 1000) => {
     const queue = useQueueStore.getState().queue;
     const player = usePlayerStore.getState();
-    const { currentPath, playbackContextFolder, isShuffle, shuffledQueue, isRepeat } = player;
+    const { currentPath, playbackContextFolder, playbackContextPath, isShuffle, shuffledQueue, isRepeat } = player;
     const { groups } = useLibraryStore.getState();
     
     let upcoming = [...queue];
@@ -125,14 +150,13 @@ export const getUpcomingTracks = (limit = 1000) => {
 
     if (activeFolder && groups[activeFolder]) {
         const fullPlaylist = groups[activeFolder];
+        const source = (isShuffle && shuffledQueue.length > 0) ? shuffledQueue : fullPlaylist;
         
-        // Use the shuffled queue if active, otherwise the standard list
-        let source = fullPlaylist;
-        if (isShuffle && shuffledQueue.length === fullPlaylist.length && shuffledQueue[0]?.__folder === activeFolder) {
-            source = shuffledQueue;
+        let idx = source.findIndex(s => s.path === currentPath);
+        if (idx === -1 && playbackContextPath) {
+            idx = source.findIndex(s => s.path === playbackContextPath);
         }
-        
-        const idx = source.findIndex(s => s.path === currentPath);
+
         if (idx >= 0) {
             let nextInFolder = source.slice(idx + 1);
             if (isRepeat === 1) { // Repeat Playlist
@@ -140,8 +164,7 @@ export const getUpcomingTracks = (limit = 1000) => {
             }
             upcoming = [...upcoming, ...nextInFolder];
         } else {
-            // If current track is NOT in the active folder (e.g. from queue), 
-            // the sequence continues with the whole folder sequence.
+            // If completely lost, show the whole sequence
             upcoming = [...upcoming, ...source];
         }
     }

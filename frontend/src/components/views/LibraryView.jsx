@@ -5,6 +5,7 @@ import { useQueueStore } from '../../store/useQueueStore';
 import { useCacheStore } from '../../store/useCacheStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { socket } from '../../lib/webtransport';
+import { generateSharedShuffle } from '../../lib/playerActions';
 import { Folder, Play, Plus, ChevronLeft, Download, CheckCircle2, Loader2 } from 'lucide-react';
 
 export default function LibraryView({ selectedFolder, onOpenFolder, onCloseFolder }) {
@@ -21,8 +22,19 @@ export default function LibraryView({ selectedFolder, onOpenFolder, onCloseFolde
 
   const handlePlaySong = (song, folder) => {
     if (window.navigator.vibrate) window.navigator.vibrate(8);
-    usePlayerStore.setState({ shuffledQueue: [] });
-    socket.sendCommand('load', { song: song.path, folder, title: song.title, artist: song.artist });
+    
+    const isShuffle = usePlayerStore.getState().isShuffle;
+    const payload = { song: song.path, folder, title: song.title, artist: song.artist };
+    
+    if (isShuffle) {
+        // Generate a new shared sequence for the room starting with this song
+        payload.shuffled_sequence = generateSharedShuffle(folder, song.path);
+    } else {
+        // Explicitly signal to clear any stale shuffle sequence on the server
+        payload.shuffled_sequence = null;
+    }
+    
+    socket.sendCommand('load', { ...payload, is_queue: false });
   };
 
   const handleEnqueue = (e, song, folder) => {

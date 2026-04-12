@@ -111,21 +111,23 @@ func saveAndPublish(roomID string, state RoomState, msg map[string]interface{}) 
 		isShuffle = 1
 	}
 	qBytes, _ := json.Marshal(state.Queue)
+	seqBytes, _ := json.Marshal(state.ShuffledSequence)
 	msgBytes, _ := json.Marshal(msg)
 
 	pipe := rdb.Pipeline()
 	pipe.HSet(ctx, getRoomStateKey(roomID), map[string]interface{}{
-		"CurrentSong":     state.CurrentSong,
-		"CurrentTitle":    state.CurrentTitle,
-		"CurrentArtist":   state.CurrentArtist,
-		"IsPlaying":       isPlaying,
-		"CurrentPosition": state.CurrentPosition,
-		"LastUpdate":      state.LastUpdate.UnixMilli(),
-		"IsShuffleGlobal": isShuffle,
-		"IsRepeatGlobal":  state.IsRepeatGlobal,
-		"CurrentFolder":   state.CurrentFolder,
-		"GlobalVolume":    state.GlobalVolume,
-		"Queue":           string(qBytes),
+		"CurrentSong":      state.CurrentSong,
+		"CurrentTitle":     state.CurrentTitle,
+		"CurrentArtist":    state.CurrentArtist,
+		"IsPlaying":        isPlaying,
+		"CurrentPosition":  state.CurrentPosition,
+		"LastUpdate":       state.LastUpdate.UnixMilli(),
+		"IsShuffleGlobal":  isShuffle,
+		"IsRepeatGlobal":   state.IsRepeatGlobal,
+		"CurrentFolder":    state.CurrentFolder,
+		"GlobalVolume":     state.GlobalVolume,
+		"Queue":            string(qBytes),
+		"ShuffledSequence": string(seqBytes),
 	})
 	pipe.Expire(ctx, getRoomStateKey(roomID), 1*time.Hour)
 	pipe.Publish(ctx, getPubsubChannel(roomID), string(msgBytes))
@@ -146,38 +148,26 @@ func SaveRoomState(roomID string, state RoomState) {
 		isShuffle = 1
 	}
 	qBytes, _ := json.Marshal(state.Queue)
+	seqBytes, _ := json.Marshal(state.ShuffledSequence)
 
 	rdb.HSet(ctx, getRoomStateKey(roomID), map[string]interface{}{
-		"CurrentSong":     state.CurrentSong,
-		"CurrentTitle":    state.CurrentTitle,
-		"CurrentArtist":   state.CurrentArtist,
-		"IsPlaying":       isPlaying,
-		"CurrentPosition": state.CurrentPosition,
-		"LastUpdate":      state.LastUpdate.UnixMilli(),
-		"IsShuffleGlobal": isShuffle,
-		"IsRepeatGlobal":  state.IsRepeatGlobal,
-		"CurrentFolder":   state.CurrentFolder,
-		"GlobalVolume":    state.GlobalVolume,
-		"Queue":           string(qBytes),
+		"CurrentSong":      state.CurrentSong,
+		"CurrentTitle":     state.CurrentTitle,
+		"CurrentArtist":    state.CurrentArtist,
+		"IsPlaying":        isPlaying,
+		"CurrentPosition":  state.CurrentPosition,
+		"LastUpdate":       state.LastUpdate.UnixMilli(),
+		"IsShuffleGlobal":  isShuffle,
+		"IsRepeatGlobal":   state.IsRepeatGlobal,
+		"CurrentFolder":    state.CurrentFolder,
+		"GlobalVolume":     state.GlobalVolume,
+		"Queue":            string(qBytes),
+		"ShuffledSequence": string(seqBytes),
 	})
 	rdb.Expire(ctx, getRoomStateKey(roomID), 1*time.Hour)
 }
 
-// RoomState is the parsed in-memory representation of the room.
-type RoomState struct {
-	CurrentSong     string
-	CurrentTitle    string
-	CurrentArtist   string
-	IsPlaying       bool
-	CurrentPosition float64
-	LastUpdate      time.Time
-	IsShuffleGlobal bool
-	IsRepeatGlobal  int
-	CurrentFolder   string
-	GlobalVolume    float64
-	Queue           []map[string]interface{}
-}
-
+// GetRoomState retrieves the current state from Redis.
 func GetRoomState(roomID string) RoomState {
 	res, _ := rdb.HGetAll(ctx, getRoomStateKey(roomID)).Result()
 
@@ -208,6 +198,13 @@ func GetRoomState(roomID string) RoomState {
 	var queue []map[string]interface{}
 	json.Unmarshal([]byte(queueStr), &queue)
 
+	seqStr := res["ShuffledSequence"]
+	if seqStr == "" {
+		seqStr = "[]"
+	}
+	var sequence []map[string]interface{}
+	json.Unmarshal([]byte(seqStr), &sequence)
+
 	return RoomState{
 		CurrentSong:     res["CurrentSong"],
 		CurrentTitle:    res["CurrentTitle"],
@@ -220,5 +217,6 @@ func GetRoomState(roomID string) RoomState {
 		CurrentFolder:   res["CurrentFolder"],
 		GlobalVolume:    globalVol,
 		Queue:           queue,
+		ShuffledSequence: sequence,
 	}
 }

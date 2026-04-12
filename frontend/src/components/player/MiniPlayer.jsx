@@ -5,14 +5,36 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { playNext, playPrev } from '../../lib/playerActions';
 import { socket } from '../../lib/webtransport';
 
-export default function MiniPlayer({ onClick }) {
-  const { 
-    title, artist, coverUrl, currentPath, isPlaying, 
-    currentTime, duration, isShuffle, isRepeat, setModes 
-  } = usePlayerStore();
-
+const MiniProgressBar = React.memo(() => {
+  const currentTime = usePlayerStore(state => state.currentTime);
+  const duration = usePlayerStore(state => state.duration);
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
   
+  return (
+    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'rgba(255,255,255,0.05)' }}>
+        <motion.div 
+          style={{ 
+            height: '100%', 
+            background: 'var(--primary)', 
+            boxShadow: '0 0 10px var(--primary)'
+          }} 
+          animate={{ width: `${progressPercent}%` }}
+          transition={{ type: 'tween', ease: 'linear', duration: 0.2 }}
+        />
+    </div>
+  );
+});
+
+export default function MiniPlayer({ onClick }) {
+  const title = usePlayerStore(state => state.title);
+  const artist = usePlayerStore(state => state.artist);
+  const coverUrl = usePlayerStore(state => state.coverUrl);
+  const currentPath = usePlayerStore(state => state.currentPath);
+  const isPlaying = usePlayerStore(state => state.isPlaying);
+  const isShuffle = usePlayerStore(state => state.isShuffle);
+  const isRepeat = usePlayerStore(state => state.isRepeat);
+  const setModes = usePlayerStore(state => state.setModes);
+
   if (!currentPath && !title) return null;
 
   const handlePlayPause = (e) => {
@@ -71,17 +93,7 @@ export default function MiniPlayer({ onClick }) {
       }}
     >
       {/* Animated Glass Progress Bar at top (Non-interactive) */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'rgba(255,255,255,0.05)' }}>
-        <motion.div 
-          style={{ 
-            height: '100%', 
-            background: 'var(--primary)', 
-            boxShadow: '0 0 10px var(--primary)'
-          }} 
-          animate={{ width: `${progressPercent}%` }}
-          transition={{ type: 'tween', ease: 'linear', duration: 0.2 }}
-        />
-      </div>
+      <MiniProgressBar />
 
       <motion.img 
         layoutId="cover-art-large"

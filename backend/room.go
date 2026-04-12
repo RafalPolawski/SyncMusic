@@ -5,10 +5,26 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
-
+	"time"
 
 	"github.com/quic-go/webtransport-go"
 )
+
+// RoomState is the parsed in-memory representation of the room.
+type RoomState struct {
+	CurrentSong      string
+	CurrentTitle     string
+	CurrentArtist    string
+	IsPlaying        bool
+	CurrentPosition  float64
+	LastUpdate       time.Time
+	IsShuffleGlobal  bool
+	IsRepeatGlobal   int
+	CurrentFolder    string
+	GlobalVolume     float64
+	Queue            []map[string]interface{}
+	ShuffledSequence []map[string]interface{} // Shared sequence for the current context
+}
 
 // WTClient represents a single connected WebTransport client.
 type WTClient struct {

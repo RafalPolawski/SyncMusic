@@ -37,7 +37,15 @@ const UpcomingItem = React.memo(({ song, index }) => (
 
 export default function QueueView() {
   const queue = useQueueStore(state => state.queue);
-  const { currentPath, title, artist, coverUrl, isPlaying, isShuffle, isRepeat, playbackContextFolder } = usePlayerStore();
+  const currentPath = usePlayerStore(state => state.currentPath);
+  const title = usePlayerStore(state => state.title);
+  const artist = usePlayerStore(state => state.artist);
+  const coverUrl = usePlayerStore(state => state.coverUrl);
+  const isPlaying = usePlayerStore(state => state.isPlaying);
+  const isShuffle = usePlayerStore(state => state.isShuffle);
+  const isRepeat = usePlayerStore(state => state.isRepeat);
+  const playbackContextFolder = usePlayerStore(state => state.playbackContextFolder);
+  const shuffledQueue = usePlayerStore(state => state.shuffledQueue);
   const { groups } = useLibraryStore();
   
   const [draggingIdx, setDraggingIdx] = useState(null);
@@ -49,7 +57,7 @@ export default function QueueView() {
     const allUpcoming = getUpcomingTracks(1000);
     const queuePaths = new Set(queue.map(q => q.path));
     return allUpcoming.filter(t => !queuePaths.has(t.path));
-  }, [queue, currentPath, isShuffle, isRepeat, groups, playbackContextFolder]);
+  }, [queue, currentPath, isShuffle, isRepeat, groups, playbackContextFolder, shuffledQueue]);
 
   const totalRemaining = queue.length + upcomingTracksFull.length;
 

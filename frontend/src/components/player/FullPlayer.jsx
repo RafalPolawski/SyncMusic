@@ -7,14 +7,17 @@ import {
 } from 'lucide-react';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { socket } from '../../lib/webtransport';
-import { playNext, playPrev, skipTime } from '../../lib/playerActions';
+import { playNext, playPrev, skipTime, generateSharedShuffle } from '../../lib/playerActions';
 import ProgressBar from './ProgressBar';
 
 export default function FullPlayer({ isOpen, onClose, onNavigate }) {
-  const { 
-    title, artist, coverUrl, isPlaying, 
-    isShuffle, isRepeat, setModes 
-  } = usePlayerStore();
+  const title = usePlayerStore(state => state.title);
+  const artist = usePlayerStore(state => state.artist);
+  const coverUrl = usePlayerStore(state => state.coverUrl);
+  const isPlaying = usePlayerStore(state => state.isPlaying);
+  const isShuffle = usePlayerStore(state => state.isShuffle);
+  const isRepeat = usePlayerStore(state => state.isRepeat);
+  const setModes = usePlayerStore(state => state.setModes);
 
   const togglePlay = () => {
     if (window.navigator.vibrate) window.navigator.vibrate(12);
@@ -28,9 +31,14 @@ export default function FullPlayer({ isOpen, onClose, onNavigate }) {
 
   const toggleShuffle = () => {
       const newShuffle = !isShuffle;
-      setModes(newShuffle, isRepeat);
-      usePlayerStore.setState({ isShuffle: newShuffle });
-      socket.sendCommand('shuffle', { state: newShuffle });
+      const player = usePlayerStore.getState();
+      const payload = { state: newShuffle };
+      
+      if (newShuffle && player.playbackContextFolder) {
+          payload.shuffled_sequence = generateSharedShuffle(player.playbackContextFolder, player.currentPath);
+      }
+      
+      socket.sendCommand('shuffle', { ...payload, is_queue: false });
   };
 
   const toggleRepeat = () => {

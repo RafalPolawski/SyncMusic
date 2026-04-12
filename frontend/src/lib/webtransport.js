@@ -252,20 +252,24 @@ export class SyncWebTransport {
                     isPlaying: msg.isPlaying,
                     isShuffle: msg.isShuffle ?? player.isShuffle,
                     isRepeat: msg.isRepeat ?? player.isRepeat,
-                    volume: msg.volume ?? player.volume
+                    volume: msg.volume ?? player.volume,
+                    shuffledQueue: msg.shuffled_sequence ?? player.shuffledQueue
                 });
                 break;
             case 'load':
                 if (msg.song) {
-                    const queue = useQueueStore.getState().queue;
-                    const isFromQueue = queue.length > 0 && queue[0].path === msg.song;
+                    const isQueue = msg.is_queue === true;
                     // If it's not from the queue, it's a manual playlist change
-                    player.setTrack(msg.song, msg.folder, msg.title, msg.artist, !isFromQueue);
+                    player.setTrack(msg.song, msg.folder, msg.title, msg.artist, !isQueue);
                 }
+                const isQueue = msg.is_queue === true;
                 usePlayerStore.setState({
                     syncReceivedTime: Date.now(),
                     syncAudioTime: 0,
                     isPlaying: true,
+                    shuffledQueue: msg.hasOwnProperty('shuffled_sequence') ? (msg.shuffled_sequence || []) : player.shuffledQueue,
+                    // If this is a regular playlist load, update the pivot/context path
+                    playbackContextPath: isQueue ? (player.playbackContextPath || msg.song) : msg.song
                 });
                 break;
             case 'play':
@@ -290,7 +294,12 @@ export class SyncWebTransport {
                 });
                 break;
             case 'shuffle':
-                usePlayerStore.setState({ isShuffle: msg.state });
+                usePlayerStore.setState({ 
+                    isShuffle: msg.state,
+                    shuffledQueue: msg.shuffled_sequence ?? player.shuffledQueue,
+                    // If the current song is NOT in the new shuffle, try to keep the old anchor or use current
+                    playbackContextPath: player.playbackContextPath || player.currentPath
+                });
                 break;
             case 'repeat':
                 usePlayerStore.setState({ isRepeat: typeof msg.state === 'number' ? msg.state : parseInt(msg.state) });

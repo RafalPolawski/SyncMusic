@@ -121,6 +121,7 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 				"folder":    state.CurrentFolder,
 				"volume":    state.GlobalVolume,
 				"queue":     state.Queue,
+				"shuffled_sequence": state.ShuffledSequence,
 			}
 			b, _ := json.Marshal(syncMsg)
 			client.SendNonBlocking(append(b, '\n'))
@@ -182,6 +183,19 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 			if f, ok := msg["folder"].(string); ok {
 				state.CurrentFolder = f
 			}
+			if seqRaw, ok := msg["shuffled_sequence"]; ok {
+				if seqRaw == nil {
+					state.ShuffledSequence = nil
+				} else if seq, ok2 := seqRaw.([]interface{}); ok2 {
+					newSeq := make([]map[string]interface{}, len(seq))
+					for i, s := range seq {
+						if sm, ok3 := s.(map[string]interface{}); ok3 {
+							newSeq[i] = sm
+						}
+					}
+					state.ShuffledSequence = newSeq
+				}
+			}
 			msg["server_ts"] = NowNTP().UnixMilli()
 			saveAndPublish(client.RoomID, state, msg)
 
@@ -220,8 +234,20 @@ func handleClientMessage(client *WTClient, clientIP string, msg map[string]inter
 		case "shuffle":
 			if st, ok := msg["state"].(bool); ok {
 				state.IsShuffleGlobal = st
+				// If shuffle is coming with a sequence, save it
+				if seq, ok := msg["shuffled_sequence"].([]interface{}); ok {
+					newSeq := make([]map[string]interface{}, len(seq))
+					for i, s := range seq {
+						if sm, ok := s.(map[string]interface{}); ok {
+							newSeq[i] = sm
+						}
+					}
+					state.ShuffledSequence = newSeq
+				} else if !st {
+					state.ShuffledSequence = nil
+				}
 				saveAndPublish(client.RoomID, state, msg)
-				log.Printf("[ACTION] Client %s SHUFFLE=%v\n", clientIP, st)
+				log.Printf("[ACTION] Client %s SHUFFLE=%v (seq_len=%d)\n", clientIP, st, len(state.ShuffledSequence))
 			}
 
 		case "repeat":
