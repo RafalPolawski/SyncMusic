@@ -37,14 +37,23 @@ export const usePlayerStore = create(
 
             // Actions
             setDrift: (drift) => set({ drift }),
-            setTrack: (path, folder, title, artist, updateContext = false) => set((state) => ({
-                currentPath: path,
-                currentFolder: folder,
-                playbackContextFolder: updateContext ? folder : state.playbackContextFolder,
-                title: title || 'Unknown Title',
-                artist: artist || 'Unknown Artist',
-                coverUrl: path ? `/api/cover?song=${encodeURIComponent(path)}` : null
-            })),
+            setTrack: (path, folder, title, artist, updateContext = false) => set((state) => {
+                // Guard: Don't update if nothing changed (prevents redundant effect triggers)
+                if (state.currentPath === path && state.currentFolder === folder && state.title === title && state.artist === artist) {
+                    if (!updateContext || state.playbackContextFolder === folder) {
+                        return state;
+                    }
+                }
+
+                return {
+                    currentPath: path,
+                    currentFolder: folder,
+                    playbackContextFolder: updateContext ? folder : state.playbackContextFolder,
+                    title: title || 'Unknown Title',
+                    artist: artist || 'Unknown Artist',
+                    coverUrl: path ? `/api/cover?song=${encodeURIComponent(path)}` : null
+                };
+            }),
             setPlaying: (isPlaying) => set({ isPlaying }),
             setVolume: (volume) => set({ volume, isMuted: volume === 0 }),
             setProgress: (currentTime, duration) => set({ currentTime, duration }),

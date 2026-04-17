@@ -46,7 +46,7 @@ export class SyncWebTransport {
         try {
             // Fetch self-signed cert hash
             const response = await fetch('/api/cert-hash?t=' + Date.now(), {
-                signal: AbortSignal.timeout(4000),
+                signal: AbortSignal.timeout(8000), // Increased timeout for slow networks
             });
             if (!response.ok) throw new Error('cert-hash non-OK: ' + response.status);
             const { hash: hexHash } = await response.json();
@@ -64,10 +64,12 @@ export class SyncWebTransport {
             const stream = await this.transport.createBidirectionalStream();
             this.writer = stream.writable.getWriter();
 
-            this.serverTimeOffset = 0;
-            this.rtt = 0;
-            this._rttSamples = [];
-            this._pendingPings.clear();
+            // DO NOT reset calibration by default. Preserve last known values to prevent huge drift jumps
+            // reset calibration only if specifically requested or if samples are obviously bad
+            if (this.rtt === 0) {
+                this._rttSamples = [];
+                this._pendingPings.clear();
+            }
 
             this.readStream(stream.readable);
             this.startPinging();
@@ -94,13 +96,23 @@ export class SyncWebTransport {
         if (this.reconnecting) return;
         this.reconnecting = true;
 
-        useNetworkStore.getState().setRtt('OFFLINE');
+        // Grace period: Wait 3s before declaring OFFLINE status to UI (prevents flickering)
+        this._offlineGrace = setTimeout(() => {
+            useNetworkStore.getState().setRtt('OFFLINE');
+        }, 3000);
 
-        if (this.transport) { try { this.transport.close(); } catch (e) {} this.transport = null; }
+        if (this.transport) { 
+            try { this.transport.close(); } catch (e) {} 
+            this.transport = null; 
+        }
         this.writer = null;
         clearInterval(this._pingInterval);
 
-        setTimeout(() => { this.reconnecting = false; this.connect(); }, 2000);
+        setTimeout(() => { 
+            this.reconnecting = false; 
+            clearTimeout(this._offlineGrace);
+            this.connect(); 
+        }, 2000);
     }
 
     startPinging() {
@@ -242,7 +254,7 @@ export class SyncWebTransport {
 
         switch(msg.action) {
             case 'sync':
-                if (msg.song) {
+                if (msg.song && msg.song !== player.currentPath) {
                     // Only update context if we don't have one, or if it's a sync heartbeat that matches metadata
                     player.setTrack(msg.song, msg.folder, msg.title, msg.artist, false);
                 }

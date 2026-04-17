@@ -1,5 +1,5 @@
 import React from 'react';
-import { Library, ListMusic, Settings } from 'lucide-react';
+import { Library, Search, Settings } from 'lucide-react';
 import { useQueueStore } from '../store/useQueueStore';
 import { motion } from 'framer-motion';
 
@@ -8,7 +8,7 @@ export default function BottomNav({ activeTab, onChangeTab }) {
   
   const tabs = [
     { id: 'library', label: 'Library', icon: Library },
-    { id: 'queue', label: 'Queue', icon: ListMusic },
+    { id: 'search', label: 'Search', icon: Search },
     { id: 'settings', label: 'Settings', icon: Settings }
   ];
 

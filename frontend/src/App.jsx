@@ -6,6 +6,7 @@ import MiniPlayer from './components/player/MiniPlayer';
 import FullPlayer from './components/player/FullPlayer';
 import LibraryView from './components/views/LibraryView';
 import QueueView from './components/views/QueueView';
+import SearchView from './components/views/SearchView';
 import SettingsView from './components/views/SettingsView';
 import AuthOverlay from './components/AuthOverlay';
 import AudioController from './components/player/AudioController';
@@ -114,6 +115,7 @@ export default function App() {
                     onCloseFolder={closeFolder}
                   />
                 )}
+                {activeTab === 'search' && <SearchView />}
                 {activeTab === 'queue' && <QueueView />}
                 {activeTab === 'settings' && <SettingsView />}
               </motion.div>

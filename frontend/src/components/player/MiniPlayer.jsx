@@ -5,23 +5,24 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { playNext, playPrev } from '../../lib/playerActions';
 import { socket } from '../../lib/webtransport';
 
-const MiniProgressBar = React.memo(() => {
+const FullBackgroundProgress = React.memo(() => {
   const currentTime = usePlayerStore(state => state.currentTime);
   const duration = usePlayerStore(state => state.duration);
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
   
   return (
-    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'rgba(255,255,255,0.05)' }}>
-        <motion.div 
-          style={{ 
-            height: '100%', 
-            background: 'var(--primary)', 
-            boxShadow: '0 0 10px var(--primary)'
-          }} 
-          animate={{ width: `${progressPercent}%` }}
-          transition={{ type: 'tween', ease: 'linear', duration: 0.2 }}
-        />
-    </div>
+    <motion.div 
+      style={{ 
+        position: 'absolute',
+        top: 0, left: 0, bottom: 0,
+        background: 'var(--primary)',
+        opacity: 0.12,
+        zIndex: 0,
+        pointerEvents: 'none'
+      }} 
+      animate={{ width: `${progressPercent}%` }}
+      transition={{ type: 'tween', ease: 'linear', duration: 0.2 }}
+    />
   );
 });
 
@@ -92,18 +93,18 @@ export default function MiniPlayer({ onClick }) {
         boxShadow: '0 12px 30px rgba(0,0,0,0.4)',
       }}
     >
-      {/* Animated Glass Progress Bar at top (Non-interactive) */}
-      <MiniProgressBar />
+      {/* Animated Full Tile Background Progress */}
+      <FullBackgroundProgress />
 
       <motion.img 
         layoutId="cover-art-large"
         src={coverUrl || '/default-album.png'} 
         alt="" 
-        style={{ width: '44px', height: '44px', borderRadius: '10px', objectFit: 'cover', background: 'rgba(255,255,255,0.05)' }}
+        style={{ width: '44px', height: '44px', borderRadius: '10px', objectFit: 'cover', background: 'rgba(255,255,255,0.05)', zIndex: 1 }}
         onError={(e) => { e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23333"%3E%3Cpath d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 14.5c-2.49 0-4.5-2.01-4.5-4.5S9.51 7.5 12 7.5s4.5 2.01 4.5 4.5-2.01 4.5-4.5 4.5zm0-5.5c-.55 0-1 .45-1 1s.45 1 1 1 1-.45 1-1-.45-1-1-1z"/%3E%3C/svg%3E'; }}
       />
       
-      <div style={{ flex: 1, margin: '0 12px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '1px' }}>
+      <div style={{ flex: 1, margin: '0 12px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: '1px', zIndex: 1 }}>
         <div className="text-ellipsis" style={{ fontWeight: 700, fontSize: '14px', color: 'white' }}>
           {title}
         </div>
@@ -112,7 +113,7 @@ export default function MiniPlayer({ onClick }) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', zIndex: 1 }}>
         <button onClick={toggleShuffle} style={{ padding: '8px', color: isShuffle ? 'var(--primary)' : 'var(--text-tertiary)' }}>
             <Shuffle size={18} />
         </button>

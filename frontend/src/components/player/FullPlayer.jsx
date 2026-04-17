@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Play, Pause, SkipBack, SkipForward, 
     Shuffle, Repeat, ListMusic, 
-    RotateCcw, RotateCw 
+    RotateCcw, RotateCw, ChevronDown, ChevronsUp
 } from 'lucide-react';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { socket } from '../../lib/webtransport';
@@ -75,11 +75,17 @@ export default function FullPlayer({ isOpen, onClose, onNavigate }) {
           </div>
 
           {/* DISMISS HANDLE AREA */}
-          <div 
-            onClick={onClose}
-            style={{ display: 'flex', justifyContent: 'center', padding: '16px 0 24px 0', cursor: 'pointer', zIndex: 110 }}
-          >
-            <div style={{ width: '40px', height: '5px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px' }} />
+          <div style={{ display: 'flex', alignItems: 'center', padding: '16px 24px 8px 24px', zIndex: 110 }}>
+            <motion.button 
+                whileTap={{ scale: 0.9 }}
+                onClick={onClose}
+                style={{ color: 'rgba(255,255,255,0.5)', padding: '8px' }}
+            >
+                <ChevronDown size={32} />
+            </motion.button>
+            <div style={{ flex: 1, display: 'flex', justifyContent: 'center', marginRight: '48px' }}>
+                <div style={{ width: '40px', height: '5px', background: 'rgba(255,255,255,0.2)', borderRadius: '10px' }} />
+            </div>
           </div>
 
           {/* SCROLLABLE / FLEXIBLE CONTENT */}
@@ -111,7 +117,13 @@ export default function FullPlayer({ isOpen, onClose, onNavigate }) {
             </div>
 
             {/* TRACK INFO & CONTROLS CONTAINER */}
-            <div style={{ flex: '0 0 auto', paddingBottom: '20px' }}>
+            <div style={{ 
+                flex: '0 0 auto', 
+                paddingBottom: '20px', 
+                maxWidth: '450px', 
+                width: '100%', 
+                margin: '0 auto' 
+            }}>
                 <div style={{ marginBottom: '16px' }}>
                     <motion.h2 
                         key={title} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
@@ -176,10 +188,10 @@ export default function FullPlayer({ isOpen, onClose, onNavigate }) {
                     
                     <button 
                         onClick={() => { onNavigate('queue'); onClose(); }}
-                        style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'rgba(255,255,255,0.6)', fontWeight: 800, fontSize: '11px', letterSpacing: '0.05em' }}
+                        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', color: 'rgba(255,255,255,0.6)', fontWeight: 800, fontSize: '10px', letterSpacing: '0.05em' }}
                     >
-                       <ListMusic size={20} />
-                       HISTORY
+                       <ChevronsUp size={22} />
+                       QUEUE
                     </button>
 
                     <button 
