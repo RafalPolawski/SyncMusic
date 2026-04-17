@@ -19,6 +19,7 @@ export class SyncWebTransport {
         this.rtt = 0;
         this._rttSamples = [];
         this._pendingPings = new Map();
+        this.hasCalibrated = false;
 
         this.reconnecting = false;
         // Ping loop id
@@ -150,13 +151,15 @@ export class SyncWebTransport {
     }
 
     _updateCalibration(rtt, serverTimeOffset) {
-        // Fast bootstrap EMA equivalent for React port
-        if (this.rtt === 0) {
+        if (!this.hasCalibrated) {
             this.rtt = rtt;
             this.serverTimeOffset = serverTimeOffset;
+            this.hasCalibrated = true;
+            console.log('[Sync] Initial calibration complete. Offset:', this.serverTimeOffset, 'RTT:', this.rtt);
         } else {
-            this.rtt = this.rtt * 0.65 + rtt * 0.35;
-            this.serverTimeOffset = this.serverTimeOffset * 0.85 + serverTimeOffset * 0.15;
+            // More aggressive RTT tracking, very smooth Offset tracking
+            this.rtt = this.rtt * 0.5 + rtt * 0.5;
+            this.serverTimeOffset = this.serverTimeOffset * 0.9 + serverTimeOffset * 0.1;
         }
         useNetworkStore.getState().setRtt(this.rtt);
     }
@@ -205,8 +208,12 @@ export class SyncWebTransport {
         });
     }
 
-    getServerTime() { return Date.now() + (this.serverTimeOffset || 0); }
-    toServerTime(clientTime) { return clientTime + (this.serverTimeOffset || 0); }
+    getServerTime() { 
+        return Date.now() + (this.hasCalibrated ? this.serverTimeOffset : 0); 
+    }
+    toServerTime(clientTime) { 
+        return clientTime + (this.hasCalibrated ? this.serverTimeOffset : 0); 
+    }
 
     sendCommand(action, payload = {}) {
         const player = usePlayerStore.getState();
@@ -254,8 +261,11 @@ export class SyncWebTransport {
 
         switch(msg.action) {
             case 'sync':
-                if (msg.song && msg.song !== player.currentPath) {
-                    // Only update context if we don't have one, or if it's a sync heartbeat that matches metadata
+                const isNewSong = msg.song && msg.song !== player.currentPath;
+                const isPlaceholder = player.title === 'Select a Track' || !player.title;
+                
+                if (msg.song && (isNewSong || isPlaceholder)) {
+                    // Force metadata update if it's a new song or if we are still showing placeholders
                     player.setTrack(msg.song, msg.folder, msg.title, msg.artist, false);
                 }
                 usePlayerStore.setState({

@@ -20,7 +20,8 @@ export default function AudioController() {
         syncEnabled, 
         syncThreshold,
         setProgress,
-        setDrift
+        setDrift,
+        setPlaying
     } = usePlayerStore();
     const nextTrack = useQueueStore(state => state.nextTrack);
     const { cacheSongs, cachedPaths } = useCacheStore();
@@ -124,49 +125,70 @@ export default function AudioController() {
         }
     }, [currentPath]);
 
-    // 2. Handle Play/Pause and Seek Sync
+    // 2. High-Frequency Real-time Drift Tracking (For UI & Sync)
+    useEffect(() => {
+        if (!currentPath) return;
+
+        const interval = setInterval(() => {
+            const audio = audioRef.current;
+            if (!audio || audio.readyState < 2) return; // HAVE_CURRENT_DATA
+
+            if (isPlaying) {
+                const now = Date.now();
+                const hasValidSync = syncReceivedTime > 0;
+                const elapsedSinceSync = hasValidSync ? (now - syncReceivedTime) / 1000 : 0;
+                const targetTime = hasValidSync ? (syncAudioTime + elapsedSinceSync) : audio.currentTime;
+                
+                const drift = audio.currentTime - targetTime;
+                if (hasValidSync) {
+                    setDrift(Math.round(Math.abs(drift) * 1000));
+                }
+
+                // Auto-Correction Loop (Sync Compensation)
+                if (hasValidSync && Math.abs(drift) > syncThreshold && syncEnabled) {
+                    console.log(`[Sync] Drift (${Math.round(drift*1000)}ms) exceeded threshold (${syncThreshold}s). Correcting...`);
+                    audio.currentTime = targetTime;
+                }
+            } else {
+                setDrift(0);
+            }
+        }, 100); // 10Hz updates for smooth UI
+
+        return () => clearInterval(interval);
+    }, [isPlaying, syncAudioTime, syncReceivedTime, syncEnabled, syncThreshold, currentPath]);
+
+    // 3. Handle Play/Pause and Initial Load ReadyState
     useEffect(() => {
         if (!audioRef.current || !currentPath) return;
 
-        // Apply volume
         audioRef.current.volume = volume;
 
         if (isPlaying) {
-            // Calculate target time based on server sync
-            const now = Date.now();
-            const hasValidSync = syncReceivedTime > 0;
-            const elapsedSinceSync = hasValidSync ? (now - syncReceivedTime) / 1000 : 0;
-            const targetTime = hasValidSync ? (syncAudioTime + elapsedSinceSync) : audioRef.current.currentTime;
-            
-            const drift = audioRef.current.currentTime - targetTime;
-            if (hasValidSync) {
-                setDrift(Math.round(Math.abs(drift) * 1000));
-            }
-
-            // Hard seek if drift exceeds threshold, or just seeking after pause
-            if (hasValidSync && Math.abs(drift) > syncThreshold && syncEnabled) {
-                try {
-                    audioRef.current.currentTime = targetTime;
-                } catch (err) {
-                    console.warn('[AudioController] Ignored currentTime seek on unready audio', err);
+            audioRef.current.play().catch(e => {
+                if (e.name === 'NotAllowedError') {
+                    console.warn('[AudioController] Auto-play blocked. Waiting for user interaction.');
+                    setPlaying(false);
                 }
-            }
-
-            // Deal with browser restrictions
-            console.log('[AudioController] Playing audio at drift:', drift);
-            audioRef.current.play().catch(e => console.warn("Auto-play blocked", e));
+            });
         } else {
             audioRef.current.pause();
-            try {
-                audioRef.current.currentTime = syncAudioTime;
-            } catch (err) {}
         }
-    }, [isPlaying, syncAudioTime, syncReceivedTime, syncEnabled, syncThreshold, currentPath, volume]);
+    }, [isPlaying, volume, currentPath]);
 
-    // 3. Time Update loop (for UI)
+    // 4. Time Update loop & ReadyState Listeners
     useEffect(() => {
         const audio = audioRef.current;
         if (!audio) return;
+
+        const onLoadedMetadata = () => {
+            if (isPlaying && syncReceivedTime > 0) {
+                const now = Date.now();
+                const elapsedSinceSync = (now - syncReceivedTime) / 1000;
+                const targetTime = syncAudioTime + elapsedSinceSync;
+                console.log('[AudioController] Metadata loaded, applying starting sync position:', targetTime);
+                audio.currentTime = targetTime;
+            }
+        };
         const onTimeUpdate = () => {
             const time = audio.currentTime;
             const dur = audio.duration || 0;
@@ -208,10 +230,12 @@ export default function AudioController() {
         window.addEventListener('click', unlockAudio);
         window.addEventListener('touchstart', unlockAudio);
 
+        audio.addEventListener('loadedmetadata', onLoadedMetadata);
         audio.addEventListener('timeupdate', onTimeUpdate);
         audio.addEventListener('ended', onEnded);
 
         return () => {
+            audio.removeEventListener('loadedmetadata', onLoadedMetadata);
             audio.removeEventListener('timeupdate', onTimeUpdate);
             audio.removeEventListener('ended', onEnded);
             window.removeEventListener('click', unlockAudio);
