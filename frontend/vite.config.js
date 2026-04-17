@@ -50,11 +50,11 @@ export default defineConfig({
         },
         proxy: {
             '/api': {
-                target: 'http://sync-app:12137',
+                target: 'http://sync-app:8080',
                 changeOrigin: true
             },
             '/music': {
-                target: 'http://sync-app:12137',
+                target: 'http://sync-app:8080',
                 changeOrigin: true
             }
         }

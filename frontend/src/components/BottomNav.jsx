@@ -49,16 +49,6 @@ export default function BottomNav({ activeTab, onChangeTab }) {
           >
             <div style={{ position: 'relative' }}>
                 <Icon size={26} strokeWidth={isActive ? 2.8 : 2} />
-                {tab.id === 'queue' && queueLength > 0 && (
-                    <div style={{ 
-                        position: 'absolute', top: '-6px', right: '-10px',
-                        background: 'var(--primary)', color: 'black',
-                        fontSize: '10px', fontWeight: 900, padding: '2px 5px',
-                        borderRadius: '10px', border: '2px solid var(--bg-base)'
-                    }}>
-                        {queueLength > 99 ? '99+' : queueLength}
-                    </div>
-                )}
             </div>
             <span style={{ fontSize: '11px', fontWeight: isActive ? 800 : 500, letterSpacing: '0.02em' }}>
               {tab.label}

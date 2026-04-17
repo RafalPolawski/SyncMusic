@@ -84,26 +84,38 @@ export const useCacheStore = create((set, get) => ({
     },
 
     cacheSongs: (songs, jobId = 'manual') => {
-        if (!navigator.serviceWorker?.controller) return;
+        const sw = navigator.serviceWorker;
+        if (!sw) return;
+
+        if (!sw.controller) {
+            console.warn('[CacheStore] Service Worker not controlling page yet. Retrying in 1s...');
+            setTimeout(() => get().cacheSongs(songs, jobId), 1000);
+            return;
+        }
 
         // Filter out already cached songs
         const uncached = songs.filter(s => !get().cachedPaths.has(s.path));
-        if (uncached.length === 0) return;
+        
+        // If everything is already cached, just signal done immediately
+        if (uncached.length === 0) {
+            get().updateSize();
+            return;
+        }
 
         const audioUrls = uncached.map(s => `/music/${s.path.split('/').map(encodeURIComponent).join('/')}`);
         const coverUrls = uncached.map(s => `/api/cover?song=${encodeURIComponent(s.path)}`);
 
-        // total = only audio files (covers are silent bonus downloads)
+        // total = only audio files
         set(state => {
             const jobs = new Map(state.activeJobs);
             jobs.set(jobId, { processed: 0, total: uncached.length, songs: uncached });
             return { activeJobs: jobs };
         });
 
-        navigator.serviceWorker.controller.postMessage({
+        sw.controller.postMessage({
             action: 'cache_playlist',
             urls: [...audioUrls, ...coverUrls],
-            audioUrls,  // SW uses this to count progress separately
+            audioUrls,
             cacheId: jobId
         });
     },

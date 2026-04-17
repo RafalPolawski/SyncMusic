@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { socket } from '../../lib/webtransport';
-import { playNext, playPrev, skipTime, generateSharedShuffle } from '../../lib/playerActions';
+import { playNext, playPrev, skipTime, toggleShuffleAction, toggleRepeatAction } from '../../lib/playerActions';
 import ProgressBar from './ProgressBar';
 
 export default function FullPlayer({ isOpen, onClose, onNavigate }) {
@@ -29,24 +29,8 @@ export default function FullPlayer({ isOpen, onClose, onNavigate }) {
   const handlePrev = () => { if (window.navigator.vibrate) window.navigator.vibrate(10); playPrev(); };
   const handleSkip = (delta) => { if (window.navigator.vibrate) window.navigator.vibrate(8); skipTime(delta); };
 
-  const toggleShuffle = () => {
-      const newShuffle = !isShuffle;
-      const player = usePlayerStore.getState();
-      const payload = { state: newShuffle };
-      
-      if (newShuffle && player.playbackContextFolder) {
-          payload.shuffled_sequence = generateSharedShuffle(player.playbackContextFolder, player.currentPath);
-      }
-      
-      socket.sendCommand('shuffle', { ...payload, is_queue: false });
-  };
-
-  const toggleRepeat = () => {
-      const newRepeat = (isRepeat + 1) % 3;
-      setModes(isShuffle, newRepeat);
-      usePlayerStore.setState({ isRepeat: newRepeat });
-      socket.sendCommand('repeat', { state: newRepeat });
-  };
+  const toggleShuffle = () => { toggleShuffleAction(); };
+  const toggleRepeat = () => { toggleRepeatAction(); };
 
   return (
     <AnimatePresence>

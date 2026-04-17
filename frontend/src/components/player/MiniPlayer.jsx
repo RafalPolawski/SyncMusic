@@ -2,7 +2,7 @@ import React from 'react';
 import { Play, Pause, SkipForward, SkipBack, Shuffle, Repeat } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { usePlayerStore } from '../../store/usePlayerStore';
-import { playNext, playPrev } from '../../lib/playerActions';
+import { playNext, playPrev, toggleShuffleAction, toggleRepeatAction } from '../../lib/playerActions';
 import { socket } from '../../lib/webtransport';
 
 const FullBackgroundProgress = React.memo(() => {
@@ -59,20 +59,12 @@ export default function MiniPlayer({ onClick }) {
 
   const toggleShuffle = (e) => {
     e.stopPropagation();
-    if (window.navigator.vibrate) window.navigator.vibrate(8);
-    const newShuffle = !isShuffle;
-    setModes(newShuffle, isRepeat);
-    usePlayerStore.setState({ isShuffle: newShuffle });
-    socket.sendCommand('shuffle', { state: newShuffle });
+    toggleShuffleAction();
   };
 
   const toggleRepeat = (e) => {
     e.stopPropagation();
-    if (window.navigator.vibrate) window.navigator.vibrate(8);
-    const newRepeat = (isRepeat + 1) % 3;
-    setModes(isShuffle, newRepeat);
-    usePlayerStore.setState({ isRepeat: newRepeat });
-    socket.sendCommand('repeat', { state: newRepeat });
+    toggleRepeatAction();
   };
 
   return (

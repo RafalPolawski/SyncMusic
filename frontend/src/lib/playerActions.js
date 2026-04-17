@@ -139,6 +139,31 @@ export const skipTime = (delta) => {
     socket.sendCommand('seek', { time: target });
 };
 
+export const toggleShuffleAction = () => {
+    if (window.navigator.vibrate) window.navigator.vibrate(8);
+    
+    const { isShuffle, playbackContextFolder, currentPath } = usePlayerStore.getState();
+    const newShuffle = !isShuffle;
+    const payload = { state: newShuffle };
+    
+    if (newShuffle && playbackContextFolder) {
+        payload.shuffled_sequence = generateSharedShuffle(playbackContextFolder, currentPath);
+    }
+    
+    usePlayerStore.setState({ isShuffle: newShuffle });
+    socket.sendCommand('shuffle', { ...payload, is_queue: false });
+};
+
+export const toggleRepeatAction = () => {
+    if (window.navigator.vibrate) window.navigator.vibrate(8);
+    
+    const { isRepeat, isShuffle } = usePlayerStore.getState();
+    const newRepeat = (isRepeat + 1) % 3;
+    
+    usePlayerStore.setState({ isRepeat: newRepeat });
+    socket.sendCommand('repeat', { state: newRepeat });
+};
+
 export const getUpcomingTracks = (limit = 1000) => {
     const queue = useQueueStore.getState().queue;
     const player = usePlayerStore.getState();

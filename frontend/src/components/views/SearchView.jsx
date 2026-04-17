@@ -8,7 +8,7 @@ export default function SearchView() {
     const [query, setQuery] = useState('');
     const songs = useLibraryStore(state => state.songs);
 
-    const filtered = query.length > 1 
+    const filtered = query.length > 0 
         ? songs.filter(s => 
             s.title.toLowerCase().includes(query.toLowerCase()) || 
             s.artist.toLowerCase().includes(query.toLowerCase())
@@ -60,42 +60,7 @@ export default function SearchView() {
                 />
             </div>
 
-            {query.length === 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-                   {/* Suggestion Categories */}
-                   <div>
-                       <h3 style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '16px' }}>
-                           Browse All
-                       </h3>
-                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                           {[
-                               { label: 'Recent', icon: History, color: '#FF5722' },
-                               { label: 'Artists', icon: Mic2, color: '#E91E63' },
-                               { label: 'Tracks', icon: Music, color: '#3F51B5' },
-                               { label: 'Folders', icon: Music, color: '#4CAF50' }
-                           ].map(cat => (
-                               <motion.div 
-                                    key={cat.label}
-                                    whileTap={{ scale: 0.95 }}
-                                    style={{ 
-                                        height: '90px', 
-                                        background: `linear-gradient(135deg, ${cat.color}aa, ${cat.color}66)`, 
-                                        borderRadius: '16px',
-                                        padding: '16px',
-                                        position: 'relative',
-                                        cursor: 'pointer',
-                                        overflow: 'hidden',
-                                        border: '1px solid rgba(255,255,255,0.1)'
-                                    }}
-                               >
-                                   <span style={{ fontWeight: 800, fontSize: '16px', color: 'white' }}>{cat.label}</span>
-                                   <cat.icon size={48} style={{ position: 'absolute', right: '-10px', bottom: '-10px', opacity: 0.3, transform: 'rotate(-15deg)' }} />
-                               </motion.div>
-                           ))}
-                       </div>
-                   </div>
-                </div>
-            ) : (
+            {query.length > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {filtered.length > 0 ? filtered.map(song => (
                         <motion.div 
@@ -107,30 +72,44 @@ export default function SearchView() {
                                 display: 'flex', 
                                 alignItems: 'center', 
                                 gap: '14px', 
-                                padding: '10px', 
-                                borderRadius: '12px', 
+                                padding: '12px', 
+                                borderRadius: '14px', 
                                 cursor: 'pointer',
-                                background: 'rgba(255,255,255,0.03)'
+                                background: 'rgba(255,255,255,0.03)',
+                                border: '1px solid rgba(255,255,255,0.04)'
                             }}
-                            whileTap={{ background: 'rgba(255,255,255,0.08)' }}
+                            whileTap={{ background: 'rgba(255,255,255,0.08)', scale: 0.98 }}
                         >
                             <div style={{ 
-                                width: '48px', height: '48px', borderRadius: '8px', 
+                                width: '52px', height: '52px', borderRadius: '10px', 
                                 background: 'rgba(255,255,255,0.05)', display: 'flex', 
-                                alignItems: 'center', justifyContent: 'center' 
+                                alignItems: 'center', justifyContent: 'center',
+                                overflow: 'hidden'
                             }}>
-                                <Music size={20} color="var(--text-tertiary)" />
+                                <img 
+                                    src={`/api/cover?song=${encodeURIComponent(song.path)}`} 
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                    alt="" 
+                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                                <Music size={22} color="var(--text-tertiary)" style={{ position: 'absolute' }} />
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontWeight: 700, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.title}</div>
-                                <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.artist}</div>
+                                <div style={{ fontWeight: 700, color: 'white', fontSize: '15px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.title}</div>
+                                <div style={{ fontSize: '13px', color: 'var(--text-tertiary)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{song.artist}</div>
                             </div>
                         </motion.div>
                     )) : (
-                        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-tertiary)' }}>
-                            No results for "{query}"
+                        <div style={{ textAlign: 'center', padding: '60px 40px', color: 'var(--text-tertiary)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+                            <Search size={40} opacity={0.2} />
+                            <div style={{ fontWeight: 500 }}>No results for "{query}"</div>
                         </div>
                     )}
+                </div>
+            ) : (
+                <div style={{ height: '50vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-tertiary)', opacity: 0.5 }}>
+                    <Music size={48} strokeWidth={1.5} style={{ marginBottom: '16px' }} />
+                    <p style={{ fontWeight: 600, fontSize: '14px', letterSpacing: '0.05em' }}>FIND YOUR FAVORITE MUSIC</p>
                 </div>
             )}
         </div>

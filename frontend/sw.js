@@ -178,12 +178,16 @@ self.addEventListener('message', (event) => {
 
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 15000);
+                const timeoutId = setTimeout(() => controller.abort(), 60000); // Increased to 60s for large files
                 const res = await fetch(req, { signal: controller.signal });
                 clearTimeout(timeoutId);
-                if (res && res.status === 200) await cache.put(req, res.clone());
+                if (res && res.status === 200) {
+                    await cache.put(req, res.clone());
+                } else {
+                    console.error(`[SW] Bulk cache failed for ${urlStr}: Status ${res ? res.status : 'No Response'}`);
+                }
             } catch (e) {
-                console.warn('[SW] cache_playlist failed:', urlStr, e);
+                console.error(`[SW] Network error during bulk cache: ${urlStr}`, e);
             }
 
             // Only notify progress for audio files (not covers)

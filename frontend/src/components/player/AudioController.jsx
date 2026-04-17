@@ -122,7 +122,7 @@ export default function AudioController() {
             audioRef.current.pause();
             audioRef.current.src = '';
         }
-    }, [currentPath, cachedPaths]);
+    }, [currentPath]);
 
     // 2. Handle Play/Pause and Seek Sync
     useEffect(() => {
