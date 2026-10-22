@@ -263,9 +263,7 @@ func (c *conn) readLoop() {
 				c.sendControl(&protocol.Error{Type: protocol.TypeError, Code: "already_joined", Message: "hello may only be sent once"})
 				continue
 			}
-			if !c.handleHello(m) {
-				return
-			}
+			c.handleHello(m)
 		default:
 			if c.room == nil {
 				c.sendControl(&protocol.Error{Type: protocol.TypeError, Code: "not_joined", Message: "send hello first"})
@@ -276,22 +274,23 @@ func (c *conn) readLoop() {
 	}
 }
 
-func (c *conn) handleHello(m *protocol.Hello) bool {
+func (c *conn) handleHello(m *protocol.Hello) {
 	if m.Protocol != protocol.Version {
 		c.sendControl(&protocol.Error{Type: protocol.TypeError, Code: "protocol_mismatch",
 			Message: "client and server versions differ, please reload the app"})
+		// Keep reading until the writer has delivered the error and closed.
 		c.closeAfter(websocket.StatusPolicyViolation, "protocol mismatch")
-		return true // keep reading until the writer closes the socket
+		return
 	}
 	roomName, ok := NormalizeRoomName(m.Room)
 	if !ok {
 		c.sendControl(&protocol.Error{Type: protocol.TypeError, Code: "bad_room", Message: "invalid room name"})
-		return true
+		return
 	}
 	clientID := sanitizeClientID(m.ClientID)
 	if clientID == "" {
 		c.sendControl(&protocol.Error{Type: protocol.TypeError, Code: "bad_client", Message: "invalid client id"})
-		return true
+		return
 	}
 	c.clientID = clientID
 	r, err := c.hub.join(c, joinInfo{
@@ -302,8 +301,7 @@ func (c *conn) handleHello(m *protocol.Hello) bool {
 	})
 	if err != nil {
 		c.sendControl(&protocol.Error{Type: protocol.TypeError, Code: "join_failed", Message: err.Error()})
-		return true
+		return
 	}
 	c.room = r
-	return true
 }

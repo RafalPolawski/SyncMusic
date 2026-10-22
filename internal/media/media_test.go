@@ -2,6 +2,7 @@ package media
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,7 +36,7 @@ func TestParseFFprobe(t *testing.T) {
 
 func TestParseFFprobeNoAudio(t *testing.T) {
 	_, err := parseFFprobe([]byte(`{"streams":[{"codec_type":"video"}],"format":{}}`))
-	if err != ErrNoAudio {
+	if !errors.Is(err, ErrNoAudio) {
 		t.Fatalf("want ErrNoAudio, got %v", err)
 	}
 	if _, err := parseFFprobe([]byte(`not json`)); err == nil {

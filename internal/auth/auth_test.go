@@ -56,11 +56,11 @@ func TestPasswordChangeInvalidatesSessions(t *testing.T) {
 
 func TestMiddleware(t *testing.T) {
 	m := New("pw", []byte("0123456789abcdef0123456789abcdef"), time.Hour)
-	h := m.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) }))
+	h := m.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/api/library", nil))
-	if rec.Code != 401 {
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/library", nil))
+	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("no cookie: %d", rec.Code)
 	}
 
@@ -71,19 +71,19 @@ func TestMiddleware(t *testing.T) {
 	if !cookie.HttpOnly || !cookie.Secure || cookie.SameSite != http.SameSiteLaxMode || cookie.Path != "/" {
 		t.Fatalf("cookie attributes: %+v", cookie)
 	}
-	req := httptest.NewRequest("GET", "/api/library", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/library", nil)
 	req.AddCookie(cookie)
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
-	if rec.Code != 204 {
+	if rec.Code != http.StatusNoContent {
 		t.Fatalf("valid cookie: %d", rec.Code)
 	}
 
 	open := New("", []byte("x"), time.Hour)
 	rec = httptest.NewRecorder()
-	open.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) })).
-		ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
-	if rec.Code != 204 || open.Required() {
+	open.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })).
+		ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if rec.Code != http.StatusNoContent || open.Required() {
 		t.Fatal("auth disabled should let everything through")
 	}
 
@@ -143,7 +143,7 @@ func TestLimiter(t *testing.T) {
 }
 
 func TestClientIPAndSecure(t *testing.T) {
-	r := httptest.NewRequest("GET", "/", nil)
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	r.RemoteAddr = "10.0.0.5:1234"
 	r.Header.Set("X-Forwarded-For", "100.64.0.9, 10.0.0.1")
 	r.Header.Set("X-Forwarded-Proto", "https")

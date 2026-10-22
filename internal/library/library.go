@@ -311,7 +311,7 @@ func (l *Library) walk(ctx context.Context) (audio, playlists []walkedFile, imag
 		}
 		relOS, err := filepath.Rel(root, p)
 		if err != nil {
-			return nil
+			return err
 		}
 		rel := NormalizePath(filepath.ToSlash(relOS))
 		ext := strings.ToLower(filepath.Ext(name))
@@ -333,7 +333,11 @@ func (l *Library) walk(ctx context.Context) (audio, playlists []walkedFile, imag
 			return nil
 		}
 		fi, err := os.Stat(p) // follows symlinked files
-		if err != nil || !fi.Mode().IsRegular() {
+		if err != nil {
+			l.log.Debug("skipping unreadable file", "path", p, "err", err)
+			return nil //nolint:nilerr // broken symlinks and unreadable files are skipped, not fatal
+		}
+		if !fi.Mode().IsRegular() {
 			return nil
 		}
 		wf := walkedFile{rel: rel, abs: p, size: fi.Size(), mtimeNs: fi.ModTime().UnixNano()}

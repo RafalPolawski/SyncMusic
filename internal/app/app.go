@@ -56,7 +56,7 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger, opts Options)
 		return fmt.Errorf("create data directory: %w", err)
 	}
 	if fi, err := os.Stat(cfg.MusicDir); err != nil || !fi.IsDir() {
-		return fmt.Errorf("music directory %q is not accessible (mount your music there): %v", cfg.MusicDir, err)
+		return fmt.Errorf("music directory %q is not accessible (mount your music there): %w", cfg.MusicDir, err)
 	}
 	ffprobe, err := exec.LookPath(cfg.FFprobePath)
 	if err != nil {
@@ -157,7 +157,7 @@ func Run(ctx context.Context, cfg config.Config, log *slog.Logger, opts Options)
 
 	ln := opts.Listener
 	if ln == nil {
-		ln, err = net.Listen("tcp", cfg.Listen)
+		ln, err = (&net.ListenConfig{}).Listen(ctx, "tcp", cfg.Listen)
 		if err != nil {
 			return fmt.Errorf("listen on %s: %w", cfg.Listen, err)
 		}

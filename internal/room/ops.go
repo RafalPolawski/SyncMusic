@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"slices"
 	"strconv"
 )
 
@@ -453,9 +454,8 @@ func (e *Engine) queueMove(entryID string, to int) (Changes, error) {
 		return 0, nil
 	}
 	entry := s.Queue[from]
-	q := append(s.Queue[:from:from], s.Queue[from+1:]...)
-	q = append(q[:to:to], append([]QueueEntry{entry}, q[to:]...)...)
-	s.Queue = q
+	q := slices.Delete(slices.Clone(s.Queue), from, from+1)
+	s.Queue = slices.Insert(q, to, entry)
 	return ChangedQueue, nil
 }
 

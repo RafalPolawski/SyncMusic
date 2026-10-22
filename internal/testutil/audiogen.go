@@ -3,6 +3,7 @@ package testutil
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -105,7 +106,7 @@ func generateOne(t testing.TB, dir string, s Spec, cover string) string {
 func run(t testing.TB, args ...string) {
 	t.Helper()
 	full := append([]string{"-nostdin", "-hide_banner", "-v", "error", "-y"}, args...)
-	cmd := exec.Command("ffmpeg", full...)
+	cmd := exec.CommandContext(context.Background(), "ffmpeg", full...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {

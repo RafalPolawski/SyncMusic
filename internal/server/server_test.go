@@ -127,10 +127,10 @@ func trackID(rel string) string { return library.TrackID(rel) }
 
 func TestHealthAndSession(t *testing.T) {
 	f := newFixture(t, "", false)
-	if r := f.get(t, "/healthz"); r.StatusCode != 200 {
+	if r := f.get(t, "/healthz"); r.StatusCode != http.StatusOK {
 		t.Fatalf("healthz %d", r.StatusCode)
 	}
-	if r := f.get(t, "/readyz"); r.StatusCode != 200 {
+	if r := f.get(t, "/readyz"); r.StatusCode != http.StatusOK {
 		t.Fatalf("readyz %d", r.StatusCode)
 	}
 	var s sessionInfo
@@ -167,7 +167,7 @@ func TestLoginFlow(t *testing.T) {
 	if r := f.postJSON(t, "/api/auth/login", `{"password":"secret"}`); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("login: %d", r.StatusCode)
 	}
-	if r := f.get(t, "/api/library"); r.StatusCode != 200 {
+	if r := f.get(t, "/api/library"); r.StatusCode != http.StatusOK {
 		t.Fatalf("library after login: %d", r.StatusCode)
 	}
 	_ = json.Unmarshal(readAll(t, f.get(t, "/api/session").Body), &s)
@@ -213,7 +213,7 @@ func TestLoginRejectsCrossSiteRequests(t *testing.T) {
 func TestLibraryETagAndGzip(t *testing.T) {
 	f := newFixture(t, "", false)
 	r := f.get(t, "/api/library", "Accept-Encoding", "gzip")
-	if r.StatusCode != 200 || r.Header.Get("Content-Encoding") != "gzip" {
+	if r.StatusCode != http.StatusOK || r.Header.Get("Content-Encoding") != "gzip" {
 		t.Fatalf("status %d encoding %q", r.StatusCode, r.Header.Get("Content-Encoding"))
 	}
 	zr, err := gzip.NewReader(r.Body)
@@ -236,7 +236,7 @@ func TestLibraryETagAndGzip(t *testing.T) {
 		t.Fatalf("conditional request: %d", r2.StatusCode)
 	}
 	// Without gzip support the plain body is served.
-	req, _ := http.NewRequest("GET", f.srv.URL+"/api/library", nil)
+	req, _ := http.NewRequest(http.MethodGet, f.srv.URL+"/api/library", nil)
 	req.Header.Set("Accept-Encoding", "identity")
 	tr := &http.Transport{DisableCompression: true}
 	resp, err := (&http.Client{Transport: tr}).Do(req)
@@ -247,7 +247,7 @@ func TestLibraryETagAndGzip(t *testing.T) {
 	if resp.Header.Get("Content-Encoding") != "" || !json.Valid(readAll(t, resp.Body)) {
 		t.Fatal("plain library response expected")
 	}
-	if r := f.get(t, "/api/library/status"); r.StatusCode != 200 {
+	if r := f.get(t, "/api/library/status"); r.StatusCode != http.StatusOK {
 		t.Fatalf("status endpoint: %d", r.StatusCode)
 	}
 	if r := f.postJSON(t, "/api/library/rescan", `{}`); r.StatusCode != http.StatusAccepted {
@@ -264,7 +264,7 @@ func TestAudioOriginalWithRanges(t *testing.T) {
 	}
 	r := f.get(t, "/api/tracks/"+id+"/audio?q=original&v=abc")
 	body := readAll(t, r.Body)
-	if r.StatusCode != 200 || !bytes.Equal(body, orig) || r.Header.Get("Content-Type") != "audio/mpeg" {
+	if r.StatusCode != http.StatusOK || !bytes.Equal(body, orig) || r.Header.Get("Content-Type") != "audio/mpeg" {
 		t.Fatalf("status %d type %q len %d", r.StatusCode, r.Header.Get("Content-Type"), len(body))
 	}
 	if r.Header.Get("Cache-Control") != immutable || r.Header.Get("X-Audio-Profile") != "original" {
@@ -285,7 +285,7 @@ func TestAudioTranscoded(t *testing.T) {
 	id := trackID("Gym/01 - Pump.flac")
 	r := f.get(t, "/api/tracks/"+id+"/audio?f=opus&q=low")
 	body := readAll(t, r.Body)
-	if r.StatusCode != 200 || r.Header.Get("Content-Type") != "audio/ogg" || r.Header.Get("X-Audio-Profile") != "opus-64" {
+	if r.StatusCode != http.StatusOK || r.Header.Get("Content-Type") != "audio/ogg" || r.Header.Get("X-Audio-Profile") != "opus-64" {
 		t.Fatalf("status %d headers %v", r.StatusCode, r.Header)
 	}
 	if !bytes.HasPrefix(body, []byte("OggS")) {
@@ -304,7 +304,7 @@ func TestAudioTranscoded(t *testing.T) {
 func TestAudioWithoutTranscoderServesOriginal(t *testing.T) {
 	f := newFixture(t, "", false)
 	r := f.get(t, "/api/tracks/"+trackID("Gym/01 - Pump.flac")+"/audio?f=opus&q=low")
-	if r.StatusCode != 200 || r.Header.Get("Content-Type") != "audio/flac" {
+	if r.StatusCode != http.StatusOK || r.Header.Get("Content-Type") != "audio/flac" {
 		t.Fatalf("status %d type %q", r.StatusCode, r.Header.Get("Content-Type"))
 	}
 }
@@ -313,7 +313,7 @@ func TestCover(t *testing.T) {
 	f := newFixture(t, "", false)
 	r := f.get(t, "/api/tracks/"+trackID("Gym/01 - Pump.flac")+"/cover?s=128&v=1")
 	body := readAll(t, r.Body)
-	if r.StatusCode != 200 || r.Header.Get("Content-Type") != "image/jpeg" || !bytes.HasPrefix(body, []byte{0xff, 0xd8}) {
+	if r.StatusCode != http.StatusOK || r.Header.Get("Content-Type") != "image/jpeg" || !bytes.HasPrefix(body, []byte{0xff, 0xd8}) {
 		t.Fatalf("cover: status %d type %q", r.StatusCode, r.Header.Get("Content-Type"))
 	}
 	if r := f.get(t, "/api/tracks/"+trackID("loose.mp3")+"/cover"); r.StatusCode != http.StatusNotFound {
@@ -324,19 +324,19 @@ func TestCover(t *testing.T) {
 func TestStaticFiles(t *testing.T) {
 	f := newFixture(t, "", false)
 	r := f.get(t, "/")
-	if r.StatusCode != 200 || !strings.Contains(string(readAll(t, r.Body)), "SyncMusic") || r.Header.Get("Cache-Control") != "no-cache" {
+	if r.StatusCode != http.StatusOK || !strings.Contains(string(readAll(t, r.Body)), "SyncMusic") || r.Header.Get("Cache-Control") != "no-cache" {
 		t.Fatalf("index: %d %v", r.StatusCode, r.Header)
 	}
 	r = f.get(t, "/library/some/folder")
-	if r.StatusCode != 200 || !strings.Contains(string(readAll(t, r.Body)), "<!doctype html>") {
+	if r.StatusCode != http.StatusOK || !strings.Contains(string(readAll(t, r.Body)), "<!doctype html>") {
 		t.Fatalf("spa fallback: %d", r.StatusCode)
 	}
 	r = f.get(t, "/assets/app-1234.js")
-	if r.StatusCode != 200 || !strings.Contains(r.Header.Get("Cache-Control"), "immutable") {
+	if r.StatusCode != http.StatusOK || !strings.Contains(r.Header.Get("Cache-Control"), "immutable") {
 		t.Fatalf("asset: %d %q", r.StatusCode, r.Header.Get("Cache-Control"))
 	}
 	r = f.get(t, "/sw.js")
-	if r.StatusCode != 200 || r.Header.Get("Cache-Control") != "no-cache" {
+	if r.StatusCode != http.StatusOK || r.Header.Get("Cache-Control") != "no-cache" {
 		t.Fatalf("sw: %d %q", r.StatusCode, r.Header.Get("Cache-Control"))
 	}
 	if r := f.get(t, "/assets/missing.js"); r.StatusCode != http.StatusNotFound {
@@ -362,8 +362,8 @@ func TestStaticFiles(t *testing.T) {
 
 func TestPlaceholderWithoutWebBuild(t *testing.T) {
 	rec := httptest.NewRecorder()
-	newStaticHandler(nil).ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "npm run build") {
+	newStaticHandler(nil).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "npm run build") {
 		t.Fatalf("placeholder: %d %s", rec.Code, rec.Body.String())
 	}
 }
@@ -382,7 +382,7 @@ func TestWebSocketRequiresSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("authenticated websocket: %v", err)
 	}
-	defer ws.CloseNow()
+	defer func() { _ = ws.CloseNow() }()
 	if err := ws.Write(context.Background(), websocket.MessageText, []byte(`{"type":"ping","id":1,"t0":1}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -392,7 +392,7 @@ func TestWebSocketRequiresSession(t *testing.T) {
 	if err != nil || !strings.Contains(string(data), `"pong"`) {
 		t.Fatalf("pong: %s %v", data, err)
 	}
-	if r := f.get(t, "/api/rooms"); r.StatusCode != 200 {
+	if r := f.get(t, "/api/rooms"); r.StatusCode != http.StatusOK {
 		t.Fatalf("rooms: %d", r.StatusCode)
 	}
 }
@@ -400,7 +400,7 @@ func TestWebSocketRequiresSession(t *testing.T) {
 func TestAcceptsGzip(t *testing.T) {
 	cases := map[string]bool{"gzip": true, "br, gzip;q=0.8": true, "gzip;q=0": false, "identity": false, "": false}
 	for in, want := range cases {
-		r := httptest.NewRequest("GET", "/", nil)
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
 		r.Header.Set("Accept-Encoding", in)
 		if acceptsGzip(r) != want {
 			t.Errorf("acceptsGzip(%q) != %v", in, want)
@@ -411,7 +411,7 @@ func TestAcceptsGzip(t *testing.T) {
 func TestRecoverer(t *testing.T) {
 	h := recoverer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("boom") }), slog.New(slog.DiscardHandler))
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 	if rec.Code != 500 {
 		t.Fatalf("status = %d", rec.Code)
 	}

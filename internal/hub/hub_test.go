@@ -96,7 +96,7 @@ func (e *env) dial(header ...http.Header) *client {
 			c.msgs <- data
 		}
 	}()
-	e.t.Cleanup(func() { ws.CloseNow() })
+	e.t.Cleanup(func() { _ = ws.CloseNow() })
 	return c
 }
 
@@ -615,11 +615,11 @@ func TestIdleRoomIsUnloaded(t *testing.T) {
 }
 
 func TestNormalizeRoomName(t *testing.T) {
-	cases := map[string]string{"": "main", "  Siłownia   Bros ": "Siłownia Bros", "gym_2-b": "gym_2-b"}
-	for in, want := range cases {
-		got, ok := NormalizeRoomName(in)
-		if !ok || got != want {
-			t.Errorf("NormalizeRoomName(%q) = %q, %v", in, got, ok)
+	cases := []struct{ in, want string }{{"", "main"}, {"  Siłownia   Bros ", "Siłownia Bros"}, {"gym_2-b", "gym_2-b"}}
+	for _, c := range cases {
+		got, ok := NormalizeRoomName(c.in)
+		if !ok || got != c.want {
+			t.Errorf("NormalizeRoomName(%q) = %q, %v", c.in, got, ok)
 		}
 	}
 	for _, bad := range []string{"a/b", "<script>", strings.Repeat("x", 33)} {
