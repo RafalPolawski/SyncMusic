@@ -174,7 +174,7 @@ func LoadOrCreateSecret(configured, dir string) ([]byte, error) {
 	return key, nil
 }
 
-// Limiter rate limits login attempts per client IP.
+// Limiter rate limits failed login attempts per client IP.
 type Limiter struct {
 	mu      sync.Mutex
 	every   rate.Limit
@@ -188,15 +188,12 @@ type limiterEntry struct {
 	seen time.Time
 }
 
-// NewLimiter allows burst attempts and then one per interval.
+// NewLimiter allows burst failed attempts and then one per interval.
 func NewLimiter(interval time.Duration, burst int) *Limiter {
 	return &Limiter{every: rate.Every(interval), burst: burst, clients: map[string]*limiterEntry{}, now: time.Now}
 }
 
-// Allow reports whether ip may attempt a login now.
-func (l *Limiter) Allow(ip string) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+func (l *Limiter) entry(ip string) *limiterEntry {
 	now := l.now()
 	if len(l.clients) > 10000 {
 		for k, e := range l.clients {
@@ -211,7 +208,23 @@ func (l *Limiter) Allow(ip string) bool {
 		l.clients[ip] = e
 	}
 	e.seen = now
-	return e.lim.AllowN(now, 1)
+	return e
+}
+
+// Blocked reports whether ip used up its failed attempts. Successful logins
+// never count, so a whole group behind one address (NAT, tailscale serve)
+// can log in freely while guessing stays slow.
+func (l *Limiter) Blocked(ip string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.entry(ip).lim.TokensAt(l.now()) < 1
+}
+
+// Fail records a failed attempt from ip.
+func (l *Limiter) Fail(ip string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.entry(ip).lim.AllowN(l.now(), 1)
 }
 
 // ClientIP extracts the client address, honouring X-Forwarded-For only when

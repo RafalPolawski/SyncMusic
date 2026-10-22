@@ -156,7 +156,8 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "cross_origin")
 		return
 	}
-	if !s.Limiter.Allow(auth.ClientIP(r, s.TrustProxy)) {
+	ip := auth.ClientIP(r, s.TrustProxy)
+	if s.Limiter.Blocked(ip) {
 		w.Header().Set("Retry-After", "15")
 		writeError(w, http.StatusTooManyRequests, "too_many_attempts")
 		return
@@ -169,7 +170,8 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.Auth.Required() && !s.Auth.CheckPassword(body.Password) {
-		s.Logger.Warn("failed login", "ip", auth.ClientIP(r, s.TrustProxy))
+		s.Limiter.Fail(ip)
+		s.Logger.Warn("failed login", "ip", ip)
 		writeError(w, http.StatusUnauthorized, "wrong_password")
 		return
 	}

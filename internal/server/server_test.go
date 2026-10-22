@@ -155,6 +155,12 @@ func TestLoginFlow(t *testing.T) {
 	if r := f.postJSON(t, "/api/auth/login", `{"password":"nope"}`); r.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("wrong password: %d", r.StatusCode)
 	}
+	// Successful logins do not use up attempts.
+	for range 5 {
+		if r := f.postJSON(t, "/api/auth/login", `{"password":"secret"}`); r.StatusCode != http.StatusNoContent {
+			t.Fatalf("repeated login: %d", r.StatusCode)
+		}
+	}
 	if r := f.postJSON(t, "/api/auth/login", `not json`); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("bad body: %d", r.StatusCode)
 	}
@@ -174,8 +180,13 @@ func TestLoginFlow(t *testing.T) {
 	if r := f.get(t, "/api/library"); r.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("library after logout: %d", r.StatusCode)
 	}
-	// Rate limited after 3 attempts.
-	if r := f.postJSON(t, "/api/auth/login", `{"password":"x"}`); r.StatusCode != http.StatusTooManyRequests {
+	// Rate limited after 3 failed attempts.
+	for range 2 {
+		if r := f.postJSON(t, "/api/auth/login", `{"password":"x"}`); r.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("failed attempt: %d", r.StatusCode)
+		}
+	}
+	if r := f.postJSON(t, "/api/auth/login", `{"password":"secret"}`); r.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("rate limit: %d", r.StatusCode)
 	}
 }

@@ -125,19 +125,20 @@ func TestLimiter(t *testing.T) {
 	now := time.Unix(1000, 0)
 	l.now = func() time.Time { return now }
 	for i := range 3 {
-		if !l.Allow("1.2.3.4") {
-			t.Fatalf("attempt %d rejected", i)
+		if l.Blocked("1.2.3.4") {
+			t.Fatalf("blocked after %d failures", i)
 		}
+		l.Fail("1.2.3.4")
 	}
-	if l.Allow("1.2.3.4") {
-		t.Fatal("4th attempt allowed")
+	if !l.Blocked("1.2.3.4") {
+		t.Fatal("should be blocked after 3 failures")
 	}
-	if !l.Allow("5.6.7.8") {
+	if l.Blocked("5.6.7.8") {
 		t.Fatal("other IPs are independent")
 	}
 	now = now.Add(time.Minute)
-	if !l.Allow("1.2.3.4") {
-		t.Fatal("token should refill")
+	if l.Blocked("1.2.3.4") {
+		t.Fatal("a token should refill")
 	}
 }
 
