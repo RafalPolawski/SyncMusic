@@ -1,0 +1,34 @@
+# Changelog
+
+All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org).
+
+## [Unreleased]
+
+A complete rewrite. SyncMusic is now a single self-contained server instead of eight containers.
+
+### Added
+
+- Single Go binary with the web client embedded, SQLite storage and a ~47 MB multi-arch container image (`linux/amd64`, `linux/arm64`) with a minimal static ffmpeg.
+- Timeline-based room synchronisation with server-side gapless auto advance, scheduled starts and an optional "wait for everyone" start barrier.
+- NTP-style clock sync, playback-rate drift correction and learned per-device play latency.
+- Offline playback: upcoming tracks are prefetched, folders and playlists can be saved on the phone, and the timeline (including track changes) continues without a connection.
+- Transcoding to Opus or AAC (low/medium/high/original) with an on-disk LRU cache and prewarming of upcoming tracks.
+- Library scanner with incremental rescans, folders as playlists, loose tracks, `.m3u` playlists, embedded and folder cover art (resized), and title/artist detection from file names.
+- Shared queue (play next, reorder, remove), shuffle, repeat, search, presence with per-listener sync status.
+- Personal pause for headphone buttons, lock-screen controls and phone calls. Bluetooth latency compensation.
+- Installable PWA in Polish and English with Media Session integration.
+- Shared-password login with signed session cookies and rate limiting of failed attempts.
+- Health checks, Prometheus metrics, structured logging.
+- Unit, integration, fuzz and end-to-end tests. CI, multi-arch image publishing, release binaries and Dependabot.
+
+### Removed
+
+- Redis, PostgreSQL, Keycloak, Caddy, nginx, Prometheus and Grafana containers.
+- WebTransport with self-signed certificates (replaced by WebSocket over HTTPS).
+
+## [0.1.0] - 2026-04-09
+
+Initial alpha release (multi-service architecture).
+
+[Unreleased]: https://github.com/RafalPolawski/SyncMusic/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/RafalPolawski/SyncMusic/releases/tag/v0.1.0
