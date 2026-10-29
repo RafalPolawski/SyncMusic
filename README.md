@@ -1,13 +1,5 @@
 <p align="center">
-  <img src="web/public/icon-192.png" width="88" height="88" alt="">
-</p>
-
-<h1 align="center">SyncMusic</h1>
-
-<p align="center">
-  <b>Listen together, perfectly in sync.</b><br>
-  Your own music library on every friend's phone, at exactly the same moment,<br>
-  each through their own headphones. Even when the gym Wi-Fi gives up.
+  <img src="docs/images/en/banner.jpg" alt="SyncMusic: listen together, perfectly in sync. Your music on every friend's phone." width="880">
 </p>
 
 <p align="center">
@@ -24,10 +16,6 @@
   <a href="#how-it-works">How it works</a> ·
   <a href="#configuration">Configuration</a> ·
   <a href="docs/README.pl.md">🇵🇱 Po polsku</a>
-</p>
-
-<p align="center">
-  <img src="docs/images/en/hero.jpg" alt="Three phones: the library, the player with the list of listeners and the shared queue" width="880">
 </p>
 
 ## Why
