@@ -261,12 +261,15 @@ export class Engine {
     const cat = this.catalog(index);
     if (!index || !cat) return;
     const s = this.stateAt(this.serverNow());
+    const n = useSettings.getState().prefetch;
     const current = s.playback.trackId;
-    // The current track is streamed if it is not stored yet; only what comes
-    // next is downloaded ahead.
-    const ids = upcoming(s, useSettings.getState().prefetch, cat).filter((id) => id !== current);
+    // What comes next is the most urgent. The track playing now is usually
+    // streamed already, so it is stored last (for loops, seeks and reloads
+    // without a connection) instead of competing with the stream.
+    const ids = upcoming(s, n, cat).filter((id) => id !== current);
+    if (current && n > 0) ids.push(current);
     const refs = [...new Set(ids)].map((id) => refOf(index.tracks.get(id))).filter((r): r is TrackRef => !!r);
-    this.downloader.setPrefetch(refs, current ? [current] : []);
+    this.downloader.setPrefetch(refs);
   }
 
   private async resolveSource(id: string, bypassCache: boolean): Promise<Source | undefined> {

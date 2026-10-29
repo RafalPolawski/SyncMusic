@@ -65,14 +65,28 @@ function ack(ws: FakeSocket, ok = true, error?: { code: string; message: string 
 }
 
 describe('Engine following the room', () => {
-  it('streams the current track and downloads only what comes next', async () => {
+  it('streams the current track and downloads what comes next first', async () => {
     const { h } = await online({ trackId: 'a', playing: true, anchorMs: Date.now() - 1000 });
     await vi.waitFor(() => expect(h.media.src).toBe('/api/tracks/a/audio?f=aac&q=medium&v=ra'));
     expect(useRoom.getState().status).toBe('online');
     expect(useRoom.getState().state.playback.trackId).toBe('a');
 
-    await vi.waitFor(() => expect(h.engine.downloader.downloadedIds().sort()).toEqual(['b', 'c']));
-    expect(net.calls.some((c) => c.startsWith('/api/tracks/a/'))).toBe(false);
+    await vi.waitFor(() => expect(h.engine.downloader.downloadedIds().sort()).toEqual(['a', 'b', 'c']));
+    const downloads = net.calls.filter((c) => c.startsWith('/api/tracks/')).map((c) => c.split('/')[3]);
+    expect(downloads).toEqual([expect.stringMatching(/[bc]/), expect.stringMatching(/[bc]/), 'a']);
+  });
+
+  it('downloads nothing automatically when prefetching is off', async () => {
+    h = await createHarness();
+    useSettings.setState({ prefetch: 0 });
+    await h.engine.start();
+    h.connect().receive(
+      stateMessage(1, { playback: playback({ trackId: 'a', playing: true }), context: gym }),
+    );
+    await vi.waitFor(() => expect(h!.media.src).not.toBe(''));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(h.engine.downloader.stats().queued + h.engine.downloader.activeCount).toBe(0);
+    expect(net.calls.filter((c) => c.startsWith('/api/tracks/'))).toEqual([]);
   });
 
   it('starts playing once the track is buffered and reports its status', async () => {

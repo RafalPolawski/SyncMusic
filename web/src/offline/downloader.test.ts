@@ -264,23 +264,3 @@ describe('Downloader', () => {
     d.dispose();
   });
 });
-
-describe('Downloader protection', () => {
-  it('never evicts protected tracks but does not fetch them', async () => {
-    const calls: string[] = [];
-    const routes = new Map(['a', 'b'].map((id) => [url(id), [{ body: bytes(100) }]] as [string, Route[]]));
-    const d = make(routes, calls, { limit: 150 });
-    await d.whenReady();
-    d.setPrefetch([ref('a')]);
-    await settle(d, ['a']);
-    now = 5000;
-    // "a" is now playing (protected), "b" is next.
-    d.setPrefetch([ref('b')], ['a']);
-    await settle(d, ['b']);
-    expect(d.isDownloaded('a')).toBe(true);
-    // A protected track that is missing is not requested.
-    d.setPrefetch([], ['zzz']);
-    expect(d.isQueued('zzz')).toBe(false);
-    expect(calls).toEqual([url('a'), url('b')]);
-  });
-});

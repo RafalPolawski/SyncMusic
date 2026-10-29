@@ -21,6 +21,11 @@ export async function phone(browser: Browser): Promise<{ ctx: BrowserContext; pa
   return { ctx, page };
 }
 
+/** A room name not used by any earlier test run against the same server. */
+export function freshRoom(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`;
+}
+
 export async function join(page: Page, name: string, room: string): Promise<void> {
   await page.goto('/');
   await page.getByLabel('Twoje imię').fill(name);
@@ -49,4 +54,14 @@ export async function expectPlaying(page: Page): Promise<Debug> {
     })
     .toBe(true);
   return debug(page);
+}
+
+/** Waits until the element is within `toleranceMs` of the room timeline. */
+export async function expectInSync(page: Page, toleranceMs = 400): Promise<void> {
+  await expect
+    .poll(async () => {
+      const d = await debug(page);
+      return d.playing && !d.paused ? Math.abs(d.elementMs - d.targetMs) : Infinity;
+    })
+    .toBeLessThan(toleranceMs);
 }

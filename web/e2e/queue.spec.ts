@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { debug, expectPlaying, join, openFolder, phone } from './helpers';
+import { debug, expectPlaying, freshRoom, join, openFolder, phone } from './helpers';
 
 test('queued tracks are shared and play next', async ({ browser }) => {
   const a = await phone(browser);
   const b = await phone(browser);
-  await join(a.page, 'Ala', 'queue-test');
-  await join(b.page, 'Bartek', 'queue-test');
+  const room = freshRoom('queue-test');
+  await join(a.page, 'Ala', room);
+  await join(b.page, 'Bartek', room);
 
   await openFolder(a.page, 'Siłownia');
   await a.page.getByRole('button', { name: 'Odtwórz' }).first().click();

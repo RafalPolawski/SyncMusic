@@ -148,6 +148,7 @@ export class RoomConnection {
     this.stopped = false;
     this.halted = undefined;
     this.win()?.addEventListener('online', this.onOnline);
+    this.win()?.addEventListener('offline', this.onOffline);
     this.doc()?.addEventListener('visibilitychange', this.onVisible);
     this.tickTimer = setInterval(() => this.tick(), 1000);
     this.connect();
@@ -156,6 +157,7 @@ export class RoomConnection {
   stop(): void {
     this.stopped = true;
     this.win()?.removeEventListener('online', this.onOnline);
+    this.win()?.removeEventListener('offline', this.onOffline);
     this.doc()?.removeEventListener('visibilitychange', this.onVisible);
     clearInterval(this.tickTimer);
     clearTimeout(this.reconnectTimer);
@@ -173,6 +175,13 @@ export class RoomConnection {
   }
 
   private onOnline = () => this.reconnectNow();
+
+  /** The browser knows the network is gone: do not wait for the watchdog. */
+  private onOffline = () => {
+    if (this.stopped || this.halted || !this.ws) return;
+    this.closeSocket();
+    this.scheduleReconnect();
+  };
 
   private onVisible = () => {
     if (this.doc()?.visibilityState !== 'visible') return;

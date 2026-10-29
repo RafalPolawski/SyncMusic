@@ -214,6 +214,26 @@ describe('RoomConnection', () => {
     conn.stop();
   });
 
+  it('goes offline as soon as the browser reports it', () => {
+    const conn = make();
+    const statuses: string[] = [];
+    conn.subscribe({ status: (st) => statuses.push(st) });
+    conn.start();
+    const ws = connect(conn);
+    win.dispatchEvent(new Event('offline'));
+    expect(ws.closed).toBe(true);
+    expect(statuses.at(-1)).toBe('offline');
+    // Commands wait for the connection instead of being written to a dead socket.
+    void conn.send({ op: 'next' });
+    expect(ws.ofType('cmd')).toHaveLength(0);
+    win.dispatchEvent(new Event('online'));
+    expect(connect(conn).ofType('cmd')).toHaveLength(1);
+    conn.stop();
+    // Stopped connections ignore the event.
+    win.dispatchEvent(new Event('offline'));
+    expect(statuses.at(-1)).toBe('idle');
+  });
+
   it('detects silent dead connections', () => {
     const conn = make();
     conn.start();
