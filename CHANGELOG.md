@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+
+- Container images are no longer tagged with commit hashes (`sha-…`). A weekly *Clean up images* workflow removes images no tag points to any more, such as old `:edge` builds.
+
 ## [1.0.1] - 2026-10-29
 
 ### Changed
