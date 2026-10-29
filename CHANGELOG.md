@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+
+- Releases can be started from *Actions → Publish → Run workflow* with a version; the tag is created only after CI, images and binaries succeeded.
+- New README and Polish guide with screenshots generated from the real app (`make screenshots`).
+
+### Fixed
+
+- `npm ci` on `main` after the tooling update: TypeScript stays on 6.x until typescript-eslint supports 7.
+
 ## [1.0.0] - 2026-10-29
 
 A complete rewrite. SyncMusic is now a single self-contained server instead of eight containers.
