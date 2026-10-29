@@ -8,12 +8,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- The project is now licensed under the MIT license (previously GPL-3.0).
 - Releases can be started from *Actions → Publish → Run workflow* with a version; the tag is created only after CI, images and binaries succeeded.
 - New README and Polish guide with screenshots generated from the real app (`make screenshots`), plus a social preview image for the repository.
 - The container image carries its own description and the release version in its metadata, and the multi-arch index is annotated so the package page shows them.
 
 ### Fixed
 
+- A phone that ran slightly ahead of the room could stop at the end of a track with "Paused just for you": the browser's late `pause` event from the finished track was taken for a pause by the system.
 - `npm ci` on `main` after the tooling update: TypeScript stays on 6.x until typescript-eslint supports 7.
 
 ## [1.0.0] - 2026-10-29
