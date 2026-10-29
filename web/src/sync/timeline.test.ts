@@ -18,7 +18,7 @@ interface Fixtures {
 
 // The same contract file is used by the Go tests in internal/room.
 const fixtures = JSON.parse(
-  readFileSync(resolve(process.cwd(), '../testdata/sync/timeline.json'), 'utf8'),
+  readFileSync(resolve(import.meta.dirname, '../../../testdata/sync/timeline.json'), 'utf8'),
 ) as Fixtures;
 
 const catalog: Catalog = (id) => fixtures.catalog[id];
