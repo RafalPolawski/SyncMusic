@@ -29,7 +29,7 @@ See [docs/architecture.md](docs/architecture.md#code-map). The short version: Go
 | `make test-web` | Vitest unit and component tests. |
 | `make e2e` | Playwright tests against a real server with generated music, emulating two Android phones. `PW_CHROMIUM=/path/to/chrome` uses a preinstalled Chromium. |
 | `make lint` | golangci-lint, ESLint, TypeScript and Prettier. |
-| `make screenshots` | Regenerates the images in `docs/images/` from the real app: a demo library with generated cover art, a server and three emulated phones in one room, in English and Polish. Run it after visible UI changes. |
+| `make screenshots` | Regenerates the images in `docs/images/` from the real app: a demo library with generated cover art, a server and three emulated phones in one room, in English and Polish, plus the repository's social preview (`-- social` rebuilds only that). Run it after visible UI changes. |
 
 **Changing the room timeline?** Update `internal/room/timeline.go` and `web/src/sync/timeline.ts` together and add a case to `testdata/sync/timeline.json`. Both test suites must agree, otherwise offline phones drift away from the server.
 

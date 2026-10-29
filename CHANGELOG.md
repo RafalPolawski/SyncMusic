@@ -4,10 +4,13 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-29
+
 ### Changed
 
 - Releases can be started from *Actions → Publish → Run workflow* with a version; the tag is created only after CI, images and binaries succeeded.
-- New README and Polish guide with screenshots generated from the real app (`make screenshots`).
+- New README and Polish guide with screenshots generated from the real app (`make screenshots`), plus a social preview image for the repository.
+- The container image carries its own description and the release version in its metadata, and the multi-arch index is annotated so the package page shows them.
 
 ### Fixed
 
@@ -41,6 +44,7 @@ A complete rewrite. SyncMusic is now a single self-contained server instead of e
 
 Initial alpha release (multi-service architecture).
 
-[Unreleased]: https://github.com/RafalPolawski/SyncMusic/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/RafalPolawski/SyncMusic/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/RafalPolawski/SyncMusic/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/RafalPolawski/SyncMusic/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/RafalPolawski/SyncMusic/releases/tag/v0.1.0
