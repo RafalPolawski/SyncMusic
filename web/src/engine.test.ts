@@ -145,6 +145,15 @@ describe('Engine following the room', () => {
     expect(useRoom.getState().status).not.toBe('online');
   });
 
+  it('cancels pending work when stopped', async () => {
+    const { h } = await online({ trackId: 'c', positionMs: 5000 });
+    h.engine.stop();
+    localStorage.setItem('syncmusic.playBias', 'untouched');
+    await new Promise((r) => setTimeout(r, 2200));
+    expect(await h.engine.db.getKV('room:gym')).toBeUndefined();
+    expect(localStorage.getItem('syncmusic.playBias')).toBe('untouched');
+  });
+
   it('refreshes the library when the server announces a change', async () => {
     const changed = { ...sampleLibrary, version: 'lib-2' };
     mockFetch({ ...audioRoutes, '/api/library': { json: changed, headers: { ETag: '"lib-2"' } } });

@@ -168,6 +168,9 @@ export class Engine {
     for (const u of this.unsubscribers) u();
     this.unsubscribers = [];
     clearInterval(this.statusTimer);
+    clearTimeout(this.statusSoon);
+    clearTimeout(this.saveTimer);
+    this.statusSoon = this.saveTimer = undefined;
     window.removeEventListener('online', this.onOnline);
     this.conn.stop();
   }
@@ -192,7 +195,7 @@ export class Engine {
   }
 
   private saveSnapshotSoon(): void {
-    if (this.saveTimer) return;
+    if (this.saveTimer || !this.started) return;
     this.saveTimer = setTimeout(() => {
       this.saveTimer = undefined;
       const room = useSettings.getState().room;
@@ -306,7 +309,7 @@ export class Engine {
   private statusSoon: ReturnType<typeof setTimeout> | undefined;
 
   private reportStatusSoon(): void {
-    if (this.statusSoon) return;
+    if (this.statusSoon || !this.started) return;
     this.statusSoon = setTimeout(() => {
       this.statusSoon = undefined;
       this.reportStatus();
