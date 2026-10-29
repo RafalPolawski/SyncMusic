@@ -61,6 +61,8 @@ function subscribe(fn: () => void): () => void {
     if (subscribers.size === 0) {
       clearInterval(ticker);
       unsubscribeRoom?.();
+      // Not refreshed while nobody listens; read afresh on the next mount.
+      snapshot = undefined;
     }
   };
 }

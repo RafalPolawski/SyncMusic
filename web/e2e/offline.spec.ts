@@ -9,7 +9,7 @@ test('keeps playing and advancing tracks while offline, then resyncs', async ({ 
   await expectPlaying(page);
 
   // Upcoming tracks are prefetched for offline use.
-  await expect.poll(async () => (await debug(page)).downloaded.length).toBeGreaterThanOrEqual(3);
+  await expect.poll(async () => (await debug(page)).downloaded.length).toBeGreaterThanOrEqual(2);
   const first = (await debug(page)).trackId;
 
   await ctx.setOffline(true);

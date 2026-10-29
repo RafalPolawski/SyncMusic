@@ -74,6 +74,7 @@ export class Downloader {
   private pins = new Map<string, string[]>();
   private refs = new Map<string, TrackRef>();
   private prefetch: string[] = [];
+  private protectedIds: string[] = [];
   private timer: ReturnType<typeof setTimeout> | undefined;
   private changeTimer: ReturnType<typeof setTimeout> | undefined;
   quotaExceeded = false;
@@ -182,12 +183,16 @@ export class Downloader {
   // ---- commands ----------------------------------------------------------
 
   /**
-   * Replaces the prefetch list (current track first). Tracks dropping out of
-   * the list are no longer fetched unless pinned.
+   * Replaces the prefetch list (most urgent first). Tracks dropping out of
+   * the list are no longer fetched unless pinned. `protect` lists tracks
+   * that must not be evicted but are not fetched (the one playing now is
+   * streamed by the player; fetching it as well would halve the bandwidth
+   * on a weak connection).
    */
-  setPrefetch(refs: TrackRef[]): void {
+  setPrefetch(refs: TrackRef[], protect: string[] = []): void {
     const ids = refs.map((r) => r.id);
     this.prefetch = ids;
+    this.protectedIds = protect;
     for (const [id, job] of this.jobs) {
       if (job.priority < PIN_PRIORITY && !ids.includes(id)) this.jobs.delete(id);
     }
@@ -220,7 +225,9 @@ export class Downloader {
       if (job && job.priority >= PIN_PRIORITY) this.jobs.delete(id);
       const act = this.active.get(id);
       if (act && act.job.priority >= PIN_PRIORITY && !this.prefetch.includes(id)) act.abort.abort();
-      if (this.records.has(id) && !this.prefetch.includes(id)) await this.remove(id);
+      if (this.records.has(id) && !this.prefetch.includes(id) && !this.protectedIds.includes(id)) {
+        await this.remove(id);
+      }
     }
     this.changed();
   }
@@ -421,7 +428,7 @@ export class Downloader {
     const auto = [...this.records.values()].filter((r) => !this.isPinnedTrack(r.trackId));
     let total = auto.reduce((s, r) => s + r.bytes, 0);
     if (total <= limit) return;
-    const keep = new Set(this.prefetch);
+    const keep = new Set([...this.prefetch, ...this.protectedIds]);
     auto.sort((a, b) => a.lastUsed - b.lastUsed);
     for (const r of auto) {
       if (total <= limit) break;
