@@ -68,6 +68,8 @@ const HAVE_METADATA = 1;
 const HAVE_FUTURE_DATA = 3;
 const PAUSED_TOLERANCE_MS = 250;
 const PARK_TOLERANCE_MS = 30;
+/** How long a pending end-of-track 'pause' event is waited for. */
+const END_PAUSE_GRACE_MS = 1000;
 
 export class AudioPlayer {
   readonly drift: DriftController;
@@ -84,6 +86,10 @@ export class AudioPlayer {
   private startAt = 0;
   private interval: ReturnType<typeof setInterval> | undefined;
   private selfPause = 0;
+  /** The element ended and its 'pause' event has been dispatched. */
+  private endPauseSeen = false;
+  /** When the player moved on from an ended track before its 'pause' event. */
+  private endPauseQueuedAt = -Infinity;
   private buffering = false;
   private needsGesture = false;
   private personalPause = false;
@@ -259,6 +265,7 @@ export class AudioPlayer {
   }
 
   private async load(trackId: string): Promise<void> {
+    this.leaveEnded();
     const gen = ++this.loadGen;
     clearTimeout(this.retryTimer);
     this.clearStart();
@@ -302,6 +309,7 @@ export class AudioPlayer {
   }
 
   private playEl(): void {
+    this.leaveEnded();
     this.el.play().then(
       () => {
         this.needsGesture = false;
@@ -323,6 +331,7 @@ export class AudioPlayer {
   }
 
   private seekEl(ms: number): void {
+    this.leaveEnded();
     try {
       this.el.currentTime = Math.max(0, ms) / 1000;
     } catch {
@@ -353,12 +362,32 @@ export class AudioPlayer {
     this.publish();
   };
 
+  /**
+   * Reaching the end of a track pauses the element at once, but browsers
+   * dispatch the 'pause' event later. Called before the player changes an
+   * ended element (seek, play, new source): if that event is still pending,
+   * it would arrive looking like a pause by the system, so it is expected.
+   */
+  private leaveEnded(): void {
+    if (!this.el.ended) return;
+    if (!this.endPauseSeen) this.endPauseQueuedAt = this.d.now();
+    this.endPauseSeen = false;
+  }
+
   private onPause = () => {
     if (this.selfPause > 0) {
       this.selfPause--;
       return;
     }
-    if (this.el.ended) return;
+    if (this.el.ended) {
+      this.endPauseSeen = true;
+      return;
+    }
+    if (this.d.now() - this.endPauseQueuedAt < END_PAUSE_GRACE_MS) {
+      // The late pause of a track the player already moved on from.
+      this.endPauseQueuedAt = -Infinity;
+      return;
+    }
     // Paused by the OS or the browser (incoming call, headphones removed).
     this.personalPause = true;
     this.d.onExternalPause?.();
