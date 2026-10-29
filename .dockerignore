@@ -1,0 +1,16 @@
+.git
+.github
+**/node_modules
+**/.DS_Store
+web/coverage
+web/test-results
+web/playwright-report
+web/blob-report
+internal/webui/dist/*
+!internal/webui/dist/.gitkeep
+data
+music
+dist
+bin
+*.db
+docs

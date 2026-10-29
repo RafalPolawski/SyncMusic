@@ -1,0 +1,147 @@
+{
+  "comment": "Shared timeline contract. Verified by internal/room (Go) and web/src/sync (TypeScript). States are merged over a fresh room state.",
+  "catalog": { "a": 10000, "b": 20000, "c": 5000, "d": 8000, "u": 0 },
+  "positionAt": [
+    { "name": "paused returns stored position", "playback": { "trackId": "a", "positionMs": 4200, "anchorMs": 1000, "playing": false, "durationMs": 10000 }, "now": 99999, "expect": 4200 },
+    { "name": "armed start holds position before anchor", "playback": { "trackId": "a", "positionMs": 0, "anchorMs": 5000, "playing": true, "durationMs": 10000 }, "now": 4000, "expect": 0 },
+    { "name": "playing advances with time", "playback": { "trackId": "a", "positionMs": 1500, "anchorMs": 5000, "playing": true, "durationMs": 10000 }, "now": 7250, "expect": 3750 },
+    { "name": "clamped to duration", "playback": { "trackId": "a", "positionMs": 0, "anchorMs": 0, "playing": true, "durationMs": 10000 }, "now": 50000, "expect": 10000 },
+    { "name": "unknown duration is not clamped", "playback": { "trackId": "u", "positionMs": 0, "anchorMs": 0, "playing": true, "durationMs": 0 }, "now": 50000, "expect": 50000 }
+  ],
+  "normalize": [
+    {
+      "name": "not finished yet",
+      "state": { "playback": { "trackId": "a", "positionMs": 0, "anchorMs": 1000, "playing": true, "durationMs": 10000 }, "contextIndex": 0, "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "b", "c"], "order": [0, 1, 2] } },
+      "now": 10999,
+      "expect": { "changed": false, "playback": { "trackId": "a", "positionMs": 0, "anchorMs": 1000, "playing": true, "durationMs": 10000 }, "contextIndex": 0, "queue": [] }
+    },
+    {
+      "name": "advances gaplessly at the exact end",
+      "state": { "playback": { "trackId": "a", "positionMs": 0, "anchorMs": 1000, "playing": true, "durationMs": 10000 }, "contextIndex": 0, "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "b", "c"], "order": [0, 1, 2] } },
+      "now": 11000,
+      "expect": { "changed": true, "playback": { "trackId": "b", "positionMs": 0, "anchorMs": 11000, "playing": true, "durationMs": 20000 }, "contextIndex": 1, "queue": [] }
+    },
+    {
+      "name": "several tracks elapsed while offline",
+      "state": { "playback": { "trackId": "a", "positionMs": 0, "anchorMs": 1000, "playing": true, "durationMs": 10000 }, "contextIndex": 0, "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "b", "c"], "order": [0, 1, 2] } },
+      "now": 33000,
+      "expect": { "changed": true, "playback": { "trackId": "c", "positionMs": 0, "anchorMs": 31000, "playing": true, "durationMs": 5000 }, "contextIndex": 2, "queue": [] }
+    },
+    {
+      "name": "end of context without repeat parks on the first track",
+      "state": { "playback": { "trackId": "a", "positionMs": 0, "anchorMs": 1000, "playing": true, "durationMs": 10000 }, "contextIndex": 0, "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "b", "c"], "order": [0, 1, 2] } },
+      "now": 40000,
+      "expect": { "changed": true, "playback": { "trackId": "a", "positionMs": 0, "anchorMs": 36000, "playing": false, "durationMs": 10000 }, "contextIndex": 0, "queue": [] }
+    },
+    {
+      "name": "repeat all wraps around",
+      "state": { "repeat": "all", "playback": { "trackId": "a", "positionMs": 0, "anchorMs": 1000, "playing": true, "durationMs": 10000 }, "contextIndex": 0, "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "b", "c"], "order": [0, 1, 2] } },
+      "now": 40000,
+      "expect": { "changed": true, "playback": { "trackId": "a", "positionMs": 0, "anchorMs": 36000, "playing": true, "durationMs": 10000 }, "contextIndex": 0, "queue": [] }
+    },
+    {
+      "name": "repeat one restarts the same track",
+      "state": { "repeat": "one", "playback": { "trackId": "a", "positionMs": 0, "anchorMs": 1000, "playing": true, "durationMs": 10000 }, "contextIndex": 0, "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "b", "c"], "order": [0, 1, 2] } },
+      "now": 25000,
+      "expect": { "changed": true, "playback": { "trackId": "a", "positionMs": 0, "anchorMs": 21000, "playing": true, "durationMs": 10000 }, "contextIndex": 0, "queue": [] }
+    },
+    {
+      "name": "queue plays first, then the context resumes",
+      "state": { "playback": { "trackId": "a", "positionMs": 0, "anchorMs": 1000, "playing": true, "durationMs": 10000 }, "contextIndex": 0, "queue": [{ "id": "q1", "trackId": "d" }], "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "b", "c"], "order": [0, 1, 2] } },
+      "now": 19001,
+      "expect": { "changed": true, "playback": { "trackId": "b", "positionMs": 0, "anchorMs": 19000, "playing": true, "durationMs": 20000 }, "contextIndex": 1, "queue": [] }
+    },
+    {
+      "name": "queued track carries its entry id",
+      "state": { "playback": { "trackId": "a", "positionMs": 0, "anchorMs": 1000, "playing": true, "durationMs": 10000 }, "contextIndex": 0, "queue": [{ "id": "q1", "trackId": "d" }, { "id": "q2", "trackId": "c" }], "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "b", "c"], "order": [0, 1, 2] } },
+      "now": 12000,
+      "expect": { "changed": true, "playback": { "trackId": "d", "entryId": "q1", "positionMs": 0, "anchorMs": 11000, "playing": true, "durationMs": 8000 }, "contextIndex": 0, "queue": ["q2"] }
+    },
+    {
+      "name": "resumed mid-track ends at anchor plus remaining time",
+      "state": { "playback": { "trackId": "a", "positionMs": 4000, "anchorMs": 1000, "playing": true, "durationMs": 10000 }, "contextIndex": 0, "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "b", "c"], "order": [0, 1, 2] } },
+      "now": 7000,
+      "expect": { "changed": true, "playback": { "trackId": "b", "positionMs": 0, "anchorMs": 7000, "playing": true, "durationMs": 20000 }, "contextIndex": 1, "queue": [] }
+    },
+    {
+      "name": "paused playback never advances",
+      "state": { "playback": { "trackId": "a", "positionMs": 9999, "anchorMs": 0, "playing": false, "durationMs": 10000 }, "contextIndex": 0, "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "b", "c"], "order": [0, 1, 2] } },
+      "now": 1000000000,
+      "expect": { "changed": false, "playback": { "trackId": "a", "positionMs": 9999, "anchorMs": 0, "playing": false, "durationMs": 10000 }, "contextIndex": 0, "queue": [] }
+    },
+    {
+      "name": "tracks missing from the catalog are skipped",
+      "state": { "playback": { "trackId": "a", "positionMs": 0, "anchorMs": 1000, "playing": true, "durationMs": 10000 }, "contextIndex": 0, "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "missing", "c"], "order": [0, 1, 2] } },
+      "now": 11000,
+      "expect": { "changed": true, "playback": { "trackId": "c", "positionMs": 0, "anchorMs": 11000, "playing": true, "durationMs": 5000 }, "contextIndex": 2, "queue": [] }
+    },
+    {
+      "name": "queue entries for missing tracks are dropped",
+      "state": { "playback": { "trackId": "a", "positionMs": 0, "anchorMs": 1000, "playing": true, "durationMs": 10000 }, "contextIndex": 0, "queue": [{ "id": "q1", "trackId": "missing" }, { "id": "q2", "trackId": "d" }], "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "b", "c"], "order": [0, 1, 2] } },
+      "now": 11500,
+      "expect": { "changed": true, "playback": { "trackId": "d", "entryId": "q2", "positionMs": 0, "anchorMs": 11000, "playing": true, "durationMs": 8000 }, "contextIndex": 0, "queue": [] }
+    },
+    {
+      "name": "shuffled order is followed",
+      "state": { "shuffle": true, "playback": { "trackId": "c", "positionMs": 0, "anchorMs": 0, "playing": true, "durationMs": 5000 }, "contextIndex": 0, "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "b", "c"], "order": [2, 0, 1] } },
+      "now": 5000,
+      "expect": { "changed": true, "playback": { "trackId": "a", "positionMs": 0, "anchorMs": 5000, "playing": true, "durationMs": 10000 }, "contextIndex": 1, "queue": [] }
+    },
+    {
+      "name": "armed start does not advance before its anchor",
+      "state": { "playback": { "trackId": "c", "positionMs": 0, "anchorMs": 5000, "playing": true, "durationMs": 5000 }, "contextIndex": 2, "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "b", "c"], "order": [0, 1, 2] } },
+      "now": 9999,
+      "expect": { "changed": false, "playback": { "trackId": "c", "positionMs": 0, "anchorMs": 5000, "playing": true, "durationMs": 5000 }, "contextIndex": 2, "queue": [] }
+    },
+    {
+      "name": "unknown duration never auto-advances",
+      "state": { "playback": { "trackId": "u", "positionMs": 0, "anchorMs": 0, "playing": true, "durationMs": 0 }, "contextIndex": 0, "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["u", "a"], "order": [0, 1] } },
+      "now": 999999,
+      "expect": { "changed": false, "playback": { "trackId": "u", "positionMs": 0, "anchorMs": 0, "playing": true, "durationMs": 0 }, "contextIndex": 0, "queue": [] }
+    },
+    {
+      "name": "nothing loaded stays empty",
+      "state": {},
+      "now": 1000,
+      "expect": { "changed": false, "playback": { "trackId": "", "positionMs": 0, "anchorMs": 0, "playing": false, "durationMs": 0 }, "contextIndex": -1, "queue": [] }
+    }
+  ],
+  "upcoming": [
+    {
+      "name": "queue then rest of context",
+      "state": { "playback": { "trackId": "a", "playing": true, "durationMs": 10000 }, "contextIndex": 0, "queue": [{ "id": "q1", "trackId": "d" }], "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "b", "c"], "order": [0, 1, 2] } },
+      "n": 5,
+      "expect": ["d", "b", "c"]
+    },
+    {
+      "name": "repeat all cycles",
+      "state": { "repeat": "all", "playback": { "trackId": "b", "playing": true, "durationMs": 20000 }, "contextIndex": 1, "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "b", "c"], "order": [0, 1, 2] } },
+      "n": 5,
+      "expect": ["c", "a", "b", "c", "a"]
+    },
+    {
+      "name": "repeat one repeats the current track",
+      "state": { "repeat": "one", "playback": { "trackId": "a", "playing": true, "durationMs": 10000 }, "contextIndex": 0, "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "b", "c"], "order": [0, 1, 2] } },
+      "n": 3,
+      "expect": ["a", "a", "a"]
+    },
+    {
+      "name": "shuffled order",
+      "state": { "shuffle": true, "playback": { "trackId": "c", "playing": true, "durationMs": 5000 }, "contextIndex": 0, "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "b", "c"], "order": [2, 0, 1] } },
+      "n": 10,
+      "expect": ["a", "b"]
+    },
+    {
+      "name": "while a queued track plays the context continues after it",
+      "state": { "playback": { "trackId": "d", "entryId": "q1", "playing": true, "durationMs": 8000 }, "contextIndex": 0, "queue": [{ "id": "q2", "trackId": "c" }], "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "b", "c"], "order": [0, 1, 2] } },
+      "n": 4,
+      "expect": ["c", "b", "c"]
+    },
+    {
+      "name": "skips missing tracks",
+      "state": { "playback": { "trackId": "a", "playing": true, "durationMs": 10000 }, "contextIndex": 0, "context": { "kind": "folder", "id": "F", "name": "F", "tracks": ["a", "missing", "c"], "order": [0, 1, 2] } },
+      "n": 3,
+      "expect": ["c"]
+    }
+  ]
+}

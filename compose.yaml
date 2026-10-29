@@ -1,0 +1,24 @@
+# SyncMusic — single container. Quick start:
+#   1. cp .env.example .env   and set SYNCMUSIC_PASSWORD and MUSIC_DIR
+#   2. docker compose up -d
+#   3. expose it over HTTPS, e.g. on the host:  tailscale serve --bg 8080
+#      (or use compose.tailscale.yaml for a Tailscale sidecar)
+services:
+  syncmusic:
+    image: ghcr.io/rafalpolawski/syncmusic:${SYNCMUSIC_VERSION:-latest}
+    # Building from source instead: docker build -t ghcr.io/rafalpolawski/syncmusic:latest .
+    container_name: syncmusic
+    restart: unless-stopped
+    ports:
+      - "${SYNCMUSIC_PORT:-8080}:8080"
+    environment:
+      SYNCMUSIC_PASSWORD: ${SYNCMUSIC_PASSWORD:?set SYNCMUSIC_PASSWORD in .env}
+      # true behind `tailscale serve` or another reverse proxy
+      SYNCMUSIC_TRUST_PROXY: ${SYNCMUSIC_TRUST_PROXY:-false}
+      TZ: ${TZ:-Europe/Warsaw}
+    volumes:
+      - ${MUSIC_DIR:?set MUSIC_DIR in .env}:/music:ro
+      - syncmusic-data:/data
+
+volumes:
+  syncmusic-data:
