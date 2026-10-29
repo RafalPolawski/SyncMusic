@@ -4,10 +4,12 @@
 //
 //   npm run screenshots          # English and Polish
 //   npm run screenshots -- pl    # one language
+//   npm run screenshots -- social  # only the social preview, from existing images
 //
 // Needs Go, ffmpeg with libmp3lame and drawtext, a font (Inter looks best)
 // and Playwright's Chromium (PW_CHROMIUM=/path/to/chrome for another one).
-// Images are written to docs/images/<lang>/.
+// Images are written to docs/images/<lang>/, and the repository's social
+// preview (Settings → General → Social preview) to docs/images/social-preview.jpg.
 
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
@@ -705,10 +707,40 @@ async function capture(lang: Lang, browser: Browser): Promise<void> {
   }
 }
 
+/** 1280×640 card for link previews, built from the English screenshots. */
+async function social(browser: Browser): Promise<void> {
+  const dir = resolve(repo, 'docs/images/en');
+  const img = (f: string) => `data:image/jpeg;base64,${readFileSync(join(dir, f)).toString('base64')}`;
+  const icon = `data:image/png;base64,${readFileSync(resolve(repo, 'web/public/icon-512.png')).toString('base64')}`;
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 640 }, deviceScaleFactor: 1 });
+  const page = await ctx.newPage();
+  const phone = (f: string, x: number, y: number, rotate: number) =>
+    `<div style="position:absolute;left:${x}px;top:${y}px;width:250px;height:537px;border-radius:34px;padding:8px;
+      background:#1c2433;box-shadow:0 24px 60px rgba(0,0,0,.6),inset 0 0 0 2px #2c3647;transform:rotate(${rotate}deg)">
+      <img src="${img(f)}" style="width:100%;height:100%;object-fit:cover;object-position:top;border-radius:27px;display:block"></div>`;
+  await page.setContent(`<!doctype html><html><body style="margin:0;font-family:Inter,system-ui,sans-serif">
+    <div style="position:relative;width:1280px;height:640px;overflow:hidden;color:#fff;
+      background:radial-gradient(900px 600px at 15% 10%,#17324a 0%,#0b1120 60%,#070b14 100%)">
+      <div style="position:absolute;left:72px;top:150px;width:520px">
+        <img src="${icon}" width="96" height="96" style="border-radius:22px;display:block">
+        <div style="font-size:76px;font-weight:800;letter-spacing:-1.5px;margin-top:26px">SyncMusic</div>
+        <div style="font-size:28px;line-height:1.35;color:#cbd5e1;margin-top:12px">
+          Listen together, perfectly in sync.<br>Your music on every friend's phone.</div>
+        <div style="font-size:21px;color:#34d399;margin-top:26px">Self-hosted · offline-first · one small container</div>
+      </div>
+      ${phone('library.jpg', 650, 120, -6)}${phone('queue.jpg', 1000, 110, 6)}${phone('now-playing.jpg', 820, 60, 0)}
+    </div></body></html>`);
+  await page.screenshot({ path: resolve(repo, 'docs/images/social-preview.jpg'), type: 'jpeg', quality: 88 });
+  console.info('  social-preview.jpg');
+  await ctx.close();
+}
+
 async function main(): Promise<void> {
-  const asked = process.argv.slice(2).filter((a): a is Lang => a === 'en' || a === 'pl');
-  const langs: Lang[] = asked.length > 0 ? asked : ['en', 'pl'];
-  if (!existsSync(join(repo, 'internal/webui/dist/index.html'))) {
+  const args = process.argv.slice(2);
+  const asked = args.filter((a): a is Lang => a === 'en' || a === 'pl');
+  const onlySocial = args.includes('social') && asked.length === 0;
+  const langs: Lang[] = onlySocial ? [] : asked.length > 0 ? asked : ['en', 'pl'];
+  if (langs.length > 0 && !existsSync(join(repo, 'internal/webui/dist/index.html'))) {
     throw new Error('build the web client first: npm run build');
   }
   rmSync(join(work, 'syncmusic'), { force: true });
@@ -718,6 +750,7 @@ async function main(): Promise<void> {
   });
   try {
     for (const lang of langs) await capture(lang, browser);
+    if (onlySocial || langs.includes('en')) await social(browser);
   } finally {
     await browser.close();
   }

@@ -4,7 +4,7 @@ import type { Target } from '../sync/timeline';
 
 class FakeMedia extends EventTarget implements MediaLike {
   src = '';
-  currentTime = 0;
+  private time = 0;
   paused = true;
   ended = false;
   readyState = 0;
@@ -29,9 +29,17 @@ class FakeMedia extends EventTarget implements MediaLike {
     this.paused = true;
     queueMicrotask(() => this.dispatchEvent(new Event('pause')));
   }
+  get currentTime(): number {
+    return this.time;
+  }
+  set currentTime(v: number) {
+    this.time = v;
+    if (v < this.duration) this.ended = false;
+  }
   load(): void {
     this.loads++;
     this.readyState = 0;
+    this.ended = false;
   }
   removeAttribute(name: string): void {
     if (name === 'src') this.src = '';
@@ -47,6 +55,19 @@ class FakeMedia extends EventTarget implements MediaLike {
   }
   advance(ms: number): void {
     if (!this.paused) this.currentTime += (ms * this.playbackRate) / 1000;
+  }
+  /**
+   * Plays to the end like Chromium: paused and ended change at once, the
+   * 'pause' and 'ended' events are dispatched later (call the result).
+   */
+  reachEnd(): () => void {
+    this.time = this.duration;
+    this.paused = true;
+    this.ended = true;
+    return () => {
+      this.dispatchEvent(new Event('pause'));
+      this.dispatchEvent(new Event('ended'));
+    };
   }
 }
 
@@ -187,6 +208,78 @@ describe('AudioPlayer', () => {
     player.setPersonalPause(false);
     await flush();
     expect(el.paused).toBe(false);
+  });
+
+  describe('end of a track', () => {
+    async function playingNearEnd(): Promise<void> {
+      target = playing('a', 199_700);
+      make();
+      player.tick();
+      await flush();
+      el.ready();
+      await flush();
+      expect(el.paused).toBe(false);
+    }
+
+    it('is not a personal pause when the event arrives while ended', async () => {
+      await playingNearEnd();
+      el.reachEnd()();
+      expect(player.state.personalPause).toBe(false);
+    });
+
+    it('is not a personal pause when the player resumed before the event arrived', async () => {
+      // The phone ran ahead: the element ended before the room did.
+      await playingNearEnd();
+      const deliver = el.reachEnd();
+      target = playing('a', 199_800);
+      player.tick(); // seeks back to the room position and plays on
+      await flush();
+      expect(el.ended).toBe(false);
+      deliver();
+      expect(player.state.personalPause).toBe(false);
+      player.tick();
+      expect(el.paused).toBe(false);
+    });
+
+    it('is not a personal pause when the next track loaded before the event arrived', async () => {
+      await playingNearEnd();
+      const deliver = el.reachEnd();
+      target = playing('b', 0);
+      player.tick();
+      await flush();
+      expect(el.src).toBe('blob:b');
+      deliver();
+      expect(player.state.personalPause).toBe(false);
+      el.ready();
+      await flush();
+      expect(el.paused).toBe(false);
+    });
+
+    it('still notices a later system pause', async () => {
+      await playingNearEnd();
+      el.reachEnd()(); // delivered while ended
+      target = playing('b', 0);
+      player.tick();
+      await flush();
+      el.ready();
+      await flush();
+      now += 5000;
+      el.systemPause();
+      expect(player.state.personalPause).toBe(true);
+    });
+
+    it('does not swallow a system pause when an end produced no event', async () => {
+      await playingNearEnd();
+      el.reachEnd(); // never delivered
+      target = playing('b', 0);
+      player.tick();
+      await flush();
+      el.ready();
+      await flush();
+      now += 2000;
+      el.systemPause();
+      expect(player.state.personalPause).toBe(true);
+    });
   });
 
   it('asks for a gesture when autoplay is blocked', async () => {

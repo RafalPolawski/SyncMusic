@@ -122,3 +122,5 @@ Telefony pokażą informację o nowej wersji. Po dotknięciu *Odśwież* aplikac
 | Przy utworze jest przekreślona chmurka | Jesteś offline, a ten utwór nie jest jeszcze zapisany w telefonie. |
 
 Więcej technicznych szczegółów jest w [README](../README.md), [architecture.md](architecture.md) i [deployment.md](deployment.md) (po angielsku).
+
+Licencja: [MIT](../LICENSE).

@@ -218,4 +218,4 @@ The code is covered by unit, integration, fuzz and end-to-end tests; CI runs all
 
 ## License
 
-[GNU General Public License v3.0](LICENSE)
+[MIT](LICENSE)

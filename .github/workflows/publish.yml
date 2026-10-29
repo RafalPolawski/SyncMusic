@@ -18,6 +18,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Shown on the package page and in image metadata (instead of the repository description).
+  DESCRIPTION: "Listen together, perfectly in sync: self-hosted music for friends' phones, one small Go server with an offline-first web app."
+
 concurrency:
   group: publish-${{ github.ref }}
   cancel-in-progress: false
@@ -82,6 +86,9 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.IMAGE }}
+          labels: |
+            org.opencontainers.image.description=${{ env.DESCRIPTION }}
+            org.opencontainers.image.version=${{ env.VERSION }}
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
@@ -136,8 +143,15 @@ jobs:
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        env:
+          # Annotate the multi-arch index: that is what the package page reads.
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: index
         with:
           images: ${{ env.IMAGE }}
+          labels: |
+            org.opencontainers.image.description=${{ env.DESCRIPTION }}
+          annotations: |
+            org.opencontainers.image.description=${{ env.DESCRIPTION }}
           # Without a release version the semver tags are skipped. latest is
           # set explicitly: only stable releases move it, never pre-releases.
           flavor: latest=false
@@ -151,9 +165,10 @@ jobs:
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
         run: |
-          docker buildx imagetools create \
-            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf "$IMAGE@sha256:%s " *)
+          args=()
+          while IFS= read -r tag; do args+=(-t "$tag"); done < <(jq -r '.tags[]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          while IFS= read -r note; do args+=(--annotation "$note"); done < <(jq -r '.annotations[]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          docker buildx imagetools create "${args[@]}" $(printf "$IMAGE@sha256:%s " *)
       - name: Inspect
         run: docker buildx imagetools inspect "$IMAGE:${{ steps.meta.outputs.version }}"
 
