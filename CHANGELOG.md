@@ -4,6 +4,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-29
+
 A complete rewrite. SyncMusic is now a single self-contained server instead of eight containers.
 
 ### Added
@@ -30,5 +32,6 @@ A complete rewrite. SyncMusic is now a single self-contained server instead of e
 
 Initial alpha release (multi-service architecture).
 
-[Unreleased]: https://github.com/RafalPolawski/SyncMusic/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/RafalPolawski/SyncMusic/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/RafalPolawski/SyncMusic/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/RafalPolawski/SyncMusic/releases/tag/v0.1.0
