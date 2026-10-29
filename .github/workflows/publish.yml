@@ -2,11 +2,18 @@ name: Publish
 
 # main  -> ghcr.io/<owner>/syncmusic:edge
 # vX.Y.Z tag -> :X.Y.Z, :X.Y, :X, :latest + GitHub release with binaries
+# Run workflow with a version -> the same release, tagging the chosen commit
+# once CI, images and binaries succeeded (no local tag push needed).
 on:
   push:
     branches: [main]
     tags: ["v*.*.*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version to tag on this commit, e.g. v1.2.3 (empty: only publish images)"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -16,12 +23,38 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUSHED_TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          tag="${PUSHED_TAG:-$REQUESTED}"
+          if [[ -n "$tag" ]]; then
+            if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+              echo "::error::Invalid version '$tag', expected vX.Y.Z or vX.Y.Z-suffix"
+              exit 1
+            fi
+            if [[ -z "$PUSHED_TAG" ]] && gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" --silent 2>/dev/null; then
+              echo "::error::Tag $tag already exists"
+              exit 1
+            fi
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
   ci:
+    needs: version
     uses: ./.github/workflows/ci.yml
 
   image:
     name: Image (${{ matrix.platform }})
-    needs: ci
+    needs: [version, ci]
     strategy:
       fail-fast: false
       matrix:
@@ -37,12 +70,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Prepare
+        env:
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
         run: |
           echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/syncmusic" >> "$GITHUB_ENV"
           platform=${{ matrix.platform }}
           echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
           echo "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
-          echo "VERSION=${GITHUB_REF_NAME}" >> "$GITHUB_ENV"
+          echo "VERSION=${RELEASE_TAG:-$GITHUB_REF_NAME}" >> "$GITHUB_ENV"
       - id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
@@ -80,7 +115,7 @@ jobs:
 
   manifest:
     name: Multi-arch manifest
-    needs: image
+    needs: [version, image]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -103,10 +138,14 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.IMAGE }}
+          # Without a release version the semver tags are skipped. latest is
+          # set explicitly: only stable releases move it, never pre-releases.
+          flavor: latest=false
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+            type=semver,pattern={{version}},value=${{ needs.version.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.version.outputs.tag }}
+            type=semver,pattern={{major}},value=${{ needs.version.outputs.tag }},enable=${{ !startsWith(needs.version.outputs.tag, 'v0.') }}
+            type=raw,value=latest,enable=${{ needs.version.outputs.tag != '' && !contains(needs.version.outputs.tag, '-') }}
             type=edge,branch=main
             type=sha,format=short
       - name: Create manifest list and push
@@ -120,8 +159,8 @@ jobs:
 
   binaries:
     name: Binaries
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: ci
+    if: needs.version.outputs.tag != ''
+    needs: [version, ci]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -139,7 +178,9 @@ jobs:
         working-directory: web
         run: npm ci && npm run build
       - name: Build binaries
-        run: ./scripts/build-release.sh "$GITHUB_REF_NAME" "$GITHUB_SHA"
+        env:
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+        run: ./scripts/build-release.sh "$RELEASE_TAG" "$GITHUB_SHA"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: binaries
@@ -148,8 +189,8 @@ jobs:
 
   release:
     name: GitHub release
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: [manifest, binaries]
+    if: needs.version.outputs.tag != ''
+    needs: [version, manifest, binaries]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -162,9 +203,10 @@ jobs:
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
         run: |
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          version="${GITHUB_REF_NAME#v}"
+          version="${RELEASE_TAG#v}"
           cat > notes.md <<NOTES
           ## Docker
 
@@ -176,7 +218,8 @@ jobs:
           The standalone binaries below need \`ffmpeg\` and \`ffprobe\` installed on the host.
           NOTES
           flags=()
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then flags+=(--prerelease); fi
-          gh release create "$GITHUB_REF_NAME" dist/* \
-            --verify-tag --title "SyncMusic $GITHUB_REF_NAME" \
+          if [[ "$RELEASE_TAG" == *-* ]]; then flags+=(--prerelease); fi
+          # Creates the tag on this commit when the release was started by hand.
+          gh release create "$RELEASE_TAG" dist/* \
+            --target "$GITHUB_SHA" --title "SyncMusic $RELEASE_TAG" \
             --notes-file notes.md --generate-notes "${flags[@]}"

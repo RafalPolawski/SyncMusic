@@ -47,6 +47,7 @@ See [docs/architecture.md](docs/architecture.md#code-map). The short version: Go
    git tag -a v1.2.3 -m "v1.2.3"
    git push origin v1.2.3
    ```
+   Or, without a local checkout: *Actions → Publish → Run workflow* on `main` with the version `v1.2.3`. The tag is created on that commit once everything below succeeded.
 3. The **Publish** workflow runs CI, builds `linux/amd64` and `linux/arm64` images natively, pushes `ghcr.io/rafalpolawski/syncmusic:1.2.3`, `:1.2`, `:1` and `:latest`, cross-compiles binaries and creates the GitHub release with generated notes. Tags with a suffix (`v1.3.0-rc.1`) become pre-releases and do not move `latest`.
 
 Every push to `main` publishes the `:edge` image.
