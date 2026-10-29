@@ -42,6 +42,10 @@ test-web: ## Web unit tests
 e2e: ## End-to-end tests (needs ffmpeg and a Playwright Chromium)
 	cd web && $(NPM) run build && $(NPM) run e2e
 
+.PHONY: screenshots
+screenshots: ## Regenerate docs/images from the real app (needs ffmpeg and a Playwright Chromium)
+	cd web && $(NPM) run screenshots
+
 .PHONY: lint
 lint: ## Lint Go and web code
 	golangci-lint run ./...
