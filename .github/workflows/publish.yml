@@ -161,7 +161,6 @@ jobs:
             type=semver,pattern={{major}},value=${{ needs.version.outputs.tag }},enable=${{ !startsWith(needs.version.outputs.tag, 'v0.') }}
             type=raw,value=latest,enable=${{ needs.version.outputs.tag != '' && !contains(needs.version.outputs.tag, '-') }}
             type=edge,branch=main
-            type=sha,format=short
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
         run: |

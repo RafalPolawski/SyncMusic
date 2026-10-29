@@ -1,0 +1,50 @@
+name: Clean up images
+
+# Removes container images no tag points to any more: every push to main
+# leaves the previous :edge build behind, together with its per-platform
+# images. Run by hand to remove tags as well; a tag shared with a release
+# is only unlinked, the release keeps its image.
+on:
+  schedule:
+    - cron: "41 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      delete-tags:
+        description: "Also remove these tags (comma separated, wildcards allowed), e.g. sha-*"
+        required: false
+        type: string
+      include-fresh:
+        description: "Include images younger than an hour (only when no Publish run is in progress)"
+        required: false
+        type: boolean
+        default: false
+      dry-run:
+        description: "Only list what would be removed"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cleanup-images
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Clean up ghcr.io/${{ github.repository_owner }}/syncmusic
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+    steps:
+      - uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
+        with:
+          package: syncmusic
+          delete-untagged: true
+          delete-tags: ${{ inputs.delete-tags }}
+          # A running Publish pushes per-platform images untagged and links
+          # them minutes later; images younger than an hour are left alone.
+          older-than: ${{ inputs.include-fresh != true && '1 hour' || '' }}
+          dry-run: ${{ inputs.dry-run == true }}
+          validate: true
