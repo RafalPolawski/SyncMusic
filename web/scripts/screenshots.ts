@@ -2,14 +2,14 @@
 // real app: a demo library with generated cover art, a real server and three
 // emulated Android phones listening in the same room.
 //
-//   npm run screenshots          # English and Polish
-//   npm run screenshots -- pl    # one language
-//   npm run screenshots -- social  # only the social preview, from existing images
+//   npm run screenshots                # English and Polish
+//   npm run screenshots -- pl          # one language
+//   npm run screenshots -- banner      # only the banners, from existing screenshots
 //
 // Needs Go, ffmpeg with libmp3lame and drawtext, a font (Inter looks best)
 // and Playwright's Chromium (PW_CHROMIUM=/path/to/chrome for another one).
-// Images are written to docs/images/<lang>/, and the repository's social
-// preview (Settings → General → Social preview) to docs/images/social-preview.jpg.
+// Images are written to docs/images/<lang>/. The English banner doubles as
+// the repository's social preview (Settings → General → Social preview).
 
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
@@ -600,26 +600,6 @@ async function shoot(page: Page, out: string, name: string): Promise<string> {
   return file;
 }
 
-async function hero(browser: Browser, shots: string[], out: string): Promise<void> {
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 }, deviceScaleFactor: 1.5 });
-  const page = await ctx.newPage();
-  const img = (f: string) => `data:image/jpeg;base64,${readFileSync(f).toString('base64')}`;
-  await page.setContent(`<!doctype html><html><body style="margin:0">
-    <div style="width:1280px;height:860px;display:flex;align-items:center;justify-content:center;gap:56px;
-      background:radial-gradient(1200px 700px at 50% 0%,#17324a 0%,#0b1120 55%,#070b14 100%)">
-      ${shots
-        .map(
-          (s, i) => `<div style="width:340px;height:731px;border-radius:44px;padding:10px;background:#1c2433;
-            box-shadow:0 30px 80px rgba(0,0,0,.55),inset 0 0 0 2px #2c3647;transform:translateY(${i === 1 ? -14 : 14}px)">
-            <img src="${img(s)}" style="width:100%;height:100%;object-fit:cover;object-position:top;border-radius:34px;display:block"></div>`,
-        )
-        .join('')}
-    </div></body></html>`);
-  await page.screenshot({ path: join(out, 'hero.jpg'), type: 'jpeg', quality: 85 });
-  console.info('  hero.jpg');
-  await ctx.close();
-}
-
 async function capture(lang: Lang, browser: Browser): Promise<void> {
   const T: Messages = lang === 'pl' ? pl : en;
   const names = folderNames[lang];
@@ -666,17 +646,16 @@ async function capture(lang: Lang, browser: Browser): Promise<void> {
     await waitPlaying(a.page);
     await a.page.waitForTimeout(2500); // drift settles, presence refreshes
 
-    const shots: Record<string, string> = {};
-    shots.folder = await shoot(a.page, out, 'folder');
+    await shoot(a.page, out, 'folder');
     await nav(a.page, T.tabLibrary);
-    shots.library = await shoot(a.page, out, 'library');
+    await shoot(a.page, out, 'library');
     await a.page.locator('.mini-row').click();
     await a.page.getByRole('dialog', { name: T.nowPlaying }).waitFor();
     await a.page.waitForTimeout(1200);
-    shots.nowPlaying = await shoot(a.page, out, 'now-playing');
+    await shoot(a.page, out, 'now-playing');
     await a.page.locator('.np-header').getByRole('button', { name: T.tabQueue }).click();
     await a.page.locator('.queue').waitFor();
-    shots.queue = await shoot(a.page, out, 'queue');
+    await shoot(a.page, out, 'queue');
 
     await nav(a.page, T.tabSearch);
     await a.page.getByPlaceholder(T.searchPlaceholder).fill('night');
@@ -700,16 +679,26 @@ async function capture(lang: Lang, browser: Browser): Promise<void> {
     await shoot(a.page, out, 'offline');
     await a.ctx.setOffline(false);
 
-    await hero(browser, [shots.library!, shots.nowPlaying!, shots.queue!], out);
     for (const p of [a, b, c]) await p.ctx.close();
   } finally {
     server.kill();
   }
 }
 
-/** 1280×640 card for link previews, built from the English screenshots. */
-async function social(browser: Browser): Promise<void> {
-  const dir = resolve(repo, 'docs/images/en');
+const bannerText: Record<Lang, { tagline: string; facts: string }> = {
+  en: {
+    tagline: "Listen together, perfectly in sync.<br>Your music on every friend's phone.",
+    facts: 'Self-hosted · offline-first · one small container',
+  },
+  pl: {
+    tagline: 'Słuchajcie razem, idealnie równo.<br>Twoja muzyka na telefonach znajomych.',
+    facts: 'Self-hosted · działa offline · jeden mały kontener',
+  },
+};
+
+/** 1280×640 banner on top of the README, also used for link previews. */
+async function banner(browser: Browser, lang: Lang): Promise<void> {
+  const dir = resolve(repo, 'docs/images', lang);
   const img = (f: string) => `data:image/jpeg;base64,${readFileSync(join(dir, f)).toString('base64')}`;
   const icon = `data:image/png;base64,${readFileSync(resolve(repo, 'web/public/icon-512.png')).toString('base64')}`;
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 640 }, deviceScaleFactor: 1 });
@@ -721,26 +710,25 @@ async function social(browser: Browser): Promise<void> {
   await page.setContent(`<!doctype html><html><body style="margin:0;font-family:Inter,system-ui,sans-serif">
     <div style="position:relative;width:1280px;height:640px;overflow:hidden;color:#fff;
       background:radial-gradient(900px 600px at 15% 10%,#17324a 0%,#0b1120 60%,#070b14 100%)">
-      <div style="position:absolute;left:72px;top:150px;width:520px">
+      <div style="position:absolute;left:72px;top:150px;width:565px">
         <img src="${icon}" width="96" height="96" style="border-radius:22px;display:block">
         <div style="font-size:76px;font-weight:800;letter-spacing:-1.5px;margin-top:26px">SyncMusic</div>
-        <div style="font-size:28px;line-height:1.35;color:#cbd5e1;margin-top:12px">
-          Listen together, perfectly in sync.<br>Your music on every friend's phone.</div>
-        <div style="font-size:21px;color:#34d399;margin-top:26px">Self-hosted · offline-first · one small container</div>
+        <div style="font-size:28px;line-height:1.35;color:#cbd5e1;margin-top:12px">${bannerText[lang].tagline}</div>
+        <div style="font-size:21px;color:#34d399;margin-top:26px">${bannerText[lang].facts}</div>
       </div>
       ${phone('library.jpg', 650, 120, -6)}${phone('queue.jpg', 1000, 110, 6)}${phone('now-playing.jpg', 820, 60, 0)}
     </div></body></html>`);
-  await page.screenshot({ path: resolve(repo, 'docs/images/social-preview.jpg'), type: 'jpeg', quality: 88 });
-  console.info('  social-preview.jpg');
+  await page.screenshot({ path: join(dir, 'banner.jpg'), type: 'jpeg', quality: 88 });
+  console.info(`  ${lang}/banner.jpg`);
   await ctx.close();
 }
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   const asked = args.filter((a): a is Lang => a === 'en' || a === 'pl');
-  const onlySocial = args.includes('social') && asked.length === 0;
-  const langs: Lang[] = onlySocial ? [] : asked.length > 0 ? asked : ['en', 'pl'];
-  if (langs.length > 0 && !existsSync(join(repo, 'internal/webui/dist/index.html'))) {
+  const langs: Lang[] = asked.length > 0 ? asked : ['en', 'pl'];
+  const onlyBanners = args.includes('banner');
+  if (!onlyBanners && !existsSync(join(repo, 'internal/webui/dist/index.html'))) {
     throw new Error('build the web client first: npm run build');
   }
   rmSync(join(work, 'syncmusic'), { force: true });
@@ -749,8 +737,10 @@ async function main(): Promise<void> {
     args: ['--autoplay-policy=no-user-gesture-required'],
   });
   try {
-    for (const lang of langs) await capture(lang, browser);
-    if (onlySocial || langs.includes('en')) await social(browser);
+    for (const lang of langs) {
+      if (!onlyBanners) await capture(lang, browser);
+      await banner(browser, lang);
+    }
   } finally {
     await browser.close();
   }

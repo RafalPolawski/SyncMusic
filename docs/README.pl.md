@@ -1,18 +1,8 @@
 <p align="center">
-  <img src="../web/public/icon-192.png" width="88" height="88" alt="">
+  <img src="images/pl/banner.jpg" alt="SyncMusic: słuchajcie razem, idealnie równo. Twoja muzyka na telefonach znajomych." width="880">
 </p>
 
-<h1 align="center">SyncMusic po polsku</h1>
-
-<p align="center">
-  <b>Słuchajcie razem, idealnie równo.</b><br>
-  Twoja muzyka na telefonach wszystkich znajomych, w tym samym momencie,<br>
-  każdy we własnych słuchawkach. Nawet gdy Wi-Fi na siłowni odmawia posłuszeństwa.
-</p>
-
-<p align="center">
-  <img src="images/pl/hero.jpg" alt="Trzy telefony: biblioteka, odtwarzacz z listą słuchaczy i wspólna kolejka" width="880">
-</p>
+<p align="center"><a href="../README.md">🇬🇧 English</a></p>
 
 SyncMusic to własny, mały serwer muzyki do wspólnego słuchania. Stawiasz go w domu (albo na Raspberry Pi), wskazujesz katalog z muzyką, a znajomi otwierają aplikację w przeglądarce telefonu i słyszą ten sam utwór w tym samym momencie. Sprawdza się na siłowni, na wspólnym bieganiu i w trasie, czyli tam, gdzie internet bywa słaby.
 
